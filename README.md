@@ -68,3 +68,7 @@ This will generate the `requirements/requirements*.txt` files with pinned packag
 │   └── model                       # logic for ML model including CV, parameter tuning, model evaluation
 └── tests                           # unit tests
 ```
+
+## Links
+
+* [Overleaf project](https://www.overleaf.com/project/667eb3777c3b306cee2b48bc)

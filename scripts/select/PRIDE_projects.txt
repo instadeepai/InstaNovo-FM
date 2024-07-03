@@ -1,0 +1,89 @@
+Done	PXD004732 ProteomeTools Part I
+Done	PXD010595 ProteomeTools Part II
+Done	PXD021013 ProteomeTools Part III
+Done	PXD009449 Systematic characterization of 21 post-translational modification using synthetic peptides (ProteomeTools)
+
+Done	PXD004565 Bacillus
+Done	PXD004536 Clam bacteria
+Done	PXD004467 Honeybee
+Done	PXD004424 Human
+Done	PXD004325 M mazei
+Done	PXD004948 Mouse
+Done	PXD004947 Tomato
+Done	PXD005025 Ricebean
+Done	PXD003868 Yeast
+
+Done	PXD006939 High-throughput MS-based immunopeptidomics
+Done	PXD036161 High-throughput proteomics of the 26 medically most important elapids and vipers from sub-Saharan Africa
+
+Done	PXD024364 Deep Human Proteome Sequencing Enables Global Detection of Mutations and Alternative Splicing
+Done	PXD014877 Proteomics kingdoms of life
+Done	PXD019483 Proteomics kingdoms of life
+
+Done	PXD014525 Rapid and site-specific deep phosphoproteome profiling by data-independent acquisition (DIA) without the need for spectral libraries
+Conv	MSV000090792 Exploration of cell state heterogeneity using single-cell proteomics through sensitivity-tailored data-independent acquisition
+
+Done	PXD049028 The one hour human proteome
+Done	PXD048219 The natural diversity of the yeast proteome links aneuploidy tolerance to protein turnover
+Done	PXD047839 timsTOF HT improves protein identification and quantitative reproducibility for deep unbiased plasma protein biomarker discovery
+Done	PXD047134 Large-scale proteomics analysis of five brain regions from Parkinson’s disease patients with a GBA1 mutation
+Done	PXD046802 DIA-based phosphoproteomics identifies early phosphorylation events in response to EGTA and mannitol in Arabidopsis
+Done	PXD046453 Ultra-fast label-free quantification and comprehensive proteome coverage with narrow-window data-independent acquisition
+Done	PXD046286 DCAF1-based PROTACs with activity against clinically validated targets overcoming intrinsic- and acquired-degrader resistance
+Done	PXD046211 Benchmarking of single cell proteomics data analysis workflows
+Done	PXD045779 Mapping the substrate landscape of protein phosphatase 2A catalytic subunit PPP2CA
+Done	PXD045662 Ubiquiton – an inducible, linkage-specific polyubiquitylation tool
+Done	PXD045500 Benchmarking CHIMERYS using Wide Window Acquisition and Classical Narrow Isolation Window Data Dependent Acquisition
+Done	PXD044830 The phosphorylation landscape of infection-related development by the rice blast fungus
+Done	PXD044641 Site- and structure-specific glycosylation signatures of bovine, caprine, porcine and human milk-derived extracellular vesicles
+Done	PXD044445 Remodeling of the human skeletal muscle proteome found after long-term endurance training but not after strength training
+Done	PXD044325 Effect of an immune challenge and feed supplements on broiler chicken individual breast muscle protein synthesis
+Done	PXD044303 Reconstruction of Metabolic Pathways, Protein Expression, and Homeostasis Machineries across Maize Bundle Sheath and Mesophyll Chloroplasts: Large-Scale Quantitative Proteomics Using the First Maize Genome Assembly
+Done	PXD044169 Thermal proteome profiling of sponge whole-body movement
+Done	PXD047761 Proteomic data of the Trypanosoma cruzi RNA-binding protein UBP1 induction and knockdown in insect-dwelling epimastigotes
+Done	PXD047226 VAP spatially stabilizes dendritic mitochondria to locally support synaptic plasticity
+Done	PXD046911 Candida auris proteomic profiling
+Done	PXD046460 Pure and mixed crude extracts of Thauera aromatica K172 and Pseudomonas putida KT2440 for benchmarking GroEL-proteotyping
+Done	PXD046451 iTRAQ-based proteomics reveals potential markers and treatment pathways for acute Achilles tendon rupture
+Done	PXD046182 Cervical Cancer Tissue Immunopeptidomics
+Done	PXD045650 Quantitative profiling of proteome extracted from zebrafish embryos exposed to different concentrations of the fungicide difenoconazole against untreated control groups.
+Done	PXD045471 Human breast adipose tissue extracellular vesicles
+Done	PXD045457 15 cm Aurora Gen3 column benchmarking on an Exploris 480
+Done	PXD045299 SARS-CoV-2 Envelope TurboID LFQ using internal tagging
+Done	PXD044301 WELFARE OF RAINBOW TROUT AT SLAUGHTER: INTEGRATING BEHAVIOURAL, PHYSIOLOGICAL, PROTEOMIC AND QUALITY INDICATORS
+Done	PXD044135 Quantitative differences in rumen epithelium proteins in lambs fed wheat, perennial wheat or perennial wheat plus lucerne.
+Done	PXD043989 Immunopeptidomics-based identification of naturally presented non-canonical circRNA-derived peptides
+
+Done	PXD047762 An automated and fast sample preparation workflow for laser microdissection guided ultrasensitive proteomics
+Done	PXD047898 Maximizing glycoproteomics identification depth in complex mixtures on the timsTOF Pro platform
+Done	PXD045311 A comprehensive portrait of tissue-, age- and sex-specific DNA modifications in rodents and humans
+Done	PXD044360 AMPK activator 991 specifically activates SnRK1 and thereby affects seed germination in rice
+Done	PXD047782 Ubiquitinome of Plasmodium yoelii lines NSS and NSR
+Done	PXD048453 The Secretome of Macrophages Has a Differential Impact on Spinal Cord Injury Recovery According to the Polarization Protocol
+Done	PXD047873 A CTL-inspired Killing System Reveals Ultralow-dose Chemotherapy is Sufficient for Inducing a Pyroptosis-mediated Antitumour Immune Function
+Done	PXD047705 Proteins of anti-sigma70 and anti-RNAP immunoprecipitates in bacteria
+Done	PXD048617 The post-biotic sodium butyrate synergizes the antiproliferative effects of dexamethasone against the AGS gastric adenocarcinoma cell
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

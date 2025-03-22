@@ -10,7 +10,6 @@ version = "0.0.1"
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "ase==3.22.1",
-    "dreams",
     "fire==0.6.0",
     "h5py==3.11.0",
     "huggingface-hub==0.24.5",
@@ -40,7 +39,6 @@ packages = ["src"]
 
 [tool.uv.sources]
 msml = { git = "https://github.com/roman-bushuiev/msml_legacy_architectures.git", rev = "main" }
-dreams = { path = "dreams" }
 
 [dependency-groups]
 dev = [

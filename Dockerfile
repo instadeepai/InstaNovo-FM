@@ -138,4 +138,4 @@ FROM runtime AS aichor
 
 # Install the 'mass_spectrometry_foundation_model' package
 COPY --chown=$USER . .
-RUN uv sync --locked --no-dev --no-editable
+RUN uv pip install ./dreams

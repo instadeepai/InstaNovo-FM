@@ -15,7 +15,7 @@ python3 dreams/training/train.py \
  --ff_fourier_d 512 \
  --ff_out_depth 1 \
  --prec_intens 1.1 \
- --num_devices 1 \
+ --num_devices 2 \
  --max_epochs 3000 \
  --log_every_n_steps 20 \
  --seed 3402 \

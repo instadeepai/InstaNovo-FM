@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://instadeep.aichor.ai/schema/latest/manifest.schema.json
+kind: AIchorManifest
+apiVersion: 0.2.1
+builder:
+  image: mass_spectrometry_foundation_model
+  dockerfile: ./Dockerfile
+  context: .
+  buildArgs:
+    USE_CUDA: "true"
+spec:
+  operator: tf
+  image: mass_spectrometry_foundation_model
+  # command: make data && make train_1 && make profile_1 && make train_8 && make profile_8
+  # command: nvidia-smi && make data && make train_ddp_stacked_single_node_multi_worker
+  command: cd dreams && python download_data.py && ./pretraining.sh
+
+  # storage:
+  #   attachExistingPVCs: # optional, array
+  #     - name: "dtu-denovo-s-2e6da747d6d34f62-instanovo-da-74ced5ddf3554ab4"
+  #       mountPoint: "/mnt/instanovo-data"
+
+  types:
+    Worker:
+      count: 1
+      resources:
+        cpus: 64
+        ramRatio: 32 # >= 2
+        accelerators:
+          gpu:
+            count: 2
+            type: gpu
+            product: NVIDIA-H100-80GB-HBM3

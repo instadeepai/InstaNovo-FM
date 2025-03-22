@@ -17,7 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/pluskal-lab/MassSpecGym",
     install_requires=[
-        "numpy==1.24.4",
+        "numpy",
         "numba==0.57.1",
         "torch==2.2.1",
         "pytorch-lightning==2.0.8",

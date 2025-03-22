@@ -170,7 +170,7 @@ def val_prep_args(args):
     assert not args.d_mz_token or not args.d_fourier
 
     if args.model == 'DreaMS' and not args.pre_trained_pth:
-        assert sum(e for e in [args.d_fourier, args.d_peak, args.d_mz_token] if e) % args.n_heads == 0
+        assert sum(e for e in [args.d_fourier, args.d_peak, args.d_mz_token] if e) % args.n_heads == 0, f"{args.d_fourier = }, {args.d_peak = }, {args.d_mz_token = }, sum = {sum(e for e in [args.d_fourier, args.d_peak, args.d_mz_token] if e)}, {args.n_heads = }, modulo = {sum(e for e in [args.d_fourier, args.d_peak, args.d_mz_token] if e) % args.n_heads}"
 
     # assert not args.ssl_probing_depth or args.ssl_probing_dataset_pth
 

@@ -1,10 +1,10 @@
 python3 dreams/training/train.py \
- --project_name SSL_VAL_4.0 \
- --job_key "${job_key}" \
- --run_name "${job_key}" \
+ --project_name DreaMS \
+ --job_key "job_paleofeces" \
+ --run_name "run_paleofeces" \
  --frac_masks 0.3 \
  --train_regime pre-training \
- --dataset_pth "${GEMS_DIR}/GeMS_A/GeMS_A10.hdf5" \
+ --dataset_pth "/home/j-vangoey/code/nf-ms-dda-casanovo/data/20210408-Paleofeces-2604-01.hdf5" \
  --val_check_interval 0.1 \
  --train_objective mask_mz_hot \
  --hot_mz_bin_size 0.05 \
@@ -15,7 +15,7 @@ python3 dreams/training/train.py \
  --ff_fourier_d 512 \
  --ff_out_depth 1 \
  --prec_intens 1.1 \
- --num_devices 8 \
+ --num_devices 1 \
  --max_epochs 3000 \
  --log_every_n_steps 20 \
  --seed 3402 \
@@ -45,4 +45,6 @@ python3 dreams/training/train.py \
  --mz_shift_aug_max 50 \
  --pre_norm \
  --graphormer_mz_diffs \
- --ret_order_loss_w 0.2
+ --ret_order_loss_w 0 \
+ --no_wandb \
+ --num_workers_data 20

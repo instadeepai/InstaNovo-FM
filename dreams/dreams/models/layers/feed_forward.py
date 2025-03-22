@@ -17,7 +17,7 @@ class FeedForward(nn.Module):
         elif isinstance(hidden_dim, Sequence):  # e.g. is List or Tuple
             depth = len(hidden_dim)
         else:
-            raise ValueError
+            raise ValueError(f"Invalid hidden_dim: {hidden_dim}")
 
         self.ff = nn.ModuleList([])
         for l in range(depth):

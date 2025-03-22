@@ -4,7 +4,7 @@ python3 dreams/training/train.py \
  --run_name "run_paleofeces" \
  --frac_masks 0.3 \
  --train_regime pre-training \
- --dataset_pth "/home/j-vangoey/code/nf-ms-dda-casanovo/data/20210408-Paleofeces-2604-01.hdf5" \
+ --dataset_pth "./data/20210408-Paleofeces-2604-01.hdf5" \
  --val_check_interval 0.1 \
  --train_objective mask_mz_hot \
  --hot_mz_bin_size 0.05 \

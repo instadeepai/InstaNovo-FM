@@ -136,6 +136,11 @@ RUN cd /tmp && uv sync --locked --no-cache --no-install-project && rm /tmp/pypro
 # It is used to run the Python package on AIchor which requires to have the package installed
 FROM runtime AS aichor
 
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install the 'mass_spectrometry_foundation_model' package
 COPY --chown=$USER . .
 RUN uv pip install ./dreams

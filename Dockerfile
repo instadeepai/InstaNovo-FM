@@ -38,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=$UV_COMPILE_BYTECODE
 # Clean after packages' install
 RUN apt-get update && \
     apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates  -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 -y && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 

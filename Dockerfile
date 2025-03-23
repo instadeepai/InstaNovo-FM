@@ -39,7 +39,7 @@ ENV UV_COMPILE_BYTECODE=$UV_COMPILE_BYTECODE
 RUN apt-get update && \
     apt-get upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates  -y && \
-    sudo update-ca-certificates && \
+    update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the files with locked dependencies

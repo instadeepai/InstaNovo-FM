@@ -84,8 +84,7 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 # Clean after packages' install
 RUN apt-get update && \
     apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y && \
-    rm -rf /var/lib/apt/lists/*
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y
 
 # Create group and user, add -f to skip the command without error if it exists already
 RUN groupadd --force --gid $HOST_GID $USER && \

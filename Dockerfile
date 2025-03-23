@@ -6,6 +6,12 @@ ARG UV_PYTHON=python3.11.9
 ARG UV_COMPILE_BYTECODE=1
 ARG UV_PYTHON_DOWNLOADS=never
 
+FROM alpine/curl AS vscode-installer
+
+RUN mkdir /aichor
+RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /aichor/vscode_cli.tar.gz
+RUN tar -xf /aichor/vscode_cli.tar.gz -C /aichor
+
 # Stage: 'uv'
 # It is used to define the uv Docker image
 FROM ghcr.io/astral-sh/uv:$UV_VERSION AS uv
@@ -148,3 +154,7 @@ FROM runtime AS aichor
 # Install the 'mass_spectrometry_foundation_model' package
 COPY --chown=$USER . .
 RUN uv pip install ./dreams
+
+# Copy the vscode binary on the final Dockerfile stage at '/aichor'
+# binary won't be findable in $PATH, it'll just be located at '/aichor/code'
+COPY --from=vscode-installer /aichor /aichor

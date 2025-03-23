@@ -14,6 +14,13 @@ spec:
   # command: nvidia-smi && make data && make train_ddp_stacked_single_node_multi_worker
   command: cd dreams && python download_data.py && ./pretraining.sh
 
+  debug:
+    vscode:
+      enabled: true # required
+      path: "/aichor/code" # Optional, defaults to "code". Refer the absolute path of the binary if not findable in $PATH
+      provider: "github" # Optional, vscode tunnel provider. Options are "github" or "microsoft", defaults to "github"
+
+
   # storage:
   #   attachExistingPVCs: # optional, array
   #     - name: "dtu-denovo-s-2e6da747d6d34f62-instanovo-da-74ced5ddf3554ab4"

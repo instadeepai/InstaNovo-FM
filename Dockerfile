@@ -34,6 +34,13 @@ ENV UV_PYTHON=$UV_PYTHON
 ARG UV_COMPILE_BYTECODE
 ENV UV_COMPILE_BYTECODE=$UV_COMPILE_BYTECODE
 
+# Install the required system dependencies
+# Clean after packages' install
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy the files with locked dependencies
 COPY pyproject.toml /tmp/pyproject.toml
 COPY uv.lock /tmp/uv.lock
@@ -135,11 +142,6 @@ RUN cd /tmp && uv sync --locked --no-cache --no-install-project && rm /tmp/pypro
 # Stage: 'aichor'
 # It is used to run the Python package on AIchor which requires to have the package installed
 FROM runtime AS aichor
-
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y && \
-    rm -rf /var/lib/apt/lists/*
 
 # Install the 'mass_spectrometry_foundation_model' package
 COPY --chown=$USER . .

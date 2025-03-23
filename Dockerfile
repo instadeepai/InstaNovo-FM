@@ -84,7 +84,7 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 # Clean after packages' install
 RUN apt-get update && \
     apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 libfontconfig1 xterm libxrender-dev libxtst6 libfreetype6  -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 libfontconfig1 xterm libxrender-dev libxtst6 libfreetype6 libglib2.0-0 -y && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 

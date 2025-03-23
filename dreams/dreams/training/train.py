@@ -1,3 +1,4 @@
+import os
 import h5py
 import numpy as np
 import pandas as pd
@@ -234,6 +235,7 @@ def main(args):
 
         # Define wandb log
         if not args.no_wandb:
+            assert 'WANDB_API_KEY' in os.environ, 'WANDB_API_KEY must be set in the environment variables.'
             if cv:
                 wandb.init(reinit=True, project=args.project_name, name=f'{args.run_name} [fold_{i}]', config=args,
                     group=args.run_name, entity=args.wandb_entity_name)

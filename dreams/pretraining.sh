@@ -46,5 +46,5 @@ python3 dreams/training/train.py \
  --pre_norm \
  --graphormer_mz_diffs \
  --ret_order_loss_w 0 \
- --no_wandb \
+ --wandb_entity_name j-vangoey \
  --num_workers_data 20

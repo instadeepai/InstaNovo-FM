@@ -12,7 +12,7 @@ def download_hdf5():
     source_path = os.path.join(
         os.environ["AICHOR_INPUT_PATH"], "DreaMS/20210408-Paleofeces-2604-01.hdf5"
     )
-    destination_dir = "dreams/data"
+    destination_dir = "data"
     destination_path = os.path.join(destination_dir, "20210408-Paleofeces-2604-01.hdf5")
 
     # Ensure destination directory exists

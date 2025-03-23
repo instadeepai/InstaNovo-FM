@@ -38,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=$UV_COMPILE_BYTECODE
 # Clean after packages' install
 RUN apt-get update && \
     apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 libfontconfig1 xterm libxrender-dev libxtst6 libfreetype6  -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates -y && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -84,7 +84,9 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 # Clean after packages' install
 RUN apt-get update && \
     apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git -y
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 libfontconfig1 xterm libxrender-dev libxtst6 libfreetype6  -y && \
+    update-ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create group and user, add -f to skip the command without error if it exists already
 RUN groupadd --force --gid $HOST_GID $USER && \
@@ -142,12 +144,6 @@ RUN cd /tmp && uv sync --locked --no-cache --no-install-project && rm /tmp/pypro
 # Stage: 'aichor'
 # It is used to run the Python package on AIchor which requires to have the package installed
 FROM runtime AS aichor
-
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install curl git apt-transport-https ca-certificates libxrender1 libfontconfig1 xterm libxrender-dev libxtst6 libfreetype6  -y && \
-    update-ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
 
 # Install the 'mass_spectrometry_foundation_model' package
 COPY --chown=$USER . .

@@ -24,7 +24,7 @@ python3 dreams/training/train.py \
  --d_peak 44 \
  --d_fourier 980 \
  --lr 1e-4 \
- --batch_size 256 \
+ --batch_size 128 \
  --dropout 0.1 \
  --save_top_k -1 \
  --att_dropout 0.1 \

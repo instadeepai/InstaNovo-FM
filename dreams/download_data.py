@@ -15,8 +15,8 @@ def download_data(data_path, bucket_location):
     s3 = S3FileSystem(client_kwargs={"endpoint_url": os.environ.get("S3_ENDPOINT")})
 
     buckets = {
-        "input": os.environ["AICHOR_INPUT_PATH"],   
-        "output": 's3://',
+        "input": os.environ["AICHOR_INPUT_PATH"],
+        "output": "s3://",
     }
     # Define source and destination paths
     source_path = os.path.join(
@@ -84,4 +84,7 @@ if __name__ == "__main__":
     # hdf5_path = convert(destination_path)
     # upload_hdf5(hdf5_path, "denovo_dataset_v1_hdf5")
     # print("Done")
-    download_data("mass-spectro-194096dec8b74901-outputs/output/7f5f9429-e729-481f-9bbb-d5039406e015/denovo_dataset_v1_hdf5/train.hdf5", "output")
+    download_data(
+        "mass-spectro-194096dec8b74901-outputs/output/7f5f9429-e729-481f-9bbb-d5039406e015/denovo_dataset_v1_hdf5/train.hdf5",
+        "output",
+    )

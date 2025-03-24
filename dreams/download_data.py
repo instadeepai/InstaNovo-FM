@@ -8,6 +8,7 @@ from dreams.utils.data import MSData
 def download_mgf(mgf_path):
     """Download mgf file from S3 to local filesystem."""
     if "S3_ENDPOINT" not in os.environ:
+        print("S3_ENDPOINT not set. Returning mgf_path.")
         return mgf_path
 
     # Initialize S3 filesystem
@@ -18,16 +19,14 @@ def download_mgf(mgf_path):
         os.environ["AICHOR_INPUT_PATH"], mgf_path
     )  # don't use Pathlib for s3 paths
 
-    destination_dir = Path("data")
-    destination_path = destination_dir / mgf_path
+    destination_dir = Path("/home/appuser/mass_spectrometry_foundation_model/dreams/data")
+    destination_path = destination_dir / Path(mgf_path).name
 
     # Ensure destination directory exists
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     # Read and save the file from S3
-    with s3.open(source_path, "rb") as s3_file, open(
-        destination_path, "wb"
-    ) as local_file:
+    with s3.open(source_path, "rb") as s3_file, destination_path.open(mode="wb") as local_file:
         shutil.copyfileobj(s3_file, local_file)
 
     print(f"File downloaded to {destination_path}")

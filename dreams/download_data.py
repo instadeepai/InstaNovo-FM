@@ -6,14 +6,17 @@ from dreams.utils.data import MSData
 
 
 def download_mgf(mgf_path):
+    """Download mgf file from S3 to local filesystem."""
     if "S3_ENDPOINT" not in os.environ:
         return mgf_path
-    
+
     # Initialize S3 filesystem
     s3 = S3FileSystem(client_kwargs={"endpoint_url": os.environ.get("S3_ENDPOINT")})
 
     # Define source and destination paths
-    source_path = Path(os.environ["AICHOR_INPUT_PATH"]) / mgf_path
+    source_path = os.path.join(
+        os.environ["AICHOR_INPUT_PATH"], mgf_path
+    )  # don't use Pathlib for s3 paths
 
     destination_dir = Path("data")
     destination_path = destination_dir / mgf_path
@@ -32,6 +35,7 @@ def download_mgf(mgf_path):
 
 
 def convert(mgf_path):
+    """Converts mgf file to hdf5 format."""
     print(f"Saving MSData to HDF5 for {mgf_path}")
     hdf5_path = Path(mgf_path).with_suffix(".hdf5")
 
@@ -43,17 +47,18 @@ def convert(mgf_path):
 
 
 def upload_hdf5(hdf5_path, subfolder):
+    """Uploads hdf5 file to S3."""
     if "S3_ENDPOINT" not in os.environ:
         return hdf5_path
-    
+
     s3 = S3FileSystem(client_kwargs={"endpoint_url": os.environ.get("S3_ENDPOINT")})
 
-    destination_dir = Path(os.environ["AICHOR_OUTPUT_PATH"]) / subfolder
+    destination_dir = os.path.join(os.environ["AICHOR_OUTPUT_PATH"], subfolder)
 
     # Ensure destination directory exists
-    destination_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(destination_dir, exist_ok=True)
 
-    destination_path = destination_dir / hdf5_path.name
+    destination_path = os.path.join(destination_dir, hdf5_path.name)  # s3 path
 
     # Read and save the file from S3
     with open(hdf5_path, "rb") as local_file, s3.open(

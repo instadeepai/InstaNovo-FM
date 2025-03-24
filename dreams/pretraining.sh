@@ -1,10 +1,10 @@
 python3 dreams/training/train.py \
- --project_name DreaMS \
- --job_key "job_paleofeces" \
- --run_name "run_paleofeces" \
+ --project_name denovo_dataset_v1 \
+ --job_key "job_denovo_dataset_v1" \
+ --run_name "run_denovo_dataset_v1" \
  --frac_masks 0.3 \
  --train_regime pre-training \
- --dataset_pth "./data/20210408-Paleofeces-2604-01.hdf5" \
+ --dataset_pth "./data/train.hdf5" \
  --val_check_interval 0.1 \
  --train_objective mask_mz_hot \
  --hot_mz_bin_size 0.05 \
@@ -35,7 +35,7 @@ python3 dreams/training/train.py \
  --train_precision 32 \
  --mask_peaks \
  --mask_intens_strategy intens_p \
- --max_peaks_n 60 \
+ --max_peaks_n 800 \
  --ssl_probing_depth 0 \
  --focal_loss_gamma 5 \
  --no_transformer_bias \
@@ -47,4 +47,4 @@ python3 dreams/training/train.py \
  --graphormer_mz_diffs \
  --ret_order_loss_w 0 \
  --wandb_entity_name j-vangoey \
- --num_workers_data 20
+ --num_workers_data 64

@@ -5,28 +5,36 @@ from pathlib import Path
 from dreams.utils.data import MSData
 
 
-def download_mgf(mgf_path):
-    """Download mgf file from S3 to local filesystem."""
+def download_data(data_path, bucket_location):
+    """Download data file from S3 to local filesystem."""
     if "S3_ENDPOINT" not in os.environ:
-        print("S3_ENDPOINT not set. Returning mgf_path.")
-        return mgf_path
+        print("S3_ENDPOINT not set. Returning data_path.")
+        return data_path
 
     # Initialize S3 filesystem
     s3 = S3FileSystem(client_kwargs={"endpoint_url": os.environ.get("S3_ENDPOINT")})
 
+    buckets = {
+        "input": os.environ["AICHOR_INPUT_PATH"],   
+        "output": os.environ["AICHOR_OUTPUT_PATH"],
+    }
     # Define source and destination paths
     source_path = os.path.join(
-        os.environ["AICHOR_INPUT_PATH"], mgf_path
+        buckets[bucket_location], data_path
     )  # don't use Pathlib for s3 paths
 
-    destination_dir = Path("/home/appuser/mass_spectrometry_foundation_model/dreams/data")
-    destination_path = destination_dir / Path(mgf_path).name
+    destination_dir = Path(
+        "/home/appuser/mass_spectrometry_foundation_model/dreams/data"
+    )
+    destination_path = destination_dir / Path(data_path).name
 
     # Ensure destination directory exists
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     # Read and save the file from S3
-    with s3.open(source_path, "rb") as s3_file, destination_path.open(mode="wb") as local_file:
+    with s3.open(source_path, "rb") as s3_file, destination_path.open(
+        mode="wb"
+    ) as local_file:
         shutil.copyfileobj(s3_file, local_file)
 
     print(f"File downloaded to {destination_path}")
@@ -70,8 +78,9 @@ def upload_hdf5(hdf5_path, subfolder):
 
 
 if __name__ == "__main__":
-    mgf_path = "denovo_dataset_v1_mgf/train.mgf"
-    destination_path = download_mgf(mgf_path)
-    hdf5_path = convert(destination_path)
-    upload_hdf5(hdf5_path, "denovo_dataset_v1_hdf5")
-    print("Done")
+    # mgf_path = "denovo_dataset_v1_mgf/train.mgf"
+    # destination_path = download_mgf(mgf_path)
+    # hdf5_path = convert(destination_path)
+    # upload_hdf5(hdf5_path, "denovo_dataset_v1_hdf5")
+    # print("Done")
+    download_data("output/7f5f9429-e729-481f-9bbb-d5039406e015/denovo_dataset_v1_hdf5/train.hdf5", "output")

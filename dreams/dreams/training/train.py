@@ -25,7 +25,8 @@ from dreams.utils.data import ContrastiveSpectraDataset
 import torch
 torch.set_printoptions(profile='full')
 torch.set_float32_matmul_precision('high')
-
+torch.cuda.empty_cache()
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 def main(args):
 

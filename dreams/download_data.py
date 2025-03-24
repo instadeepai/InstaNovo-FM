@@ -16,7 +16,7 @@ def download_data(data_path, bucket_location):
 
     buckets = {
         "input": os.environ["AICHOR_INPUT_PATH"],   
-        "output": os.environ["AICHOR_OUTPUT_PATH"],
+        "output": 's3://',
     }
     # Define source and destination paths
     source_path = os.path.join(
@@ -32,6 +32,7 @@ def download_data(data_path, bucket_location):
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     # Read and save the file from S3
+    print(f"Downloading {source_path}")
     with s3.open(source_path, "rb") as s3_file, destination_path.open(
         mode="wb"
     ) as local_file:
@@ -83,4 +84,4 @@ if __name__ == "__main__":
     # hdf5_path = convert(destination_path)
     # upload_hdf5(hdf5_path, "denovo_dataset_v1_hdf5")
     # print("Done")
-    download_data("output/7f5f9429-e729-481f-9bbb-d5039406e015/denovo_dataset_v1_hdf5/train.hdf5", "output")
+    download_data("mass-spectro-194096dec8b74901-outputs/output/7f5f9429-e729-481f-9bbb-d5039406e015/denovo_dataset_v1_hdf5/train.hdf5", "output")

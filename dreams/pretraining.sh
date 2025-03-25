@@ -35,7 +35,7 @@ python3 dreams/training/train.py \
  --train_precision 32 \
  --mask_peaks \
  --mask_intens_strategy intens_p \
- --max_peaks_n 200 \
+ --max_peaks_n 60 \
  --ssl_probing_depth 0 \
  --focal_loss_gamma 5 \
  --no_transformer_bias \

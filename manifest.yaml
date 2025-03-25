@@ -34,6 +34,6 @@ spec:
         ramRatio: 32 # >= 2
         accelerators:
           gpu:
-            count: 2
+            count: 8
             type: gpu
             product: NVIDIA-H100-80GB-HBM3

@@ -19,6 +19,13 @@ import dreams.utils.data as du
 from dreams.utils.io import setup_logger
 from dreams.models.dreams.dreams import DreaMS
 
+# imports for Neptune
+import neptune
+from lightning.pytorch.loggers.neptune import NeptuneLogger
+from dotenv import load_dotenv
+import logging
+from typing import List
+
 # from dreams.models.vanilla_bert.bert import VanillaBERT
 from dreams.models.heads.heads import *
 from dreams.models.baselines.deep_sets import *
@@ -30,6 +37,66 @@ torch.set_printoptions(profile="full")
 torch.set_float32_matmul_precision("high")
 torch.cuda.empty_cache()
 
+def init_neptune(
+        tags: List[str],
+        mode: str = "async",
+        name: Optional[str] = None,
+        api_token_var: str = "NEPTUNE_API_TOKEN",
+        project_name_var: str = "NEPTUNE_PROJECT"
+) -> neptune.Run:
+    """
+    Initialize a Neptune run using environment variables.
+
+    Parameters:
+    - tags (List[str]): Tags to associate with the Neptune run.
+    - mode (str): Neptune connection mode. Defaults to "async".
+                  Valid values: "async", "sync", "offline", "read-only", "debug".
+    - name (Optional[str]): Optional name for the run.
+    - api_token_var (str): Environment variable for Neptune API token.
+    - project_name_var (str): Environment variable for Neptune project name.
+
+    Returns:
+    - neptune.Run: Initialized Neptune run object.
+    """
+    logger = logging.getLogger(__name__)
+
+    logger.info("Loading environment variables...")
+    load_dotenv()
+
+    project_name = os.getenv(project_name_var)
+    if not project_name:
+        raise ValueError(f"Environment variable '{project_name_var}' is not set.")
+
+    # Only require API token if not running offline
+    api_token = os.getenv(api_token_var) if mode != "offline" else None
+    if mode != "offline" and not api_token:
+        raise ValueError(f"Environment variable '{api_token_var}' is not set for mode '{mode}'.")
+
+    logger.info(f"Initializing Neptune run in '{mode}' mode for project '{project_name}'.")
+
+    run = neptune.init_run(
+        project=project_name,
+        api_token=api_token,
+        mode=mode,
+        name=name,
+        tags=tags,
+    )
+
+    logger.info("Neptune run initialized successfully.")
+    return run
+
+def fully_sanitize(obj):
+    # Recursively convert all values to builtin Python types.
+    if isinstance(obj, dict):
+        return {k: fully_sanitize(v) for k, v in obj.items()}
+    elif hasattr(obj, '__dict__'):
+        return fully_sanitize(vars(obj))
+    elif isinstance(obj, (list, tuple)):
+        return [fully_sanitize(v) for v in obj]
+    elif isinstance(obj, (int, float, bool, str, type(None))):
+        return obj
+    else:
+        return str(obj)
 
 def main(args):
     # Prepare seeds and auxiliary variables
@@ -58,7 +125,7 @@ def main(args):
         dataset = du.MaskedSpectraDataset(
             in_pth=args.dataset_pth,
             spec_preproc=spec_preproc,
-            n_samples=args.n_samples,
+            n_samples=5000,
             dformat=args.dformat,
             logger=logger,
             ssl_objective=args.train_objective,
@@ -318,7 +385,34 @@ def main(args):
         if args.train_precision == 64:
             model = model.double()
 
-        # Define wandb log
+        # ——— NeptuneLogger setup ———
+        if not args.no_neptune:
+            if cv:
+                # for CV: re-name each fold run and carry over the “group” tag
+                neptune_run = init_neptune(
+                    tags=[*args.neptune_tags, args.run_name],  # include group tag
+                    mode=args.neptune_mode,
+                    name=f"{args.run_name} [fold_{i}]",  # per-fold name
+                )
+            else:
+                # for single runs: just use the base name/tags
+                neptune_run = init_neptune(
+                    tags=args.neptune_tags,
+                    mode=args.neptune_mode,
+                    # mode="offline",
+                    name=args.run_name,
+                )
+
+            neptune_logger = NeptuneLogger(
+                run=neptune_run,
+                log_model_checkpoints=False,
+            )
+            # push your full argparse config under training/hyperparams
+            neptune_logger.log_hyperparams(fully_sanitize(vars(args)))
+        else:
+            neptune_logger = None
+
+        # ——— WandbLogger setup ———
         if not args.no_wandb:
             assert (
                 "WANDB_API_KEY" in os.environ
@@ -393,10 +487,14 @@ def main(args):
             if not cv
             else None
         )
+
+        # ——— Combine both loggers for the Trainer ———
+        loggers = [lg for lg in (wandb_logger, neptune_logger) if lg]
+
         trainer = pl.Trainer(
             strategy=strategy,
             max_epochs=args.max_epochs,
-            logger=wandb_logger if not args.no_wandb else None,
+            logger=loggers or False,
             accelerator=device,
             devices=args.num_devices,
             log_every_n_steps=args.log_every_n_steps,

@@ -124,6 +124,26 @@ def parse_args():
     parser.add_argument('--val_check_interval', type=float, default=1.)
     parser.add_argument('--log_figs', action='store_true')
 
+    # Neptune
+    parser.add_argument(
+        "--no-neptune",
+        action="store_true",
+        help="Disable Neptune logging (default: enabled)"
+    )
+    parser.add_argument(
+        "--neptune-mode",
+        type=str,
+        default="async",
+        choices=["async", "sync", "offline", "read-only", "debug"],
+        help="Neptune connection mode"
+    )
+    parser.add_argument(
+        "--neptune-tags",
+        nargs="*",
+        default=[],
+        help="List of tags for the Neptune run"
+    )
+
     # Infrastructure
     # parser.add_argument('--accelerator', type=str, default='gpu')
     parser.add_argument('--num_devices', type=int, default=1)

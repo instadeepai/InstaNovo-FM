@@ -40,7 +40,7 @@ class FineTuningHead(pl.LightningModule):
         head (nn.Module): The fine-tuning head (to be implemented in subclasses).
     """
 
-    def __init__(self, backbone: Union[Path, DreaMS], lr, weight_decay, backbone_cls=DreaMS, unfreeze_backbone_at_epoch=0,
+    def __init__(self, backbone: Union[Path, DreaMS], lr, weight_decay, backbone_cls=DreaMS, unfreeze_backbone_at_epoch=1,
                  precursor_emb=True):
         """
         Initialize the FineTuningHead.
@@ -57,10 +57,14 @@ class FineTuningHead(pl.LightningModule):
         self.save_hyperparameters()
 
         if isinstance(backbone, Path):
-            self.backbone = backbone_cls.load_from_checkpoint(
-                backbone,
-                map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            )
+            try:
+                self.backbone = backbone_cls.load_from_checkpoint(
+                    backbone,
+                    map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                )
+            except:
+                print(f"Failed to load backbone ({backbone_cls}) from path: {backbone}")
+                raise
         else:
             self.backbone = backbone
 

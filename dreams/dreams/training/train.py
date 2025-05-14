@@ -125,7 +125,7 @@ def main(args):
         dataset = du.MaskedSpectraDataset(
             in_pth=args.dataset_pth,
             spec_preproc=spec_preproc,
-            n_samples=5000,
+            n_samples=args.n_samples,
             dformat=args.dformat,
             logger=logger,
             ssl_objective=args.train_objective,
@@ -172,95 +172,27 @@ def main(args):
                 label=args.train_objective,
                 dformat=args.dformat,
             )
-            data_module = du.SplittedDataModule(
-                dataset=dataset,
-                split_mask=pd.Series(msdata.get_values(FOLD)),
-                batch_size=args.batch_size,
-                num_workers=args.num_workers_data,
-                n_train_samples=args.n_samples,
-                seed=args.seed,
-            )
-        # NOTE: This is deprecated
-        elif args.dataset_pth.suffix == ".pkl":
-            df = pd.read_pickle(args.dataset_pth)
+            # data_module = du.SplittedDataModule(
+            #     dataset=dataset,
+            #     split_mask=pd.Series(msdata.get_values(FOLD)),
+            #     batch_size=args.batch_size,
+            #     num_workers=args.num_workers_data,
+            #     n_train_samples=args.n_samples,
+            #     seed=args.seed,
+            # )
 
-            if args.train_objective == "contrastive_spec_embs":
-                pos_idx_col, neg_idx_col = "pos_idx", "neg_idx"
-                dataset = ContrastiveSpectraDataset(
-                    df,
-                    n_pos_samples=args.n_pos_samples,
-                    n_neg_samples=args.n_neg_samples,
-                    spec_preproc=spec_preproc,
-                    return_smiles=True,
-                    logger=logger,
-                    pos_idx_col=pos_idx_col,
-                    neg_idx_col=neg_idx_col,
-                )
-                # Drop spectra with insufficient number of nieghbors for contrastive training
-                # through modifying the split column
-                mask_enough_neighbors = (
-                    df[neg_idx_col].apply(len) >= args.n_neg_samples
-                ) & (df[pos_idx_col].apply(len) >= args.n_pos_samples)
-                if logger and mask_enough_neighbors.sum() != len(df):
-                    n_removed = len(df) - mask_enough_neighbors.sum()
-                    logger.info(
-                        f"Removing {n_removed} out of {len(df)} spectra with insufficient number of neighbors."
-                    )
-                assert (
-                    "fold" in df.columns or "val" in df.columns
-                ), "Contrastive dataset must have a split column."
-                if "fold" in df.columns:
-                    df.loc[~mask_enough_neighbors, "fold"] = "none"
-                else:
-                    df["fold"] = "train"
-                    df.loc[df["val"], "fold"] = "val"
-                    df.loc[~mask_enough_neighbors, "fold"] = "none"
-                    del df["val"]
-            else:
-                dataset = du.AnnotatedSpectraDataset(
-                    df["MSnSpectrum"].tolist(),
-                    label=args.train_objective,
-                    dformat=args.dformat,
-                    spec_preproc=spec_preproc,
-                    return_smiles=args.retrieval_val_pth,
-                )
-            if args.train_regime == "cv-fine-tuning":
-                assert "fold" in df.columns
-                data_module = du.CVDataModule(
-                    dataset,
-                    fold_idx=df["fold"],
-                    batch_size=args.batch_size,
-                    num_workers=args.num_workers_data,
-                )
-            elif args.random_fine_tuning_split:
-                data_module = du.RandomSplitDataModule(
-                    dataset,
-                    val_frac=args.val_frac,
-                    batch_size=args.batch_size,
-                    num_workers=args.num_workers_data,
-                )
-            else:
-                split_col = "val" if "val" in df.columns else "fold"
-                assert split_col in df.columns
-                data_module = du.SplittedDataModule(
-                    dataset,
-                    split_mask=df[split_col],
-                    batch_size=args.batch_size,
-                    num_workers=args.num_workers_data,
-                    n_train_samples=args.n_samples,
-                    seed=args.seed,
-                    include_val_in_train=args.include_val_in_train,
-                )
+            # Set num_workers to 0 for HDF5 files to avoid pickling issues
+            data_module = du.RandomSplitDataModule(  # RandomSplitDataModule is simpler and sufficient
+                dataset=dataset,
+                val_frac=args.val_frac,
+                batch_size=args.batch_size,
+                num_workers=0,
+            )
         else:
             raise ValueError(f"Unknown dataset type: {args.dataset_pth.suffix}.")
 
     # Log dataset sizes
     cv = True if isinstance(data_module, du.CVDataModule) else False
-    # if not cv:
-    #     n_train_samples, n_train_batches = len(data_module.train_dataloader().dataset), len(data_module.train_dataloader())
-    #     n_val_samples, n_val_batches = len(data_module.val_dataloader().dataset), len(data_module.val_dataloader())
-    # logger.info(f'# train samples: {n_train_samples} ({n_train_batches} batches)')
-    # logger.info(f'# val samples: {n_val_samples} ({n_val_batches} batches)')
 
     # If cross validation, iterate over folds
     for i in range(data_module.get_num_folds() if cv else 1):
@@ -270,38 +202,7 @@ def main(args):
         # Define model
         if args.model == "DreaMS":
             if not args.pre_trained_pth:
-                #     model = DreaMS.load_from_checkpoint(args.pre_trained_pth, map_location=torch.device(device))
-                # else:
                 model = DreaMS(args, spec_preproc)
-
-        # elif args.model == 'VanillaBERT':
-        #     if args.pre_trained_pth:
-        #         model = VanillaBERT.load_from_checkpoint(args.pre_trained_pth)
-        #     else:
-        #         model = VanillaBERT(
-        #             gains_dir=args.gains_dir,
-        #             d_fourier=args.d_fourier,
-        #             d_peak=args.d_peak,
-        #             nheads=args.n_heads,
-        #             num_layers=args.n_layers,
-        #             ff_peak_depth=args.ff_peak_depth,
-        #             ff_fourier_depth=args.ff_fourier_depth,
-        #             ff_out_depth=args.ff_out_depth,
-        #             dropout=args.dropout,
-        #             lr=args.lr,
-        #             fourier_strategy=args.fourier_strategy,
-        #             weight_decay=args.weight_decay,
-        #             charge_feature=args.charge_feature,
-        #             ssl_objective=args.train_objective,
-        #             dformat=args.dformat,
-        #             fourier_trainable=args.fourier_trainable,
-        #             fourier_num_freqs=args.fourier_num_freqs,
-        #             ff_fourier_d=args.ff_fourier_d,
-        #             hot_mz_bin_size=args.hot_mz_bin_size,
-        #             n_warmup_steps=args.n_warmup_steps,
-        #             fourier_min_freq=args.fourier_min_freq,
-        #             # batch_size=args.batch_size
-        #         )
         elif args.model == "DeepSets":
             if args.train_objective.startswith("fp"):
                 model = DeepSetsPeaksFingerprint(args.train_objective, lr=args.lr)
@@ -321,7 +222,7 @@ def main(args):
         if "fine-tuning" in args.train_regime and args.model != "DeepSets":
             backbone = (
                 args.pre_trained_pth
-                if args.pre_trained_pth
+                if args.pre_trained_pth is not None and len(str(args.pre_trained_pth)) > 4
                 else DreaMS(args, spec_preproc)
             )
             if args.train_objective in {
@@ -517,10 +418,6 @@ def main(args):
                     )
                 }
             )
-
-        # Compute validation metrics before the training
-        if args.train_regime == "pre-training" and not args.no_val:
-            trainer.validate(model, data_module)
 
         trainer.validate(
             model,

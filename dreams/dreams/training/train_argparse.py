@@ -40,7 +40,7 @@ def parse_args():
 
     # Model (general)
     parser.add_argument('--model', type=str, default='DreaMS', choices=['DreaMS', 'VanillaBERT', 'DeepSets'])
-    parser.add_argument('--pre_trained_pth', type=Path)
+    parser.add_argument('--pre_trained_pth', type=lambda x: None if x is None or x == "" or x == "None" else Path(x))
     parser.add_argument('--unfreeze_backbone_at_epoch', default=0, help='Either integer or False to never unfreeze.')
     parser.add_argument('--head_depth', type=int, default=1)
     parser.add_argument('--head_phi_depth', type=int, default=1, help='rho is an element-wise Deep Sets network.')
@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument('--frac_masks', type=float)
     parser.add_argument('--train_objective', type=str, required=True, choices=['mask_peak', 'mask_mz', 'mask_intensity',
         'mask_mz_hot', 'mask_peak_hot', 'shuffling', 'num_C', 'num_O', 'has_N', 'has_Cl', 'has_F', 'qed', 'fp_rdkit_2048',
-        'fp_rdkit_4096', 'fp_morgan_2048', 'fp_morgan_4096', 'mol_props', 'contrastive_spec_embs'])
+        'fp_rdkit_4096', 'fp_morgan_2048', 'fp_morgan_4096', 'mol_props', 'contrastive_spec_embs', 'RTINSECONDS'])
     parser.add_argument('--deterministic_mask', action='store_true')
     parser.add_argument('--bert801010_masking', action='store_true')
     parser.add_argument('--mask_val', type=float, default=-1)

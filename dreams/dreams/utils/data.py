@@ -161,6 +161,8 @@ class SpectrumPreprocessor:
         # Adjust precision
         if self.precision == 32:
             spec = spec.astype(np.float32, copy=False)
+        elif self.precision == 64:
+            spec = spec.astype(np.float64, copy=False)
 
         return spec
 
@@ -378,7 +380,7 @@ class MSData:
 
     def to_torch_dataset(self, spec_preproc: SpectrumPreprocessor, label=None, **kwargs):
         if label is not None:
-            return LabeledSpectraDataset(msdata=self, label=label, spec_preproc=spec_preproc, **kwargs)
+            return CustomLabeledSpectraDataset(msdata=self, label=label, spec_preproc=spec_preproc, **kwargs)
         else:
             return RawSpectraDataset(self.get_spectra(), self.get_prec_mzs(), spec_preproc, **kwargs)
 
@@ -969,53 +971,6 @@ class MaskedSpectraDataset(Dataset):
 
         return item
 
-
-class AnnotatedSpectraDataset(Dataset):
-    """
-    NOTE: This class is deprecated in favor of `LabeledSpectraDataset`.
-    """
-    def __init__(self, spectra: List[su.MSnSpectrum], label: str, spec_preproc: SpectrumPreprocessor,
-                 dformat: DataFormat, return_smiles=False):
-        self.spectra = spectra
-        self.label = label
-        self.spec_preproc = spec_preproc
-        self.dformat = dformat
-        self.return_smiles = return_smiles
-        if self.label == 'mol_props':
-            self.prop_calc = mu.MolPropertyCalculator()
-
-    def __len__(self):
-        return len(self.spectra)
-
-    def __getitem__(self, i):
-        spectrum = self.spectra[i].get_peak_list()
-        spectrum = self.spec_preproc(spectrum, prec_mz=self.spectra[i].get_precursor_mz(), high_form=False)
-
-        if self.label.startswith('num'):  # e.g. num_C
-            label = float(self.spectra[i].get_precursor_formula(to_dict=True)[self.label.split('_')[1]])
-        elif self.label.startswith('has'):  # e.g. has_C
-            label = float(bool(self.spectra[i].get_precursor_formula(to_dict=True)[self.label.split('_')[1]]))
-        elif self.label.startswith('fp'):  # e.g. fp_morgan_2048
-            label = mu.fp_func_from_str(self.label)(self.spectra[i].get_precursor_mol())
-        elif self.label == 'qed':
-            label = float(Chem.QED.qed(self.spectra[i].get_precursor_mol()))
-        elif self.label == 'mol_props':
-            label = self.prop_calc.mol_to_props(self.spectra[i].get_precursor_mol(), min_max_norm=True)
-        else:
-            raise ValueError(f'Invalid label name "{self.label}".')
-
-        item = {
-            'spec': spectrum,
-            'precursor mz': self.spectra[i].get_precursor_mz(),
-            'charge': self.spectra[i].get_precursor_charge() / self.dformat.max_charge,
-            'label': label,
-        }
-
-        if self.return_smiles:
-            item['smiles'] = Chem.MolToSmiles(self.spectra[i].get_precursor_mol(), isomericSmiles=False, canonical=True)
-
-        return item
-    
 
 class LabeledSpectraDataset(Dataset):
     def __init__(self, msdata: Union[Path, str, MSData], label: str, spec_preproc: SpectrumPreprocessor,
@@ -1911,89 +1866,85 @@ def evaluate_split(df_split, n_workers=5, smiles_col=SMILES, fold_col='fold'):
     return max_train_tanimotos
 
 
-# NOTE: deprecated because not suited for (wandb) logging
-# class CVLoop(Loop):
-#
-#     def __init__(self, num_folds: int, export_path: str) -> None:
-#         super().__init__()
-#         self.num_folds = num_folds
-#         self.current_fold: int = 0
-#         self.export_path = export_path
-#
-#     @property
-#     def done(self) -> bool:
-#         return self.current_fold >= self.num_folds
-#
-#     def connect(self, fit_loop: FitLoop) -> None:
-#         self.fit_loop = fit_loop
-#
-#     def reset(self) -> None:
-#         """Nothing to reset in this loop."""
-#
-#     def on_run_start(self, *args: Any, **kwargs: Any) -> None:
-#         """Used to call `setup_folds` from the `BaseKFoldDataModule` instance and store the original weights of the
-#         model."""
-#         assert isinstance(self.trainer.datamodule, CVDataModule)
-#         self.lightning_module_state_dict = deepcopy(self.trainer.lightning_module.state_dict())
-#
-#     def on_advance_start(self, *args: Any, **kwargs: Any) -> None:
-#         """Used to call `setup_fold_index` from the `BaseKFoldDataModule` instance."""
-#         print(f'STARTING FOLD {self.current_fold}')
-#         assert isinstance(self.trainer.datamodule, CVDataModule)
-#         self.trainer.datamodule.setup_fold_index(self.current_fold)
-#         # self.trainer.lightning_module.__setattr__('fold_i', self.current_fold)
-#         setattr(self.trainer.lightning_module, 'fold_i', self.current_fold)
-#         print('getattr(self.trainer.lightning_module, "fold_i"):', getattr(self.trainer.lightning_module, 'fold_i'))
-#
-#     def advance(self, *args: Any, **kwargs: Any) -> None:
-#         """Used to the run a fitting and testing on the current hold."""
-#         self._reset_fitting()  # requires to reset the tracking stage.
-#         self.fit_loop.run()
-#
-#         self._reset_testing()  # requires to reset the tracking stage.
-#         self.trainer.test_loop.run()
-#         self.current_fold += 1  # increment fold tracking number.
-#
-#     def on_advance_end(self) -> None:
-#         """Used to save the weights of the current fold and reset the LightningModule and its optimization."""
-#         self.trainer.save_checkpoint(osp.join(self.export_path, f'cv_model.{self.current_fold}.pt'))
-#         # restore the original weights + optimization and schedulers.
-#         self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
-#         self.trainer.strategy.setup_optimizers(self.trainer)
-#         self.replace(fit_loop=FitLoop)
-#
-#     # def on_run_end(self) -> None:
-#     #     """Used to compute the performance of the ensemble model on the test set."""
-#     #     checkpoint_paths = [osp.join(self.export_path, f"model.{f_idx + 1}.pt") for f_idx in range(self.num_folds)]
-#     #     voting_model = EnsembleVotingModel(type(self.trainer.lightning_module), checkpoint_paths)
-#     #     voting_model.trainer = self.trainer
-#     #     # This requires to connect the new model and move it the right device.
-#     #     self.trainer.strategy.connect(voting_model)
-#     #     self.trainer.strategy.model_to_device()
-#     #     self.trainer.test_loop.run()
-#
-#     def on_save_checkpoint(self) -> Dict[str, int]:
-#         return {'current_fold': self.current_fold}
-#
-#     def on_load_checkpoint(self, state_dict: Dict) -> None:
-#         self.current_fold = state_dict['current_fold']
-#
-#     def _reset_fitting(self) -> None:
-#         self.trainer.reset_train_dataloader()
-#         self.trainer.reset_val_dataloader()
-#         self.trainer.state.fn = TrainerFn.FITTING
-#         self.trainer.training = True
-#
-#     def _reset_testing(self) -> None:
-#         self.trainer.reset_test_dataloader()
-#         self.trainer.state.fn = TrainerFn.TESTING
-#         self.trainer.testing = True
-#
-#     def __getattr__(self, key) -> Any:
-#         # requires to be overridden as attributes of the wrapped loop are being accessed.
-#         if key not in self.__dict__:
-#             return getattr(self.fit_loop, key)
-#         return self.__dict__[key]
-#
-#     def __setstate__(self, state: Dict[str, Any]) -> None:
-#         self.__dict__.update(state)
+class CustomLabeledSpectraDataset(Dataset):
+    def __init__(self, msdata: Union[Path, str, MSData], label: str, spec_preproc: SpectrumPreprocessor,
+                 dformat: DataFormat, return_smiles=False):
+        self.msdata = msdata if isinstance(msdata, MSData) else MSData(Path(msdata), in_mem=True)
+        self.label = label
+        self.spec_preproc = spec_preproc
+        self.dformat = dformat
+        self.return_smiles = return_smiles
+        if self.label == 'mol_props':
+            self.prop_calc = mu.MolPropertyCalculator()
+
+        # Initialize label statistics
+        self.label_mean = None
+        self.label_std = None
+        self.standardized_min = None
+        self.standardized_max = None
+
+        # Check label data type and store as attribute
+        first_label = self.msdata.get_values(self.label)[0]
+        self.label_dtype = 'float' if isinstance(first_label, (int, float)) else 'str'
+
+        # Only compute statistics for numeric labels
+        if self.label_dtype == 'float':
+            self._compute_label_stats()
+
+    def _compute_label_stats(self):
+        """Compute mean and standard deviation of scalar labels for normalization."""
+        labels = []
+        for i in range(len(self)):
+            label = self.msdata.get_values(self.label)[i]
+            labels.append(float(label))
+
+        labels = np.array(labels)
+        self.label_mean = np.mean(labels)
+        self.label_std = np.std(labels)
+        if self.label_std == 0:
+            self.label_std = 1.0  # Avoid division by zero
+
+        # Compute min and max of standardized values for [0,1] scaling
+        standardized_labels = (labels - self.label_mean) / self.label_std
+        self.standardized_min = np.min(standardized_labels)
+        self.standardized_max = np.max(standardized_labels)
+        if self.standardized_max == self.standardized_min:
+            self.standardized_max = self.standardized_min + 1.0  # Avoid division by zero
+
+    def __len__(self):
+        return len(self.msdata)
+
+    def __getitem__(self, i):
+        spectrum = self.msdata.get_spectra(i)
+        prec_mz = self.msdata.get_prec_mzs(i)
+        spectrum = self.spec_preproc(spectrum, prec_mz=prec_mz, high_form=False)
+
+        # Get and normalize the label
+        label = float(self.msdata.get_values(self.label)[i])
+        if self.label_mean is not None and self.label_std is not None:
+            # First normalize to zero mean and unit variance
+            label = (label - self.label_mean) / self.label_std
+            # Then scale standardized value to [0,1] range
+            label = (label - self.standardized_min) / (self.standardized_max - self.standardized_min)
+            # Clip to ensure [0,1] range
+            label = np.clip(label, 0.0, 1.0)
+
+        # Convert to the correct precision based on spec_preproc
+        if self.spec_preproc.precision == 64:
+            spectrum = spectrum.astype(np.float64)
+            if self.label_dtype == 'float':
+                label = np.float64(label)
+        else:
+            spectrum = spectrum.astype(np.float32)
+            if self.label_dtype == 'float':
+                label = np.float32(label)
+
+        item = {
+            'spec': spectrum,
+            'precursor mz': prec_mz,
+            'label': label,
+        }
+
+        item['charge'] = 1.0
+
+        return item

@@ -1,0 +1,56 @@
+#!/bin/bash
+
+#python download_data.py
+
+python3 dreams/training/train.py \
+ --project_name denovo_dataset_v1 \
+ --job_key "job_denovo_dataset_v1" \
+ --run_name "run_denovo_dataset_v1" \
+ --gcs_bucket_path "gs://mass_spec_foundation_model/checkpoints/pretrained" \
+ --frac_masks 0.3 \
+ --train_regime pre-training \
+ --dataset_pth "../data/train.hdf5" \
+ --val_check_interval 0.1 \
+ --train_objective mask_mz_hot \
+ --hot_mz_bin_size 0.05 \
+ --dformat A \
+ --model DreaMS \
+ --ff_peak_depth 1 \
+ --ff_fourier_depth 2 \
+ --ff_fourier_d 32 \
+ --ff_out_depth 1 \
+ --prec_intens 1.1 \
+ --num_devices 1 \
+ --max_epochs 2 \
+ --log_every_n_steps 20 \
+ --seed 3402 \
+ --n_layers 1 \
+ --n_heads 2 \
+ --d_peak 12 \
+ --d_fourier 32 \
+ --lr 1e-4 \
+ --batch_size 2 \
+ --dropout 0.1 \
+ --save_top_k -1 \
+ --att_dropout 0.1 \
+ --residual_dropout 0.1 \
+ --ff_dropout 0.1 \
+ --weight_decay 0 \
+ --attn_mech dot-product \
+ --train_precision 32 \
+ --mask_peaks \
+ --mask_intens_strategy intens_p \
+ --max_peaks_n 60 \
+ --ssl_probing_depth 0 \
+ --focal_loss_gamma 5 \
+ --no_transformer_bias \
+ --n_warmup_steps 5000 \
+ --fourier_strategy lin_float_int \
+ --mz_shift_aug_p 0.2 \
+ --mz_shift_aug_max 50 \
+ --pre_norm \
+ --graphormer_mz_diffs \
+ --ret_order_loss_w 0 \
+ --wandb_entity_name j-vangoey \
+ --num_workers_data 8 \
+ --no_wandb

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UMAP explorer · InstaNovo-FM</title>
+<meta name="description" content="Interactive explorer for the InstaNovo-FM spectrum embedding space: 100,000 LCFM test spectra in the published Figure 3 UMAP layout.">
+<link rel="icon" href="../static/images/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../static/css/viewer.css">
+</head>
+<body>
+<header>
+  <h1>UMAP explorer</h1>
+  <span class="sub" id="hdrsub"></span>
+  <span class="spacer"></span>
+  <div class="seg">
+    <button id="md2d" aria-pressed="true" title="Published 2-D layout (Figure 3)">2-D</button>
+    <button id="md3d" aria-pressed="false" title="Separate 3-component UMAP fit of the same spectra">3-D</button>
+  </div>
+  <div class="seg">
+    <button id="thLight" aria-pressed="false">Light</button>
+    <button id="thDark" aria-pressed="false">Dark</button>
+  </div>
+  <a class="backlink" href="../">← InstaNovo-FM</a>
+</header>
+
+<main>
+<div class="col" id="left">
+  <h2>Colour by</h2>
+  <select id="colorField"></select>
+
+  <div id="zBlock" hidden>
+    <h2>Coordinate space</h2>
+    <select id="zField"></select>
+    <div class="hint" id="zHint"></div>
+  </div>
+
+  <h2>Highlight classes</h2>
+  <div id="legend"></div>
+  <div class="row"><button id="lgReset">Reset</button></div>
+  <div class="hint" id="hiState"></div>
+  <div class="hint">Click a class to highlight it; shift-click to hide it.</div>
+
+  <h2>Filters</h2>
+  <div id="filters"></div>
+  <div class="row"><button id="addFilter">+ Add filter</button><button id="clearFilters">Clear</button></div>
+  <label><input type="checkbox" id="showBg" checked style="width:auto"> Keep filtered-out spectra as grey context</label>
+
+  <h2>Highlight peptidoform</h2>
+  <select id="dupSel"></select>
+  <input type="text" id="pepSearch" placeholder="sequence contains…">
+  <div class="hint" id="pepHint"></div>
+
+  <div id="boxBlock" hidden>
+    <h2>Region box</h2>
+    <div class="box6">
+      <span>x</span><input type="number" id="bx0" step="0.1"><input type="number" id="bx1" step="0.1">
+      <span>y</span><input type="number" id="by0" step="0.1"><input type="number" id="by1" step="0.1">
+      <span id="bzlab">z</span><input type="number" id="bz0" step="0.1"><input type="number" id="bz1" step="0.1">
+    </div>
+    <div class="row"><button id="boxAll">Fit all</button><button id="boxShow">Show</button></div>
+  </div>
+
+  <h2>Rendering</h2>
+  <label>Grey marker size <span class="mono" id="szv"></span></label>
+  <input type="range" id="size" min="0.6" max="8" step="0.2">
+  <label>Highlight size × <span class="mono" id="hzv"></span></label>
+  <input type="range" id="hsize" min="1" max="6" step="0.2">
+  <label>Grey opacity <span class="mono" id="opv"></span></label>
+  <input type="range" id="opac" min="0.05" max="1" step="0.05">
+  <div id="nptsBlock">
+    <label>Spectra drawn <span class="mono" id="npv"></span></label>
+    <input type="range" id="npts" min="10000" max="100000" step="10000">
+  </div>
+
+  <h2>Export</h2>
+  <div class="row wrap">
+    <button id="exPng">PNG 2×</button>
+    <button id="exSvg">SVG</button>
+    <button id="exPdf">PDF</button>
+  </div>
+  <div class="hint" id="exHint"></div>
+</div>
+
+<div id="center">
+  <div id="plot"></div>
+  <div id="overlay">loading the point set…</div>
+  <div id="statusbar">
+    <span id="stView"></span>
+    <span id="stN"></span>
+    <span id="stSel"></span>
+    <span style="flex:1"></span>
+    <button id="btnProfileView">Profile region</button>
+    <button id="btnReset">Reset view</button>
+  </div>
+</div>
+
+<div class="col" id="right">
+  <div class="tabs">
+    <button id="tbRegion" aria-pressed="true">Region</button>
+    <button id="tbPoint" aria-pressed="false">Spectrum</button>
+  </div>
+  <div class="pane" id="pnRegion" data-active="true"><div id="regionOut"><div class="resting">
+      Drag a box or lasso on the map, or press <b>Profile region</b>, to see what a
+      region is made of &mdash; class shares, enrichment against the whole point set,
+      how many projects contribute, and how the measured properties shift.
+    </div></div></div>
+  <div class="pane" id="pnPoint">
+    <div id="pinbar"><span>pinned</span><button id="unpin">Unpin and follow hover</button></div>
+    <div id="pointOut"></div>
+  </div>
+</div>
+</main>
+
+<script>
+/* Reflect the effective theme on the toggle before the app boots, so neither
+   button reads as active when the page is simply following the system. */
+(function(){
+  var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('thDark').setAttribute('aria-pressed', String(dark));
+    document.getElementById('thLight').setAttribute('aria-pressed', String(!dark));
+  });
+})();
+</script>
+<script src="../static/js/plotly-2.35.2.min.js"></script>
+<script src="../static/js/data-loader.js"></script>
+<script src="../static/js/viewer.js"></script>
+</body>
+</html>

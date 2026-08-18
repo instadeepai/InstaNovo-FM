@@ -196,7 +196,9 @@ h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.005em; }
 /* --------------------------------------------------------------- sections */
 .results { border-top: 1px solid var(--rule); }
 .result { padding: clamp(46px, 5vw, 78px) 0; border-bottom: 1px solid var(--rule); }
-.result > .wrap > .head { max-width: var(--measure); }
+/* Prose, figures, captions and cards all share one column, so the page reads as a
+   single measure rather than three competing widths. */
+.result > .wrap > * { max-width: var(--measure); }
 .result p { color: var(--ink-2); }
 .result p strong { color: var(--ink); font-weight: 600; }
 .result h2 { margin-bottom: 14px; text-wrap: balance; }
@@ -212,24 +214,41 @@ h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.005em; }
 /* ----------------------------------------------------------------- figures */
 figure { margin: 34px 0 0; }
 .figbox {
+  position: relative;
   border: 1px solid var(--rule); border-radius: 10px;
   background: var(--surface); padding: 10px;
   box-shadow: var(--shadow);
-  overflow-x: auto;
 }
-.figbox img { min-width: 620px; margin: 0 auto; cursor: zoom-in; border-radius: 4px; }
+.figbox img { width: 100%; cursor: zoom-in; border-radius: 4px; }
+/* These are dense multi-panel plates, so scaling them to the column costs detail;
+   make the zoom affordance visible rather than hover-only. */
+.figbox .enlarge {
+  position: absolute; top: 18px; right: 18px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 6px;
+  border: 1px solid var(--rule-2);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  font: 500 11.5px var(--sans); color: var(--ink-2);
+  pointer-events: none;
+}
+.figbox:hover .enlarge { border-color: var(--accent); color: var(--accent); }
 figcaption {
   margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2);
-  max-width: 88ch;
 }
 figcaption b { color: var(--ink); font-weight: 600; }
 figcaption .src { display: block; margin-top: 7px; font-size: 12.5px; color: var(--ink-3); }
 
 dialog.zoom {
-  border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh;
+  border: 0; padding: 0; background: transparent;
+  max-width: 96vw; max-height: 96vh; overflow: auto;
+  overscroll-behavior: contain;
 }
 dialog.zoom::backdrop { background: rgba(8,10,14,.86); }
-dialog.zoom img { max-height: 92vh; width: auto; cursor: zoom-out; border-radius: 6px; }
+/* Natural pixel size, pannable: the plates carry more detail than the column shows. */
+dialog.zoom img {
+  display: block; width: auto; max-width: none; max-height: none;
+  cursor: zoom-out; border-radius: 6px;
+}
 
 /* -------------------------------------------------------------- explorer cta */
 .cta {
@@ -283,6 +302,7 @@ footer { padding: clamp(44px, 5vw, 70px) 0 60px; border-top: 1px solid var(--rul
   .stat { border-left: 0; border-top: 1px solid var(--rule); padding: 20px 24px; }
   .stat:first-child { border-top: 0; }
   .figbox { padding: 6px; border-radius: 8px; }
+  .figbox .enlarge { top: 12px; right: 12px; padding: 3px 7px; font-size: 10.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

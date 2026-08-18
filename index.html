@@ -116,7 +116,7 @@
       </ul>
     </div>
     <figure>
-      <div class="figbox"><img src="static/images/fig1.webp" alt="Six-panel figure: the LLM-assisted curation pipeline, top tissue and disease terms across projects, kingdom-level taxonomy, the ACFM/LCFM/MCFM/HCFM nested tier sizes, instrument and protease shares, fragmentation-method shares, and the ten most frequent modifications." width="1656" height="2017"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig1.webp" alt="Six-panel figure: the LLM-assisted curation pipeline, top tissue and disease terms across projects, kingdom-level taxonomy, the ACFM/LCFM/MCFM/HCFM nested tier sizes, instrument and protease shares, fragmentation-method shares, and the ten most frequent modifications." width="1656" height="2017"></div>
       <figcaption><b>Figure 1 &mdash; Construction and characterisation of the InstaNovo-FM pretraining corpus.</b> Curation pipeline (a); most frequent tissue and disease terms across projects (b, c); kingdom-level taxonomy across the organism-annotated projects (d); nested tier sizes LCFM 184.6 M &sup; MCFM 18.4 M &sup; HCFM 3.7 M (e); share of spectra by mass analyser, dominated by Orbitrap Fusion 53.2% and Q Exactive 36.5% (f); by digestion protease, trypsin 148 M spectra (g); by fragmentation method, HCID 54.1% / HCD 34.1% / CID 11.2% / ETD 0.6% (h); and the ten most frequent post-translational and chemical modifications by spectral occurrence (i).
       <span class="src"><a href="static/pdfs/fig1.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
@@ -138,7 +138,7 @@
       </ul>
     </div>
     <figure>
-      <div class="figbox"><img src="static/images/fig2.webp" alt="Five-panel figure: the encoder schematic from masked spectrum to prediction heads, the leakage-versus-partial-group-masking scatter across masking strategies, the jump-rate versus collision-rate binning curve, grouped probe bars across the four pretraining variants, and a bar chart of structural attention heads per variant." width="1656" height="1623" loading="lazy"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig2.webp" alt="Five-panel figure: the encoder schematic from masked spectrum to prediction heads, the leakage-versus-partial-group-masking scatter across masking strategies, the jump-rate versus collision-rate binning curve, grouped probe bars across the four pretraining variants, and a bar chart of structural attention heads per variant." width="1656" height="1623" loading="lazy"></div>
       <figcaption><b>Figure 2 &mdash; InstaNovo-FM architecture and self-supervised pretraining objective.</b> Encoder schematic: masked MS/MS to a 768-dimensional encoder, latent and peak tokens, then group, offset, &delta;-Da and intensity heads (a). Pooled information leakage against partial-group masking rate across masking strategies, with Thompson-span plus isotope co-masking highlighted (b). Jump rate against collision rate from 0.01 to 0.5 Da, with 0.2 Da / 12,250 bins highlighted (c). Frozen-probe comparison of the four pretraining variants (d) and the count of structurally enriched attention heads each develops (e).
       <span class="src"><a href="static/pdfs/fig2.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
@@ -187,7 +187,7 @@
     </div>
 
     <figure>
-      <div class="figbox"><img src="static/images/fig3.webp" alt="Master UMAP of about 100,000 spectra coloured by fragmentation type, with five numbered zoom insets recolouring the same points by instrument, chemical labelling, PTM class, retention time and enzyme, beside bar charts of linear-probe macro-F1 and regression R-squared." width="1625" height="1109" loading="lazy"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig3.webp" alt="Master UMAP of about 100,000 spectra coloured by fragmentation type, with five numbered zoom insets recolouring the same points by instrument, chemical labelling, PTM class, retention time and enzyme, beside bar charts of linear-probe macro-F1 and regression R-squared." width="1625" height="1109" loading="lazy"></div>
       <figcaption><b>Figure 3 &mdash; The InstaNovo-FM embedding space encodes a hierarchy of proteomics knowledge.</b> UMAP of ~100,000 LCFM test-set spectra coloured by fragmentation type, with five numbered zoom windows recolouring the same layout by instrument, chemical labelling, PTM class, retention time and digestion enzyme (a). Macro-F1 of linear classification probes on frozen embeddings (b) and R&sup2; of ridge-regression probes (c).
       <span class="src"><a href="static/pdfs/fig3.pdf">Full resolution (PDF)</a> &middot; <a href="umap/">interactive version</a></span></figcaption>
     </figure>
@@ -209,7 +209,7 @@
       </ul>
     </div>
     <figure>
-      <div class="figbox"><img src="static/images/fig4.webp" alt="Five-panel figure: three stem plots of one spectrum coloured by ion type, integrated-gradients attribution and model confidence; a fragment-ion ladder for TGVELGKPTHFTVNAK with the masked y5 ion marked; summed attribution by fragment-group category; attribution against relative intensity; and an attribution Lorenz curve." width="1656" height="2270" loading="lazy"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig4.webp" alt="Five-panel figure: three stem plots of one spectrum coloured by ion type, integrated-gradients attribution and model confidence; a fragment-ion ladder for TGVELGKPTHFTVNAK with the masked y5 ion marked; summed attribution by fragment-group category; attribution against relative intensity; and an attribution Lorenz curve." width="1656" height="2270" loading="lazy"></div>
       <figcaption><b>Figure 4 &mdash; Peak-level representations and attention reveal learned fragmentation chemistry.</b> Integrated-gradients attribution for a representative test-split reconstruction (TGVELGKPTHFTVNAK, masked y<sub>5</sub>; HCD, Q Exactive, charge 3+), shown coloured by ion type, by per-peak attribution and by model confidence (a); the fragment-ion ladder for the same spectrum (b); summed attribution by ranked fragment-group category (c); attribution against relative intensity, OLS trend <span class="mono">r</span> = 0.34 (d); and the attribution-concentration Lorenz curve, Gini = 0.67 (e).
       <span class="src"><a href="static/pdfs/fig4.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
@@ -231,7 +231,7 @@
       </ul>
     </div>
     <figure>
-      <div class="figbox"><img src="static/images/fig5.webp" alt="Four side-by-side UMAPs of the same held-out spectra embedded by InstaNovo-FM, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type; bar charts of Recall@1, fragmentation macro-F1 and PTM balanced accuracy across the four; grouped de novo peptide recall across six datasets; and three query-peptide UMAP projections." width="1712" height="2167" loading="lazy"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig5.webp" alt="Four side-by-side UMAPs of the same held-out spectra embedded by InstaNovo-FM, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type; bar charts of Recall@1, fragmentation macro-F1 and PTM balanced accuracy across the four; grouped de novo peptide recall across six datasets; and three query-peptide UMAP projections." width="1712" height="2167" loading="lazy"></div>
       <figcaption><b>Figure 5 &mdash; Uniform probe benchmarking across embedding spaces.</b> UMAPs of the same held-out spectra embedded by InstaNovo-FM, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type (a). Duplicate-retrieval Recall@1 (b), fragmentation macro F1 (c) and PTM-presence balanced accuracy (d) across the four encoders. Mean <em>de novo</em> peptide recall across six biological hold-out datasets (e), and three query-peptide UMAP projections highlighting same-peptide replicates (f).
       <span class="src"><a href="static/pdfs/fig5.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
@@ -253,7 +253,7 @@
       </ul>
     </div>
     <figure>
-      <div class="figbox"><img src="static/images/fig6.webp" alt="Six-panel figure: a retrieval UMAP with query, same-sequence and unmatched spectra; cosine-similarity survival curves for matched against unmatched pairs; a five-query UMAP with top-5 rescued matches; query Recall@k strip plots; an ion-type-annotated mirror plot of a rescued identification; and a run-level UMAP coloured by digestion enzyme." width="1656" height="1648" loading="lazy"></div>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig6.webp" alt="Six-panel figure: a retrieval UMAP with query, same-sequence and unmatched spectra; cosine-similarity survival curves for matched against unmatched pairs; a five-query UMAP with top-5 rescued matches; query Recall@k strip plots; an ion-type-annotated mirror plot of a rescued identification; and a run-level UMAP coloured by digestion enzyme." width="1656" height="1648" loading="lazy"></div>
       <figcaption><b>Figure 6 &mdash; Downstream applications of the frozen InstaNovo-FM encoder.</b> Embedding-space organisation of query-centred duplicate retrieval (a) and the complementary cumulative distribution of pairwise cosine similarity for true duplicate against background pairs (b). Global UMAP of library spectra highlighting five representative query spectra and their top-5 rescued matches (c), query Recall@<span class="mono">k</span> per peptide with the mean across queries (d), a mirror plot of a rescued identification annotated by ion type (e), and run-aggregated embeddings coloured by digestion enzyme (f).
       <span class="src"><a href="static/pdfs/fig6.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
@@ -263,7 +263,7 @@
 <!-- =========================================================== model card -->
 <section class="result" id="model">
   <div class="wrap">
-    <div class="head" style="max-width:none">
+    <div class="head">
       <p class="eyebrow">Model card</p>
       <h2 style="margin-bottom:26px">InstaNovo-FM at a glance</h2>
     </div>

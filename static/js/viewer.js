@@ -152,15 +152,35 @@ const CONF = {responsive:true, scrollZoom:true, displaylogo:false,
   toImageButtonOptions:{format:'png', scale:2, filename:'umap'}};
 
 const MAXHI = 8;
+/* One colour per class, keyed on the class itself and ranked by how common
+   it is, so a class keeps the same colour whether it is highlighted, shown
+   as grey context, or sitting beside a different selection. Selection order
+   and hidden classes deliberately do not enter into it. Cached per colour
+   field and per palette, so switching theme recomputes it. */
+let CCM = null, CCM_KEY = null;
+function classColors(){
+  const slots = SLOTS(), key = S.colorField + '|' + slots[0];
+  if (CCM_KEY === key) return CCM;
+  const count = CAT[S.colorField].count, m = new Map();
+  count.map((_, l) => l)
+       .sort((a, b) => count[b] - count[a])
+       .slice(0, MAXHI)
+       .forEach((l, k) => m.set(l, slots[k]));
+  CCM_KEY = key; CCM = m;
+  return m;
+}
 function hiColorMap(){
-  const slots = SLOTS(), m = new Map();
-  S.hi.forEach((l, j) => { if (j < MAXHI) m.set(l, slots[j]); });
+  const slots = SLOTS(), all = classColors(), m = new Map();
+  for (const l of S.hi.slice(0, MAXHI))
+    /* A class outside the leading few still needs a colour once picked;
+       derive it from the level so it too is stable between selections. */
+    m.set(l, all.get(l) || slots[l % slots.length]);
   return m;
 }
 function baseColorMap(){
-  const c = CAT[S.colorField], slots = SLOTS(), m = new Map();
-  let j = 0;
-  for (let l = 0; l < c.levels.length; l++){ if (S.hidden.has(l)) continue; if (j < 3) m.set(l, slots[j++]); }
+  const m = new Map();
+  for (const [l, col] of classColors())
+    if (!S.hidden.has(l) && m.size < 3) m.set(l, col);
   return m;
 }
 function mk(rows, marker){

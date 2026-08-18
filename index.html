@@ -23,7 +23,7 @@
 <!-- ==================================================================== hero -->
 <header class="hero">
   <div class="wrap">
-    <div class="kicker">InstaNovo-FM &middot; a foundation model for tandem mass spectra</div>
+    <p class="wordmark"><span class="mark">InstaNovo-FM</span><span class="tag">a foundation model for tandem mass spectra</span></p>
     <h1>Learning from tandem mass spectra at scale with a self-supervised foundation model for proteomics</h1>
     <p class="venue">Preprint &middot; InstaDeep &amp; Technical University of Denmark</p>
 
@@ -42,14 +42,15 @@
       <span class="a">Konstantinos Kalogeropoulos<sup>3,4,5,6,*</sup></span>
     </p>
 
-    <ol class="affils">
-      <li><sup>1</sup> InstaDeep Ltd, London, UK</li>
-      <li><sup>2</sup> Novo Nordisk Foundation Biotechnology Research Institute for the Green Transition, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
-      <li><sup>3</sup> Department of Biotechnology and Biomedicine, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
-      <li><sup>4</sup> Center for Translational Protein Design, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
-      <li><sup>5</sup> Department of Bionanoscience, Delft University of Technology, 2629 HZ Delft, Netherlands</li>
-      <li><sup>6</sup> Kavli Institute of Nanoscience, 2629 HZ Delft, Netherlands</li>
-    </ol>
+    <p class="orgs">
+      <span><sup>1</sup>&nbsp;InstaDeep</span>
+      <span><sup>2</sup>&nbsp;NNF Biotechnology Research Institute for the Green Transition, DTU</span>
+      <span><sup>3</sup>&nbsp;Biotechnology &amp; Biomedicine, DTU</span>
+      <span><sup>4</sup>&nbsp;Center for Translational Protein Design, DTU</span>
+      <span><sup>5</sup>&nbsp;Bionanoscience, TU Delft</span>
+      <span><sup>6</sup>&nbsp;Kavli Institute of Nanoscience</span>
+      <a class="orgs-more" href="#affiliations">full affiliations</a>
+    </p>
 
     <p class="notes">
       <sup>+</sup> These authors contributed equally to this work.<br>
@@ -65,8 +66,6 @@
       <a class="chip" href="https://github.com/instadeepai/mass_spectrometry_foundation_model">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.35c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
         Code</a>
-      <a class="chip" href="https://github.com/instadeepai/InstaNovo">InstaNovo</a>
-      <span class="chip" aria-disabled="true">Paper</span>
       <span class="chip" aria-disabled="true">bioRxiv</span>
       <span class="chip" aria-disabled="true">Model weights</span>
       <span class="chip" aria-disabled="true">Dataset</span>
@@ -78,10 +77,10 @@
 <div class="band">
   <div class="wrap">
     <div class="stats">
-      <div class="stat"><b>1.80 B</b><span>MS/MS spectra pretrained on</span></div>
-      <div class="stat"><b>184.6 M</b><span>peptide-spectrum matches at 1% FDR</span></div>
-      <div class="stat"><b>68</b><span>organisms, 16 instrument models</span></div>
-      <div class="stat"><b>0</b><span>peptide labels used as pretraining supervision</span></div>
+      <div class="stat"><b>1.80 B</b><span>MS/MS spectra</span></div>
+      <div class="stat"><b>184.6 M</b><span>labelled PSMs at 1% FDR</span></div>
+      <div class="stat"><b>68</b><span>organisms, 16 instruments</span></div>
+      <div class="stat"><b>0</b><span>peptide labels in pretraining</span></div>
     </div>
   </div>
 </div>
@@ -89,9 +88,9 @@
 <!-- ============================================================= abstract -->
 <section class="abstract">
   <div class="wrap">
-    <div class="measure">
+    <div>
       <h2>Abstract</h2>
-      <p>Mass spectrometry-based proteomics increasingly relies on machine learning, yet existing models are trained for narrowly defined supervised tasks such as peptide identification, <em>de novo</em> sequencing or fragment intensity prediction, limiting transfer across datasets, instruments and laboratories. Here we present InstaNovo-FM, a self-supervised foundation model for bottom-up proteomics trained to reconstruct masked regions of tandem mass spectra. To power this model, we assembled a diverse training corpus spanning 1.80 billion MS/MS spectra and 184.6 million high-confidence annotations. We trained an encoder-only transformer on this data using a physics-aware masked reconstruction objective. We demonstrate that the resulting frozen embeddings linearly delineate fundamental experimental and biological properties, including fragmentation method, sequence properties and post-translational modifications, without requiring peptide labels. Furthermore, InstaNovo-FM directly enhances diverse downstream applications, including <em>de novo</em> peptide sequencing, database-free identification and analytical run classification. This foundation model establishes a unified representation space for peptide fragmentation spectra, enabling robust transferability across the proteomics ecosystem.</p>
+      <p>Mass spectrometry-based proteomics increasingly relies on machine learning, yet existing models are trained for narrowly defined supervised tasks such as peptide identification, <em>de novo</em> sequencing or fragment intensity prediction, limiting transfer across datasets, instruments and laboratories. Here we present <span class="model">InstaNovo-FM</span>, a self-supervised foundation model for bottom-up proteomics trained to reconstruct masked regions of tandem mass spectra. To power this model, we assembled a diverse training corpus spanning 1.80 billion MS/MS spectra and 184.6 million high-confidence annotations. We trained an encoder-only transformer on this data using a physics-aware masked reconstruction objective. We demonstrate that the resulting frozen embeddings linearly delineate fundamental experimental and biological properties, including fragmentation method, sequence properties and post-translational modifications, without requiring peptide labels. Furthermore, <span class="model">InstaNovo-FM</span> directly enhances diverse downstream applications, including <em>de novo</em> peptide sequencing, database-free identification and analytical run classification. This foundation model establishes a unified representation space for peptide fragmentation spectra, enabling robust transferability across the proteomics ecosystem.</p>
       <p class="keywords"><b>Keywords:</b> proteomics &middot; tandem mass spectrometry &middot; self-supervised learning &middot; foundation model &middot; spectral representation learning &middot; <em>de novo</em> sequencing</p>
     </div>
   </div>
@@ -105,7 +104,7 @@
     <div class="head">
       <p class="eyebrow">Result 01 &middot; Pretraining corpus</p>
       <h2>1.8 billion spectra, 68 organisms, one uniform pipeline</h2>
-      <p>Public repositories hold petabytes of raw mass spectrometry data, but almost none of it is usable as a single training corpus: every submission carries its own instrument, protease, labelling chemistry and search configuration. We screened <strong>26,603 PRIDE submissions</strong> with GPT-4 metadata extraction, selected 100 projects for orthogonal diversity, and reprocessed every raw file through one FragPipe pipeline with 157 experiment-specific workflows.</p>
+      <p>Public repositories hold petabytes of raw mass spectrometry data, but almost none of it is usable as a single training corpus: every submission carries its own instrument, protease, labelling chemistry and search configuration. We screened <strong>26,603 PRIDE submissions</strong> with GPT-4 metadata extraction, selected 100 project accessions for orthogonal diversity, and reprocessed every raw file through one FragPipe pipeline against 94 reference proteomes. Search parameters are set per file &mdash; by acquisition mode, fragmentation method and expected modifications &mdash; so those 100 accessions needed <strong>157 distinct workflow configurations</strong> between them.</p>
       <p>The result is <strong>ACFM</strong> — 1,802,272,487 MS/MS scans, the vast majority carrying no peptide annotation at all — and its labelled subset <strong>LCFM</strong>, 184,607,213 peptide-spectrum matches at run-specific 1% FDR. Progressively stricter curation yields MCFM and HCFM for the analyses that need cleaner spectra. Splits are peptide-centric, so no peptide crosses a split or a confidence tier.</p>
       <ul class="keynums">
         <li><span class="v">1,802,272,487</span> ACFM scans</li>
@@ -221,8 +220,8 @@
     <div class="head">
       <p class="eyebrow">Result 06 &middot; Cross-model comparison</p>
       <h2>Label-free parity with sequence-supervised encoders</h2>
-      <p>Under one uniform linear-probe protocol across four frozen embedding spaces — InstaNovo v1.2, Casanovo, XuanjiNovo and InstaNovo-FM — the annotation-free model leads on the acquisition and physical properties: <strong>instrument macro F1 0.804</strong> against 0.690 / 0.538 / 0.516, and <strong>fragmentation macro F1 0.689</strong> against 0.642 / 0.573 / 0.586. It does not lead everywhere: XuanjiNovo is ahead on duplicate retrieval and hydrophobicity, and InstaNovo v1.2 on charge and modification class.</p>
-      <p>The comparison is a read of information depth rather than a head-to-head — this evaluation is in-distribution for InstaNovo-FM and out-of-distribution for the others. The point that survives that caveat is the one about supervision: the other three encoders were all trained with peptide-sequence labels, and InstaNovo-FM reaches comparable linear decodability with none. On <em>de novo</em> sequencing across six biological hold-out sets, fine-tuning from InstaNovo-FM is competitive rather than dominant, and the <em>frozen</em> encoder retains <strong>85% of fine-tuned peptide recall</strong> on average.</p>
+      <p>Under one uniform linear-probe protocol across four frozen embedding spaces — InstaNovo v1.2, Casanovo, XuanjiNovo and <span class="model">InstaNovo-FM</span> — the annotation-free model leads on the acquisition and physical properties: <strong>instrument macro F1 0.804</strong> against 0.690 / 0.538 / 0.516, and <strong>fragmentation macro F1 0.689</strong> against 0.642 / 0.573 / 0.586. It does not lead everywhere: XuanjiNovo is ahead on duplicate retrieval and hydrophobicity, and InstaNovo v1.2 on charge and modification class.</p>
+      <p>The comparison is a read of information depth rather than a head-to-head — this evaluation is in-distribution for <span class="model">InstaNovo-FM</span> and out-of-distribution for the others. The point that survives that caveat is the one about supervision: the other three encoders were all trained with peptide-sequence labels, and <span class="model">InstaNovo-FM</span> reaches comparable linear decodability with none. On <em>de novo</em> sequencing across six biological hold-out sets, fine-tuning from <span class="model">InstaNovo-FM</span> is competitive rather than dominant, and the <em>frozen</em> encoder retains <strong>85% of fine-tuned peptide recall</strong> on average.</p>
       <ul class="keynums">
         <li><span class="v">0.804</span> instrument macro F1 (best of four)</li>
         <li><span class="v">0.689</span> fragmentation macro F1 (best of four)</li>
@@ -232,7 +231,7 @@
     </div>
     <figure>
       <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig5.webp" alt="Four side-by-side UMAPs of the same held-out spectra embedded by InstaNovo-FM, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type; bar charts of Recall@1, fragmentation macro-F1 and PTM balanced accuracy across the four; grouped de novo peptide recall across six datasets; and three query-peptide UMAP projections." width="1712" height="2167" loading="lazy"></div>
-      <figcaption><b>Figure 5 &mdash; Uniform probe benchmarking across embedding spaces.</b> UMAPs of the same held-out spectra embedded by InstaNovo-FM, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type (a). Duplicate-retrieval Recall@1 (b), fragmentation macro F1 (c) and PTM-presence balanced accuracy (d) across the four encoders. Mean <em>de novo</em> peptide recall across six biological hold-out datasets (e), and three query-peptide UMAP projections highlighting same-peptide replicates (f).
+      <figcaption><b>Figure 5 &mdash; Uniform probe benchmarking across embedding spaces.</b> UMAPs of the same held-out spectra embedded by <span class="model">InstaNovo-FM</span>, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type (a). Duplicate-retrieval Recall@1 (b), fragmentation macro F1 (c) and PTM-presence balanced accuracy (d) across the four encoders. Mean <em>de novo</em> peptide recall across six biological hold-out datasets (e), and three query-peptide UMAP projections highlighting same-peptide replicates (f).
       <span class="src"><a href="static/pdfs/fig5.pdf">Full resolution (PDF)</a></span></figcaption>
     </figure>
   </div>
@@ -315,6 +314,17 @@
 <footer>
   <div class="wrap">
     <div class="foot-grid">
+      <div class="span" id="affiliations">
+        <h3>Affiliations</h3>
+        <ol class="affils">
+      <li><sup>1</sup> InstaDeep Ltd, London, UK</li>
+      <li><sup>2</sup> Novo Nordisk Foundation Biotechnology Research Institute for the Green Transition, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
+      <li><sup>3</sup> Department of Biotechnology and Biomedicine, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
+      <li><sup>4</sup> Center for Translational Protein Design, Technical University of Denmark, S&oslash;ltofts Plads, DK-2800, Kongens Lyngby, Denmark</li>
+      <li><sup>5</sup> Department of Bionanoscience, Delft University of Technology, 2629 HZ Delft, Netherlands</li>
+      <li><sup>6</sup> Kavli Institute of Nanoscience, 2629 HZ Delft, Netherlands</li>
+        </ol>
+      </div>
       <div>
         <h3>Data availability</h3>
         <p>All training data are publicly available through the PRIDE repository; project accession numbers are listed in Supplementary Table 1. Training and evaluation data, the experiment logs and the figure source code are being released &mdash; dataset and DOI links will appear above.</p>
@@ -332,7 +342,7 @@
         <p>M.N., D.P., J.D., R.C., K.E., N.L.C. and J.V.G. are employees of InstaDeep Ltd, London, UK. K.K. and T.P.J. are co-founders of Seqora ApS, Copenhagen, Denmark. The other authors declare no competing interests.</p>
       </div>
     </div>
-    <p class="legal">Figures are reproduced from the manuscript. Page template inspired by
+    <p class="legal">Page template inspired by
       <a href="https://github.com/eliahuhorwitz/Academic-project-page-template">Academic Project Page Template</a>.</p>
   </div>
 </footer>

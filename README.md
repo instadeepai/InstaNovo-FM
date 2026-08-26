@@ -6,11 +6,10 @@ scripts that generate everything here — see `tools/projectpage/` on `main`.
 ## Layout
 
 ```
-index.html              the project page
-umap/index.html         the interactive UMAP explorer
+index.html              thin shell: a short summary and the explorer, embedded
+umap/index.html         the explorer itself, also usable standalone / full screen
 umap/data/              column-sharded point set + manifest.json
-static/css|js|images    stylesheets, vendored Plotly, viewer, figure renders
-static/pdfs/            figure sources, behind each "full resolution" link
+static/css|js|images    stylesheets, vendored Plotly, viewer, favicon, social card
 .nojekyll               serve the tree as-is
 ```
 
@@ -30,17 +29,20 @@ will break at least one of those three.
 From a checkout of `main`, with this worktree at `$GH`:
 
 ```bash
-tools/projectpage/convert_figures.sh                       # figure PDFs -> WebP + PDF copies
 python3 tools/projectpage/build_fig3_data.py \
     --prototype ~/Downloads/umap/figure3_umap_explorer_3d.html \
     --out "$GH/umap" \
     --provenance ~/Downloads/umap/umap_3d_coords_for_kostas/provenance.json
 python3 tools/projectpage/extract_viewer.py \
     --prototype ~/Downloads/umap/figure3_umap_explorer_3d.html --site "$GH"
-python3 tools/projectpage/check_content.py \
+python3 tools/projectpage/check_distance.py \
     --tex ../mass_spectrometry_foundation_model_manuscript/main.tex \
     --html "$GH/index.html"
 ```
+
+`check_distance.py` guards the one editorial constraint that matters here: the page must read as
+a summary of the manuscript, not a copy of it, because the work has not been published yet. It
+fails if a long verbatim passage, the abstract, a figure legend or a figure image reappears.
 
 ## Publishing
 
@@ -49,3 +51,14 @@ Settings → Pages → *Deploy from a branch* → `gh-pages` / `(root)`, then se
 That option needs an organisation on GitHub Enterprise Cloud, which `instadeepai` has.
 A privately published site is served from a unique random subdomain shown on that same
 settings page, and changes take up to ten minutes to appear.
+
+## Why the landing page is only a shell
+
+The explorer is the deliverable for this version, so `index.html` is deliberately thin: a wordmark,
+a summary of at most five lines, three links, and the explorer in an iframe taking the rest of the
+viewport. The explorer detects being framed (`window.self !== window.top`) and sets
+`data-framed="true"` on its root, which hides its own back-link and title so the identity is not
+stated twice.
+
+The explorer remains a standalone page. `umap/` works on its own, is what the "Full screen" link
+opens, and is the URL to share directly.

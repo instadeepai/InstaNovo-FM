@@ -113,6 +113,13 @@
 </main>
 
 <script>
+/* Embedded in the landing page, the back-link and the standalone padding are
+   redundant, so the explorer marks itself as framed and the stylesheet adapts. */
+(function(){ try { if (window.self !== window.top)
+  document.documentElement.dataset.framed = 'true'; } catch (e) {
+  document.documentElement.dataset.framed = 'true'; } })();
+</script>
+<script>
 /* Reflect the effective theme on the toggle before the app boots, so neither
    button reads as active when the page is simply following the system. */
 (function(){

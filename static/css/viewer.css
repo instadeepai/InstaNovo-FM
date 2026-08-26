@@ -148,3 +148,10 @@ textarea{height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;f
 #overlay { background: var(--surface-0); color: var(--text-2); }
 .seg button { white-space: nowrap; }
 .pane .resting { color: var(--text-3); font-size: 12px; line-height: 1.6; padding: 10px 2px; }
+
+/* Embedded in the landing page: the parent already provides identity and a
+   full-screen link, so drop the back-link and tighten the header. */
+:root[data-framed="true"] .backlink { display: none; }
+:root[data-framed="true"] header { padding-top: 6px; padding-bottom: 6px; }
+:root[data-framed="true"] header h1 { display: none; }
+:root[data-framed="true"] header .sub { font-size: 12px; }

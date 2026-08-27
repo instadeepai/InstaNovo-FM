@@ -954,7 +954,33 @@ async function setMode3d(on){
 bootData().then(init).catch(e => {
   console.error(e);
   const ov = document.getElementById('overlay');
-  if (ov) ov.innerHTML = '<div class="boot-err">Could not load the UMAP data.<br>' +
-    '<span class="mono">' + String(e.message || e) + '</span></div>';
+  if (!ov) return;
+  const detail = '<div class="boot-detail mono">' + String(e.message || e) + '</div>';
+  if (e && e.kind === 'auth'){
+    /* The page loaded but its data requests did not: the private-site sign-in is
+       not reaching them. Almost always a browser withholding the cookie from
+       subresource requests rather than anything wrong with the site. */
+    ov.innerHTML =
+      '<div class="boot-err"><b>Signed out of the data requests.</b>' +
+      '<p>The page loaded, but its data files were redirected to the GitHub ' +
+      'sign-in. That happens when the browser withholds the sign-in cookie from ' +
+      'background requests.</p><ul>' +
+      '<li><b>Reload the page</b> &mdash; this clears it most of the time.</li>' +
+      '<li><b>Brave:</b> click the shields icon in the address bar and turn ' +
+      'shields <b>down</b> for this site, then reload.</li>' +
+      '<li>Otherwise allow cross-site cookies for <span class="mono">github.com</span> ' +
+      'and <span class="mono">pages.github.io</span>.</li>' +
+      '</ul>' + detail + '</div>';
+  } else if (e && e.kind === 'network'){
+    ov.innerHTML =
+      '<div class="boot-err"><b>Could not reach the data files.</b>' +
+      '<p>The request did not complete. Check the connection, then reload. ' +
+      'An ad-blocker or content blocker can also stop these requests.</p>' +
+      detail + '</div>';
+  } else {
+    ov.innerHTML =
+      '<div class="boot-err"><b>Could not load the UMAP data.</b>' + detail +
+      '<p><a href="selftest.html">Run the renderer self-test</a></p></div>';
+  }
 });
 

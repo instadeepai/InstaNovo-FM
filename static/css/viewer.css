@@ -157,3 +157,14 @@ textarea{height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;f
 :root[data-framed="true"] header .sub { font-size: 12px; }
 .seg.wide { display: flex; margin: 2px 0 6px; }
 .seg.wide button { flex: 1; }
+
+/* Boot failure explanation: readable, with room for the remedies. */
+.boot-err { max-width: 46em; margin: 0 auto; padding: 26px 28px; text-align: left;
+            line-height: 1.6; color: var(--text-2); }
+.boot-err b { color: var(--text-1); }
+.boot-err p { margin: 10px 0; }
+.boot-err ul { margin: 10px 0 0; padding-left: 20px; }
+.boot-err li { margin-bottom: 6px; }
+.boot-err a { color: var(--s1); }
+.boot-detail { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line);
+               font-size: 11.5px; color: var(--text-3); word-break: break-word; }

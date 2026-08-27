@@ -88,6 +88,26 @@ if (gl){
   } catch (e) { add('GL clear + readback', 'threw: ' + e.message, 'bad'); }
 }
 
+/* ---- can the data files actually be fetched? --------------------------- */
+/* A privately published Pages site 302s unauthenticated subresources to
+   github.com/pages/auth. fetch() cannot follow a cross-origin redirect, so it
+   fails with a bare "Failed to fetch" even though the page itself loaded. */
+async function probeFetch(path){
+  try {
+    const r = await fetch(path, {cache:'no-store'});
+    const offsite = r.redirected && new URL(r.url).origin !== location.origin;
+    return {ok: r.ok && !offsite, status: r.status, redirected: r.redirected,
+            offsite, final: r.url, bytes: r.ok ? (await r.arrayBuffer()).byteLength : 0};
+  } catch (e) {
+    let redirected = null;
+    try {
+      const probe = await fetch(path, {redirect:'manual', cache:'no-store'});
+      redirected = probe.type === 'opaqueredirect' || (probe.status >= 300 && probe.status < 400);
+    } catch (_) { /* no further information available */ }
+    return {ok:false, threw:e.message, redirectedProbe:redirected};
+  }
+}
+
 /* ---- the real test: does Plotly's scattergl put pixels on screen? ------ */
 function countInk(dataUrl){
   return new Promise(resolve => {
@@ -129,6 +149,23 @@ async function testTrace(type){
 }
 
 (async () => {
+  let dataOk = true, authBlocked = false;
+  for (const f of ['data/manifest.json', 'data/x.f32']){
+    const r = await probeFetch(f);
+    if (r.ok){
+      add('Fetch ' + f, `HTTP ${r.status}, ${r.bytes.toLocaleString()} bytes`, 'ok');
+    } else {
+      dataOk = false;
+      if (r.offsite || r.redirectedProbe){
+        authBlocked = true;
+        add('Fetch ' + f, 'redirected to the sign-in' +
+            (r.final ? ' (' + r.final.slice(0, 70) + ')' : ''), 'bad');
+      } else {
+        add('Fetch ' + f, r.threw ? 'threw: ' + r.threw : 'HTTP ' + r.status, 'bad');
+      }
+    }
+  }
+
   let glOk = false;
   if (window.Plotly){
     try {
@@ -147,7 +184,16 @@ async function testTrace(type){
   }
 
   const v = document.getElementById('verdict');
-  if (!gl){
+  if (authBlocked){
+    v.innerHTML = '<b>The data files are being redirected to the GitHub sign-in.</b> ' +
+      'This is why the map is empty &mdash; nothing is wrong with the renderer. The browser ' +
+      'is withholding the sign-in cookie from background requests. Reload first; if that ' +
+      'does not help, in Brave click the shields icon and turn shields <b>down</b> for this ' +
+      'site, or allow cross-site cookies for github.com and pages.github.io.';
+  } else if (!dataOk){
+    v.innerHTML = '<b>The data files could not be fetched.</b> The renderer is not the ' +
+      'problem. Check the connection and any ad-blocker or content blocker, then reload.';
+  } else if (!gl){
     v.innerHTML = '<b>WebGL is unavailable in this browser.</b> The explorer needs it. ' +
       'In Safari check Settings &rarr; Advanced, and any content blockers or ' +
       '&ldquo;Prevent cross-site tracking&rdquo; style privacy settings that can disable WebGL.';

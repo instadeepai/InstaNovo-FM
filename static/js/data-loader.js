@@ -40,16 +40,49 @@ const catStr = (k, i) => {
 const BASE = 'data/';
 const inflight = new Map();
 
+/* A privately published GitHub Pages site answers unauthenticated requests with a
+   302 to github.com/pages/auth. The top-level navigation follows that happily, but
+   a fetch() cannot follow a cross-origin redirect, so it rejects with a bare
+   "Failed to fetch". Browsers that withhold the auth cookie from subresource
+   requests -- Brave with shields up, or anything blocking cross-site cookies --
+   land here while the page itself still loads. Detect it and say so, because the
+   raw message sends people looking for a bug in the data. */
+class LoadError extends Error {
+  constructor(kind, message){ super(message); this.kind = kind; }
+}
+
+async function fetchChecked(path){
+  const url = BASE + path.replace(/^data\//, '');
+  let r;
+  try {
+    r = await fetch(url);
+  } catch (e) {
+    /* Retry without following redirects: an opaque redirect means we were sent to
+       the sign-in, a second failure means the request genuinely did not complete. */
+    try {
+      const probe = await fetch(url, {redirect: 'manual'});
+      if (probe.type === 'opaqueredirect' || (probe.status >= 300 && probe.status < 400))
+        throw new LoadError('auth', 'the sign-in redirected the data request');
+    } catch (inner) {
+      if (inner instanceof LoadError) throw inner;
+    }
+    throw new LoadError('network', e.message || 'request failed');
+  }
+  if (r.redirected && new URL(r.url).origin !== location.origin)
+    throw new LoadError('auth', 'the data request was redirected off-site');
+  if (r.status === 401 || r.status === 403)
+    throw new LoadError('auth', `HTTP ${r.status} on ${path}`);
+  if (!r.ok)
+    throw new LoadError('http', `${path}: HTTP ${r.status}`);
+  return r;
+}
+
 async function fetchTyped(path, dtype){
-  const r = await fetch(BASE + path.replace(/^data\//, ''));
-  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-  const buf = await r.arrayBuffer();
+  const buf = await (await fetchChecked(path)).arrayBuffer();
   return new TA[dtype](buf);
 }
 async function fetchJson(path){
-  const r = await fetch(BASE + path.replace(/^data\//, ''));
-  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-  return r.json();
+  return (await fetchChecked(path)).json();
 }
 
 /** Load one column/array exactly once; concurrent callers share the promise. */

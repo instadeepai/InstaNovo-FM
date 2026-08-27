@@ -19,6 +19,7 @@ const S = {
   hi:[], hidden:new Set(),
   filters:[], showBg:true,
   size:2.4, hsize:2.4, opac:0.5, npts:100000,
+  renderer:'gl',            /* 'gl' = scattergl, 'svg' = plain scatter */
   pep:'', selIdx:null, saved:[], pinned:null, box:null, showBox:false, camera:null, resetCam:false
 };
 
@@ -108,7 +109,25 @@ const filterKey = () => S.filters.map(f => f.field + ':' + [...f.values].sort((a
    marker on top; every other spectrum keeps the base grey marker at the base
    size, so adding or dropping a highlight never disturbs the background. */
 const PLOT = document.getElementById('plot');
-const TT = () => MODE3D ? 'scatter3d' : 'scattergl';
+const SVG_MAX_PTS = 15000;   /* SVG cannot carry 100k markers */
+function webglAvailable(){
+  try {
+    const c = document.createElement('canvas');
+    const g = c.getContext('webgl2') || c.getContext('webgl');
+    if (!g) return false;
+    /* a context alone is not proof it paints; clear and read one pixel */
+    const c2 = document.createElement('canvas'); c2.width = c2.height = 2;
+    const g2 = c2.getContext('webgl2', {preserveDrawingBuffer:true})
+            || c2.getContext('webgl',  {preserveDrawingBuffer:true});
+    if (!g2) return false;
+    g2.clearColor(0, 1, 0, 1); g2.clear(g2.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4);
+    g2.readPixels(0, 0, 1, 1, g2.RGBA, g2.UNSIGNED_BYTE, px);
+    return px[1] > 200;
+  } catch (e) { return false; }
+}
+const TT = () => MODE3D ? 'scatter3d'
+                        : (S.renderer === 'svg' ? 'scatter' : 'scattergl');
 let SETS = null, TRACEIDX = [], HLIDX = null, SCALE = null;
 
 function axStyle(){
@@ -146,10 +165,10 @@ function layout(){
   }
   return base;
 }
-const CONF = {responsive:true, scrollZoom:true, displaylogo:false,
+const CONF = () => ({responsive:true, scrollZoom:true, displaylogo:false,
   modeBarButtonsToRemove:MODE3D ? [] : ['toggleSpikelines','hoverClosestGl2d','autoScale2d'],
   modeBarButtonsToAdd:MODE3D ? [] : ['select2d','lasso2d'],
-  toImageButtonOptions:{format:'png', scale:2, filename:'umap'}};
+  toImageButtonOptions:{format:'png', scale:2, filename:'umap'}});
 
 const MAXHI = 8;
 /* One colour per class, keyed on the class itself and ranked by how common
@@ -290,7 +309,7 @@ function drawSync(){
       lay.xaxis.autorange = false; lay.yaxis.autorange = false;
     }
   }
-  Plotly.react(PLOT, traces, lay, CONF);
+  Plotly.react(PLOT, traces, lay, CONF());
   document.getElementById('stN').textContent =
     `${fmtInt(SETS.inn.length)} of ${fmtInt(N)} pass filters · ${fmtInt(idx.length)} drawn`;
   renderLegend();
@@ -701,6 +720,13 @@ function readBox(){
 }
 
 async function init(){
+  /* Fall back to SVG when WebGL cannot paint, and honour ?renderer=svg so a
+     blank map can be worked around without waiting for a fix. */
+  const forced = new URLSearchParams(location.search).get('renderer');
+  if (forced === 'svg' || (forced !== 'gl' && !webglAvailable())){
+    S.renderer = 'svg';
+    S.npts = Math.min(S.npts, SVG_MAX_PTS);
+  }
   const sel = document.getElementById('colorField');
   const gcat = {}, gnum = {};
   for (const k of D.catOrder) (gcat[CAT[k].group] = gcat[CAT[k].group] || []).push([k, CAT[k].label, CAT[k].nlevels]);
@@ -794,6 +820,15 @@ async function init(){
 
   document.getElementById('md2d').onclick = () => setMode3d(false);
   document.getElementById('md3d').onclick = () => setMode3d(true);
+  document.getElementById('rdGl').onclick  = () => setRenderer('gl');
+  document.getElementById('rdSvg').onclick = () => setRenderer('svg');
+  document.getElementById('rdGl').setAttribute('aria-pressed', S.renderer === 'gl');
+  document.getElementById('rdSvg').setAttribute('aria-pressed', S.renderer === 'svg');
+  if (S.renderer === 'svg'){
+    const np = document.getElementById('npts');
+    np.max = SVG_MAX_PTS; np.value = S.npts;
+    setExHint('SVG renderer: at most ' + fmtInt(SVG_MAX_PTS) + ' spectra drawn.');
+  }
   document.getElementById('thDark').onclick = () => setTheme('dark');
   document.getElementById('thLight').onclick = () => setTheme('light');
   for (const [n, [b]] of Object.entries(TABS)) document.getElementById(b).onclick = () => tab(n);
@@ -868,6 +903,27 @@ function wireEvents(){
 
 /* The 2-D/3-D switch rebuilds the plot: Plotly cannot morph a scattergl trace
    into a scatter3d one in place. */
+async function setRenderer(kind){
+  if (S.renderer === kind) return;
+  S.renderer = kind;
+  S.npts = kind === 'svg' ? Math.min(S.npts, SVG_MAX_PTS) : 100000;
+  const el = document.getElementById('npts');
+  if (el){
+    el.max = kind === 'svg' ? SVG_MAX_PTS : 100000;
+    el.value = S.npts; el.dispatchEvent(new Event('input'));
+  }
+  for (const [id, on] of [['rdGl', kind === 'gl'], ['rdSvg', kind === 'svg']]){
+    const btn = document.getElementById(id);
+    if (btn) btn.setAttribute('aria-pressed', on);
+  }
+  setExHint(kind === 'svg'
+    ? 'SVG renderer: at most ' + fmtInt(SVG_MAX_PTS) + ' spectra drawn.'
+    : '');
+  Plotly.purge(PLOT);        /* scatter and scattergl are different trace types */
+  await draw();
+  wireEvents();
+}
+
 async function setMode3d(on){
   if (MODE3D === on) return;
   MODE3D = on;

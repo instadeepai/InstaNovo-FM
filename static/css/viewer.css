@@ -155,3 +155,5 @@ textarea{height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;f
 :root[data-framed="true"] header { padding-top: 6px; padding-bottom: 6px; }
 :root[data-framed="true"] header h1 { display: none; }
 :root[data-framed="true"] header .sub { font-size: 12px; }
+.seg.wide { display: flex; margin: 2px 0 6px; }
+.seg.wide button { flex: 1; }

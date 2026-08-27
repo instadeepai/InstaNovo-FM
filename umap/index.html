@@ -62,6 +62,13 @@
   </div>
 
   <h2>Rendering</h2>
+  <label>Renderer</label>
+  <div class="seg wide">
+    <button id="rdGl" aria-pressed="true" title="WebGL — all 100,000 spectra">WebGL</button>
+    <button id="rdSvg" aria-pressed="false" title="SVG — fewer spectra, works without WebGL">SVG</button>
+  </div>
+  <div class="hint">Map blank? Switch to SVG, or run the
+    <a href="selftest.html">renderer self-test</a>.</div>
   <label>Grey marker size <span class="mono" id="szv"></span></label>
   <input type="range" id="size" min="0.6" max="8" step="0.2">
   <label>Highlight size × <span class="mono" id="hzv"></span></label>

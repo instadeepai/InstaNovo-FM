@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer self-test</title>
+<link rel="icon" href="../static/images/favicon.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: light dark; --ok:#1b7f4b; --bad:#b3261e; --warn:#8a5b00; }
+  body { margin:0; padding:28px; font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+         max-width:820px; }
+  h1 { font-size:1.35rem; margin:0 0 6px; }
+  p.sub { margin:0 0 22px; opacity:.7; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td { text-align:left; padding:7px 10px; border-top:1px solid rgba(128,128,128,.3);
+          vertical-align:top; }
+  th { width:34%; font-weight:600; }
+  td.v { font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-word; }
+  .ok::before   { content:"PASS "; color:var(--ok);   font-weight:700; }
+  .bad::before  { content:"FAIL "; color:var(--bad);  font-weight:700; }
+  .warn::before { content:"NOTE "; color:var(--warn); font-weight:700; }
+  #probe { width:320px; height:200px; }
+  textarea { width:100%; height:190px; margin-top:14px; font-family:ui-monospace,Menlo,monospace;
+             font-size:12px; padding:10px; }
+  button { font:500 14px inherit; padding:8px 15px; margin-top:10px; cursor:pointer; }
+  .verdict { margin-top:22px; padding:14px 16px; border-radius:8px;
+             background:rgba(128,128,128,.12); font-size:14px; }
+</style>
+</head>
+<body>
+<h1>Explorer self-test</h1>
+<p class="sub">Checks whether this browser can draw the explorer's WebGL scatter plot.
+Run it on the machine where the map is blank, then copy the report at the bottom.</p>
+
+<table id="out"></table>
+<div class="verdict" id="verdict">Running…</div>
+<div id="probe"></div>
+<textarea id="report" readonly></textarea>
+<button id="copy" type="button">Copy report</button>
+
+<script src="../static/js/plotly-2.35.2.min.js"></script>
+<script>
+"use strict";
+const rows = [];
+function add(label, value, cls){ rows.push([label, String(value), cls || '']); render(); }
+function render(){
+  document.getElementById('out').innerHTML = rows.map(([k, v, c]) =>
+    `<tr><th>${k}</th><td class="v ${c}">${v.replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]))}</td></tr>`).join('');
+  document.getElementById('report').value =
+    rows.map(([k, v, c]) => `${(c || 'info').toUpperCase().padEnd(5)} ${k}: ${v}`).join('\n');
+}
+
+/* ---- environment ------------------------------------------------------- */
+add('User agent', navigator.userAgent);
+add('devicePixelRatio', window.devicePixelRatio);
+add('Window', window.innerWidth + ' x ' + window.innerHeight);
+add('In an iframe', window.self !== window.top ? 'yes' : 'no');
+add('Plotly version', (window.Plotly && Plotly.version) || 'NOT LOADED',
+    window.Plotly ? 'ok' : 'bad');
+
+/* ---- raw WebGL --------------------------------------------------------- */
+let gl = null, glKind = 'none';
+for (const kind of ['webgl2', 'webgl', 'experimental-webgl']){
+  try {
+    const c = document.createElement('canvas');
+    gl = c.getContext(kind, {antialias:false});
+    if (gl){ glKind = kind; break; }
+  } catch (e) { /* keep trying */ }
+}
+add('WebGL context', glKind, gl ? 'ok' : 'bad');
+if (gl){
+  add('GL version', gl.getParameter(gl.VERSION));
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  add('GPU renderer', dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '(hidden)');
+  add('GPU vendor',   dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : '(hidden)');
+  add('Max texture size', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  add('Max renderbuffer', gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));
+
+  /* can it actually paint? clear to red and read the pixel back */
+  try {
+    const c2 = document.createElement('canvas'); c2.width = c2.height = 4;
+    const g2 = c2.getContext(glKind, {preserveDrawingBuffer:true});
+    g2.clearColor(1, 0, 0, 1); g2.clear(g2.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4); g2.readPixels(0, 0, 1, 1, g2.RGBA, g2.UNSIGNED_BYTE, px);
+    const painted = px[0] > 200 && px[1] < 60;
+    add('GL clear + readback', painted ? 'red read back correctly' : 'got ' + px.join(','),
+        painted ? 'ok' : 'bad');
+  } catch (e) { add('GL clear + readback', 'threw: ' + e.message, 'bad'); }
+}
+
+/* ---- the real test: does Plotly's scattergl put pixels on screen? ------ */
+function countInk(dataUrl){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      let ink = 0;
+      for (let i = 0; i < d.length; i += 4)
+        if (d[i] > 150 && d[i+1] < 90 && d[i+2] < 90) ink++;   /* red markers */
+      resolve({ink, w: img.width, h: img.height});
+    };
+    img.onerror = () => resolve({ink:-1, w:0, h:0});
+    img.src = dataUrl;
+  });
+}
+
+async function testTrace(type){
+  const gd = document.getElementById('probe');
+  const n = type === 'scattergl' ? 20000 : 500;
+  const x = new Float32Array(n), y = new Float32Array(n);
+  for (let i = 0; i < n; i++){ x[i] = i % 100; y[i] = Math.floor(i / 100) % 100; }
+  await Plotly.newPlot(gd, [{
+    type, mode:'markers', x, y,
+    marker:{size:6, color:'rgb(220,30,30)', opacity:0.6}
+  }], {
+    width:320, height:200, margin:{l:0,r:0,t:0,b:0},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff',
+    xaxis:{visible:false}, yaxis:{visible:false}, showlegend:false
+  }, {staticPlot:true});
+  await new Promise(r => setTimeout(r, 500));
+  const url = await Plotly.toImage(gd, {format:'png', width:320, height:200});
+  const res = await countInk(url);
+  Plotly.purge(gd);
+  return res;
+}
+
+(async () => {
+  let glOk = false;
+  if (window.Plotly){
+    try {
+      const svg = await testTrace('scatter');
+      add('SVG scatter draws (control)', svg.ink + ' marker pixels',
+          svg.ink > 50 ? 'ok' : 'bad');
+    } catch (e) { add('SVG scatter draws (control)', 'threw: ' + e.message, 'bad'); }
+
+    try {
+      const wgl = await testTrace('scattergl');
+      glOk = wgl.ink > 50;
+      add('WebGL scattergl draws', wgl.ink + ' marker pixels' +
+          (glOk ? '' : '  <-- this is the explorer\'s renderer'),
+          glOk ? 'ok' : 'bad');
+    } catch (e) { add('WebGL scattergl draws', 'threw: ' + e.message, 'bad'); }
+  }
+
+  const v = document.getElementById('verdict');
+  if (!gl){
+    v.innerHTML = '<b>WebGL is unavailable in this browser.</b> The explorer needs it. ' +
+      'In Safari check Settings &rarr; Advanced, and any content blockers or ' +
+      '&ldquo;Prevent cross-site tracking&rdquo; style privacy settings that can disable WebGL.';
+  } else if (!glOk){
+    v.innerHTML = '<b>WebGL works, but Plotly\'s WebGL scatter draws nothing.</b> ' +
+      'This reproduces the blank map, and is a renderer bug rather than a data problem. ' +
+      'Please copy the report below and send it on.';
+  } else {
+    v.innerHTML = '<b>Everything passes here.</b> WebGL scatter renders, so a blank map on this ' +
+      'machine is likely a stale cached copy &mdash; try a hard reload &mdash; or something ' +
+      'specific to the window size or GPU at the time. Please send the report anyway.';
+  }
+  render();
+})();
+
+document.getElementById('copy').onclick = async () => {
+  const t = document.getElementById('report');
+  try { await navigator.clipboard.writeText(t.value); }
+  catch { t.select(); return; }
+  const b = document.getElementById('copy');
+  b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy report', 1500);
+};
+</script>
+</body>
+</html>

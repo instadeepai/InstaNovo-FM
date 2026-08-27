@@ -141,29 +141,10 @@ b .model, strong .model, h2 .model { font-weight: inherit; }
   text-wrap: balance;
 }
 
-.affils {
-  margin: 18px 0 0; padding: 0; list-style: none;
-  font-size: 13.5px; color: var(--ink-2); line-height: 1.5;
-}
-.affils li { margin-bottom: 5px; }
-.affils sup { font-family: var(--mono); color: var(--ink-3); }
-
 /* The hero carries institutions only; the full postal addresses live in the
    footer, because six of them repeated the same street address four times and
    pushed everything else below the fold. */
 /* Own line, so it does not read as a seventh affiliation. */
-.foot-grid .span { grid-column: 1 / -1; }
-
-.byline { margin: 22px 0 0; font-size: 14px; line-height: 1.75; color: var(--ink-2); }
-.byline sup { font-size: .68em; color: var(--accent); font-family: var(--mono); }
-.byline .orgline {
-  display: block; margin-top: 7px;
-  font-family: var(--mono); font-size: 11.5px;
-  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
-}
-.affil-note { margin-top: 12px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
-.affil-note sup { font-family: var(--mono); color: var(--ink-3); }
-.foot-grid .span { grid-column: 1 / -1; }
 
 /* --------------------------------------------------------------- link chips */
 .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; align-items: center; }
@@ -239,30 +220,6 @@ b .model, strong .model, h2 .model { font-weight: inherit; }
 .result p { color: var(--ink-2); }
 .result p strong { color: var(--ink); font-weight: 600; }
 .result h2 { margin-bottom: 14px; text-wrap: balance; }
-
-/* The hero band this page inherited from: hairline rules and serif numerals, no
-   boxes. Dividers come from a 1px grid gap showing the container behind, so a
-   wrapped row never leaves a stray border on the first cell of the next line. */
-.keynums {
-  display: grid; gap: 1px;
-  grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
-  margin: 26px 0 0; padding: 0; list-style: none;
-  background: var(--rule);
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-}
-.keynums li {
-  background: var(--paper);
-  padding: 15px 15px 14px;
-  font-size: 12px; line-height: 1.45; color: var(--ink-2);
-}
-.keynums .v {
-  display: block; margin-bottom: 3px;
-  font-family: var(--serif); font-weight: 500;
-  font-size: clamp(1.05rem, .92rem + .38vw, 1.28rem);
-  letter-spacing: -.018em; line-height: 1.15;
-  color: var(--ink);
-}
 
 /* ----------------------------------------------------------------- figures */
 figure { margin: 34px 0 0; }

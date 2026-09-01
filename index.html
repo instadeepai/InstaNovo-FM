@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>InstaNovo-FM — a self-supervised foundation model for proteomics tandem mass spectra</title>
-<meta name="description" content="InstaNovo-FM is a self-supervised foundation model for bottom-up proteomics, trained to reconstruct masked regions of tandem mass spectra across 1.47 billion MS/MS spectra without peptide-sequence labels.">
+<meta name="description" content="InstaNovo-FM is a self-supervised foundation model for bottom-up proteomics, trained to reconstruct masked regions of tandem mass spectra across 1.63 billion MS/MS spectra without peptide-sequence labels.">
 <link rel="icon" href="static/images/favicon.svg" type="image/svg+xml">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="InstaNovo-FM: learning from tandem mass spectra at scale">
-<meta property="og:description" content="A self-supervised foundation model for bottom-up proteomics, pretrained on 1.47 billion tandem mass spectra without peptide-sequence labels.">
+<meta property="og:description" content="A self-supervised foundation model for bottom-up proteomics, pretrained on 1.63 billion tandem mass spectra without peptide-sequence labels.">
 <meta property="og:image" content="static/images/social_preview.jpg">
 <meta name="twitter:card" content="summary_large_image">
 
@@ -43,7 +43,7 @@
 <section class="abstract">
   <div class="wrap">
     <div>
-      <p>Mass spectrometry-based proteomics increasingly relies on machine learning. Yet, deep learning models in proteomics are trained for narrowly defined supervised tasks such as peptide identification, <em>de novo</em> sequencing or fragment intensity prediction, limiting transfer across downstream tasks. We have developed <span class="model">InstaNovo-FM</span>, a self-supervised foundation model for bottom-up proteomics trained to reconstruct masked regions of tandem mass spectra. <span class="model">InstaNovo-FM</span> was built on a diverse training corpus spanning 1.47 billion MS/MS spectra and 184.6 million high-confidence annotations. Model embeddings delineate fundamental experimental and biological properties, including fragmentation method, sequence properties and post-translational modifications, without requiring peptide labels. Furthermore, <span class="model">InstaNovo-FM</span> enables downstream applications, including <em>de novo</em> peptide sequencing, database-free identification and analytical run classification. This foundation model establishes a unified representation space for peptide fragmentation spectra, enabling robust transferability across proteomics applications.</p>
+      <p>Mass spectrometry-based proteomics increasingly relies on machine learning. Yet, deep learning models in proteomics are trained for narrowly defined supervised tasks such as peptide identification, <em>de novo</em> sequencing or fragment intensity prediction, limiting transfer across downstream tasks. We have developed <span class="model">InstaNovo-FM</span>, a self-supervised foundation model for bottom-up proteomics trained to reconstruct masked regions of tandem mass spectra. <span class="model">InstaNovo-FM</span> was built on a diverse training corpus spanning 1.63 billion MS/MS spectra and 184.6 million high-confidence annotations. Model embeddings delineate fundamental experimental and biological properties, including fragmentation method, sequence properties and post-translational modifications, without requiring peptide labels. Furthermore, <span class="model">InstaNovo-FM</span> enables downstream applications, including <em>de novo</em> peptide sequencing, database-free identification and analytical run classification. This foundation model establishes a unified representation space for peptide fragmentation spectra, enabling robust transferability across proteomics applications.</p>
       <p class="keywords"><b>Keywords:</b> proteomics &middot; tandem mass spectrometry &middot; self-supervised learning &middot; foundation model &middot; spectral representation learning &middot; <em>de novo</em> sequencing</p>
     </div>
   </div>
@@ -57,7 +57,7 @@
     <div class="head">
       <h2>A billion-scale, uniform tandem mass spectrum dataset</h2>
       <p>Public repositories hold petabytes of raw mass spectrometry data, but almost none of it is usable as a single training corpus: every submission carries its own instrument, protease, labelling chemistry and search configuration. We screened tens of thousands of project submissions using repository metadata and a custom GPT-4 metadata annotation. We selected 92 projects for orthogonal diversity, and reprocessed raw data through one unified processing pipeline.</p>
-      <p>The result is <strong>ACFM</strong> — 1,467,792,801 MS/MS scans, and its labelled subset <strong>LCFM</strong>, 184,607,213 peptide-spectrum matches at run-specific 1% FDR. Progressively stricter curation for spectrum quality yields MCFM and HCFM for fine-tuning and post-training experiments. Splits are peptide-centric, so no peptide crosses a split or a confidence tier.</p>
+      <p>The result is <strong>ACFM</strong> — 1,625,276,573 MS/MS scans, and its labelled subset <strong>LCFM</strong>, 184,607,213 peptide-spectrum matches at run-specific 1% FDR. Progressively stricter curation for spectrum quality yields MCFM and HCFM for fine-tuning and post-training experiments. Splits are peptide-centric, so no peptide crosses a split or a confidence tier.</p>
     </div>
     <figure>
       <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig1.webp" alt="Figure 1: construction and characterisation of the InstaNovo-FM pretraining corpus" width="1656" height="843"></div>
@@ -172,7 +172,7 @@
         <tbody>
         <tr><th>Architecture</th><td>Encoder-only transformer; no positional encoding, no pairwise-attention bias</td></tr>
         <tr><th>Size</th><td>d = 768 &middot; 12 layers &middot; 12 heads (head dim 64) &middot; FFN 3072 &middot; ~89.5 M parameters</td></tr>
-        <tr><th>Peak encoding</th><td>Multi-scale sinusoidal <span class="mono">m/z</span> with learnable log-spaced frequencies; intensity via a separate MLP branch</td></tr>
+        <tr><th>Peak encoding</th><td>Multi-scale sinusoidal <span class="mono">m/z</span> with learnable log-spaced frequencies; intensity concatenated and projected through a second MLP</td></tr>
         <tr><th>Masked positions</th><td>Gaussian-blurred <span class="mono">m/z</span> (&sigma; = 10 Da) + original visible intensity; no learnable mask token</td></tr>
         <tr><th>Objective</th><td>Hierarchical masked reconstruction &mdash; group softmax (245) &times; offset softmax (50) over 12,250 bins at 0.2 Da; auxiliary intensity head (pretraining only)</td></tr>
         <tr><th>Masking</th><td>Thompson-span, 3&ndash;4 peak contiguous spans, isotope co-masking; 30% fragment-group budget (~26.6% of peaks)</td></tr>

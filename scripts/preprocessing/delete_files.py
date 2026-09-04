@@ -53,10 +53,10 @@ def delete_files_from_list(
         return
 
     # Ensure error log directory exists
-    error_log_path = Path(error_log_path)
-    error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    error_log = Path(error_log_path)
+    error_log.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(error_log_path, "w") as error_log:
+    with open(error_log, "w") as error_log_file:
         for file_path in files_to_delete:
             base_path = file_path.rsplit(".", 1)[0]  # Remove file extension
             ipc_file = base_path + ".ipc"
@@ -71,11 +71,11 @@ def delete_files_from_list(
                     except Exception as e:
                         error_message = f"Error deleting file {file}: {e}\n"
                         logger.error(error_message.strip())
-                        error_log.write(error_message)
+                        error_log_file.write(error_message)
                 else:
                     warning_message = f"File not found, skipping: {file}\n"
                     logger.warning(warning_message.strip())
-                    error_log.write(warning_message)
+                    error_log_file.write(warning_message)
 
 
 @app.command()

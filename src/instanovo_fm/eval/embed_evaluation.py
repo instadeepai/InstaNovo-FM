@@ -76,16 +76,12 @@ def _checkpoint_id(ckpt_path: str, index: int) -> str:
     return f"checkpoint_{index}"
 
 
-def run_evaluation(config: DictConfig) -> None:
-    """Run embedding evaluation for one or more checkpoints.
-
-    This holds the evaluation logic itself, independent of how the config was
-    built, so that both the Hydra entry point (``python -m
-    instanovo_fm.eval.embed_evaluation``) and the Typer CLI
-    (``python -m instanovo_fm.cli evaluate``) drive the same code path.
+@hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational_local")
+def main(config: DictConfig) -> None:
+    """Main entry point for embedding evaluation.
 
     Args:
-        config: Configuration loaded from evaluation.yaml (which inherits from foundational.yaml)
+        config: Hydra configuration loaded from evaluation.yaml (which inherits from foundational.yaml)
     """
     # Check if evaluation is enabled
     eval_config = config.get("evaluation", {})
@@ -170,16 +166,6 @@ def run_evaluation(config: DictConfig) -> None:
             sys.exit(1)
 
 
-@hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational_local")
-def main(config: DictConfig) -> None:
-    """Hydra entry point for embedding evaluation.
-
-    Args:
-        config: Hydra configuration loaded from evaluation.yaml (which inherits from foundational.yaml)
-    """
-    run_evaluation(config)
-
-
 def _log_metrics_to_mlflow(
     config: DictConfig,
     evaluator: EmbeddingEvaluator,
@@ -255,3 +241,5 @@ def _log_metrics_to_mlflow(
 
 if __name__ == "__main__":
     main()
+
+

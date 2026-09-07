@@ -34,12 +34,7 @@ dependencies = [
   "pandas>=2.2.3",
   "numpy==2.2.6",
   "typer==0.15.1",     # raised from the internal 0.12.5: instanovo 1.2.2 requires >=0.15.1
-  # Capped below 8.2: click 8.2 made `Parameter.make_metavar()` take a required
-  # `ctx` argument, which typer 0.15.1 does not pass. Uncapped, this resolves to
-  # click 8.5 and every `--help` that renders an options panel raises TypeError --
-  # including `instanovo-fm evaluate --help` and instanovo's own CLI. Lifting the
-  # cap needs typer >= 0.16, which instanovo 1.2.2 was not built against.
-  "click>=8.1.7,<8.2",
+  "click>=8.1.7",
   "tqdm>=4.67.0",
   "pyyaml>=6.0.2",
   "numba>=0.60.0",          # instanovo_fm.utils.lsh; 0.60 added numpy-2.0 support
@@ -60,9 +55,6 @@ dependencies = [
   "pyopenms>=3.4.0",        # theoretical spectra
   "mlflow>=2.17.0",         # experiment tracking (disabled by default in configs)
 ]
-
-[project.scripts]
-instanovo-fm = "instanovo_fm.cli:cli"
 
 [project.optional-dependencies]
 # S3 access for the ACFM sync/restore scripts. Optional: the labelled-tier
@@ -137,7 +129,10 @@ src = ["src", "scripts"]
 [tool.ruff.format]
 # Formatting would rewrite the ported files wholesale; they are kept diffable
 # against their originals in the internal repo.
-exclude = ["scripts/**", "tests/scripts_test/**", "tests/unit_test/**", "src/instanovo_fm/**", "docker/**"]
+exclude = ["scripts/preprocessing/**", "scripts/verification/**", "scripts/splitting/**",
+           "scripts/verify_preexisting_splits.py", "scripts/check_split_leakage.py",
+           "tests/scripts_test/**", "tests/unit_test/**",
+           "src/instanovo_fm/**", "docker/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4"]
@@ -151,12 +146,18 @@ select = ["E", "F", "W", "I", "UP", "B", "C4"]
 # code that cannot be exercised in CI, to satisfy cosmetic rules, is not a
 # trade worth making. New code under src/ and tests/ is held to the full set.
 [tool.ruff.lint.per-file-ignores]
-"scripts/**" = ["UP", "I001", "E501", "B904", "B905"]
+# The narrow set applies to the ported pipeline only. scripts/release/ is new
+# code written here and is held to the full rule set.
+"scripts/preprocessing/**" = ["UP", "I001", "E501", "B904", "B905"]
+"scripts/verification/**" = ["UP", "I001", "E501", "B904", "B905"]
+"scripts/splitting/**" = ["UP", "I001", "E501", "B904", "B905"]
+"scripts/verify_preexisting_splits.py" = ["UP", "I001", "E501", "B904", "B905"]
+"scripts/check_split_leakage.py" = ["UP", "I001", "E501", "B904", "B905"]
 # tests/scripts_test/ is the ported suite; same reasoning as scripts/.
 # E402: test_splitting.py's module-level skip guard has to run before the
 # imports it protects, so those imports cannot sit at the top of the file.
 "tests/unit_test/foundational/**" = ["UP", "I001", "E501", "E402", "E7", "W2", "W3",
-                                    "F401", "F541", "F722", "F841", "B", "C4", "E4"]
+                                    "F401", "F541", "F722", "F821", "F841", "B", "C4", "E4"]
 "tests/scripts_test/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
 # B904/B905 are inherited from the internal repo and are *potential* defects,
 # not confirmed ones. B905 in particular asks whether a zip() is meant to
@@ -165,13 +166,10 @@ select = ["E", "F", "W", "I", "UP", "B", "C4"]
 # review by someone who can run it; the 13 sites are listed in the PR.
 # The whole ported package is kept diffable against its source branch.
 # F722 is jaxtyping's annotation syntax, which ruff cannot parse; the source
-# branch ignored it for the same reason -- it fires 37 times here. F821 is NOT
-# ignored: it fires exactly once, on the one single-element shape string
-# (Float[Tensor, "B"] in model/heads.py), which carries a noqa. Ignoring it
-# package-wide would hide genuine undefined names across 65k lines.
-# W29x/E702/F401 are formatting and unused-import noise across 65k ported lines.
+# branch ignored it for the same reason. W29x/E702/F401 are formatting and
+# unused-import noise across 65k ported lines.
 "src/instanovo_fm/**" = ["UP", "I001", "I002", "E501", "E402", "E7", "W2", "W3",
-                         "F401", "F541", "F722", "F841", "B", "C4", "E4"]
+                         "F401", "F541", "F722", "F821", "F841", "B", "C4", "E4"]
 
 [tool.mypy]
 python_version = "3.10"

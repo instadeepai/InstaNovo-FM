@@ -9,7 +9,7 @@ from jaxtyping import Float
 
 class RtRegHead(nn.Module):
     """Regression head for retention time prediction."""
-
+    
     def __init__(self, d_model: int, max_log_rt: float = 10.5):
         super().__init__()
         self.fc1 = nn.Linear(d_model, d_model // 2)   # ½ width keeps params tiny
@@ -23,13 +23,13 @@ class RtRegHead(nn.Module):
         nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity="linear")
         nn.init.zeros_(self.fc2.bias)
 
-    def forward(self, x: Float[torch.Tensor, "B D"]) -> Float[torch.Tensor, "B"]:  # noqa: F821  # jaxtyping shape name, not a Python name
+    def forward(self, x: Float[torch.Tensor, "B D"]) -> Float[torch.Tensor, "B"]:
         """
         Forward pass for RT regression.
-
+        
         Args:
             x: Input tensor of shape (B, D)
-
+            
         Returns:
             RT predictions of shape (B,)
         """
@@ -41,13 +41,13 @@ class RtRegHead(nn.Module):
 class MDNRtHead(nn.Module):
     """
     Mixture-Density Network head for retention time prediction.
-
+    
     Predicts K-component Gaussian mixture for log-RT:
       • mu       : (B,K)   – means, scaled to ±max_log_rt
       • log_sigma: (B,K)   – unconstrained log‐σ
       • log_pi   : (B,K)   – log mixture weights (log-softmax)
     """
-
+    
     def __init__(self, d_model: int, n_components: int = 3, max_log_rt: float = 10.5):
         super().__init__()
         self.n_components = n_components
@@ -71,10 +71,10 @@ class MDNRtHead(nn.Module):
     def forward(self, x: Float[torch.Tensor, "B D"]) -> Dict[str, Float[torch.Tensor, "B K"]]:
         """
         Forward pass for MDN RT prediction.
-
+        
         Args:
             x: Input tensor of shape (B, D)
-
+            
         Returns:
             Dictionary with mixture parameters:
             - mu: means of shape (B, K)
@@ -90,7 +90,7 @@ class MDNRtHead(nn.Module):
 
 class MzRegressionHead(nn.Module):
     """Regression head for m/z prediction with μ-law scaling."""
-
+    
     def __init__(self, d_model: int):
         super().__init__()
         self.head = nn.Sequential(
@@ -255,11 +255,11 @@ class MzClassificationHead(nn.Module):
 
 class ChargeHead(nn.Module):
     """Classification head for charge state prediction."""
-
+    
     def __init__(self, d_model: int, n_charge_classes: int = 12):
         super().__init__()
         self.head = nn.Linear(d_model, n_charge_classes)
-
+        
         # Initialize with proper weights
         nn.init.xavier_uniform_(self.head.weight)
         nn.init.zeros_(self.head.bias)
@@ -267,10 +267,10 @@ class ChargeHead(nn.Module):
     def forward(self, x: Float[torch.Tensor, "B D"]) -> Float[torch.Tensor, "B C"]:
         """
         Forward pass for charge classification.
-
+        
         Args:
             x: Input tensor of shape (B, D)
-
+            
         Returns:
             Charge logits of shape (B, n_charge_classes)
         """
@@ -279,7 +279,7 @@ class ChargeHead(nn.Module):
 
 class PTMHead(nn.Module):
     """Binary classification head for PTM presence prediction."""
-
+    
     def __init__(self, d_model: int):
         super().__init__()
         self.head = nn.Sequential(
@@ -287,7 +287,7 @@ class PTMHead(nn.Module):
             nn.GELU(),
             nn.Linear(d_model // 2, 2),  # Binary classification: 0=no PTM, 1=PTM present
         )
-
+        
         # Initialize with proper weights
         nn.init.xavier_uniform_(self.head[0].weight)
         nn.init.zeros_(self.head[0].bias)
@@ -297,10 +297,10 @@ class PTMHead(nn.Module):
     def forward(self, x: Float[torch.Tensor, "B D"]) -> Float[torch.Tensor, "B 2"]:
         """
         Forward pass for PTM classification.
-
+        
         Args:
             x: Input tensor of shape (B, D)
-
+            
         Returns:
             PTM logits of shape (B, 2) for binary classification
         """
@@ -310,22 +310,22 @@ class PTMHead(nn.Module):
 class DeltaMzHead(nn.Module):
     """
     Classification head for Δm/z prediction using chemical gap buckets.
-
+    
     Predicts which chemical gap bucket lies between a peak i and its next k peaks (k = 1 ... 7).
     This is a self-supervised auxiliary task that helps the model learn chemical relationships.
     """
-
+    
     def __init__(self, d_model: int, n_buckets: int = 8):
         super().__init__()
         self.n_buckets = n_buckets
-
+        
         # Simple 2-layer MLP for Δm/z classification
         self.head = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.GELU(),
             nn.Linear(d_model, n_buckets),
         )
-
+        
         # Initialize weights
         nn.init.xavier_uniform_(self.head[0].weight)
         nn.init.zeros_(self.head[0].bias)
@@ -335,10 +335,10 @@ class DeltaMzHead(nn.Module):
     def forward(self, x: Float[torch.Tensor, "B L D"]) -> Float[torch.Tensor, "B L C"]:
         """
         Forward pass for Δm/z classification.
-
+        
         Args:
             x: Input tensor of shape (B, L, D)
-
+            
         Returns:
             Δm/z bucket logits of shape (B, L, n_buckets)
         """
@@ -348,23 +348,23 @@ class DeltaMzHead(nn.Module):
 class IntensityRegressionHead(nn.Module):
     """
     Regression head for intensity prediction.
-
+    
     Predicts continuous intensity values. Since intensity distributions are typically
     skewed with more low-intensity peaks, this head uses a transformation that can
     handle this skew effectively.
     """
-
+    
     def __init__(self, d_model: int, max_intensity: float = 1.0):
         super().__init__()
         self.max_intensity = max_intensity
-
+        
         # 2-layer MLP for intensity regression
         self.head = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.GELU(),
             nn.Linear(d_model, 1),
         )
-
+        
         # Initialize weights
         nn.init.xavier_uniform_(self.head[0].weight)
         nn.init.zeros_(self.head[0].bias)
@@ -374,31 +374,31 @@ class IntensityRegressionHead(nn.Module):
     def forward(self, x: Float[torch.Tensor, "B L D"]) -> Float[torch.Tensor, "B L 1"]:
         """
         Forward pass for intensity regression.
-
+        
         Args:
             x: Input tensor of shape (B, L, D)
-
+            
         Returns:
             Intensity predictions of shape (B, L, 1) in range [0, max_intensity]
         """
         # Get raw predictions
         raw_pred = self.head(x)
-
+        
         # Apply sigmoid to ensure positive values in [0, 1], then scale to max_intensity
         # This handles the skew towards low intensities naturally
         intensity_pred = torch.sigmoid(raw_pred) * self.max_intensity
-
+        
         return intensity_pred
 
 
 class PredictionHeads(nn.Module):
     """
     Container for all prediction heads used in the InstaNovo encoder.
-
+    
     This class manages all the different prediction heads and provides
     a unified interface for forward passes.
     """
-
+    
     def __init__(
         self,
         d_model: int,
@@ -436,26 +436,26 @@ class PredictionHeads(nn.Module):
                 self.mz_head = MzHeteroscedasticRegressionHead(d_model)
             else:
                 self.mz_head = MzRegressionHead(d_model)
-
+        
         # Auxiliary prediction heads (strictly gated by per-task flags)
         self.aux_enabled = aux_enabled
         self.charge = ChargeHead(d_model, n_charge_classes=n_charge_classes) if aux_enabled and charge_enabled else None
         self.rt_mdn = MDNRtHead(d_model, n_components=n_rt_components, max_log_rt=max_log_rt) if aux_enabled and rt_enabled else None
-
+        
         # Δm/z prediction head (only if enabled)
         self.dmz_enabled = dmz_enabled
         if dmz_enabled:
             self.dmz_head = DeltaMzHead(d_model, n_buckets=8)
         else:
             self.dmz_head = None
-
+        
         # PTM prediction head (only if enabled)
         self.ptm_enabled = ptm_enabled
         if ptm_enabled:
             self.ptm_head = PTMHead(d_model)
         else:
             self.ptm_head = None
-
+        
         # Intensity prediction head (only if enabled, regression only)
         self.intensity_enabled = intensity_enabled
         if intensity_enabled:
@@ -535,7 +535,7 @@ class PredictionHeads(nn.Module):
             else:
                 mz_preds = self.mz_head(x_head)
             group_logits, offset_logits = None, None
-
+        
         # Auxiliary predictions (using latent token)
         if self.aux_enabled:
             aux_out = {
@@ -559,15 +559,15 @@ class PredictionHeads(nn.Module):
                 },  # Dummy RT output
                 "latent": latent,  # expose for variance regularisation
             }
-
+        
         # Δm/z predictions (using sequence tokens)
         if self.dmz_enabled and self.dmz_head is not None:
             aux_out["dmz"] = self.dmz_head(x_head)  # (B, L, n_buckets)
-
+        
         # PTM predictions (using latent token)
         if self.ptm_enabled and self.ptm_head is not None:
             aux_out["ptm"] = self.ptm_head(latent)  # (B, 2)
-
+        
         # Intensity predictions (using sequence tokens)
         if self.intensity_enabled and self.intensity_head is not None:
             aux_out["intensity"] = self.intensity_head(x_head)  # (B, L, n_bins) or (B, L, 1)

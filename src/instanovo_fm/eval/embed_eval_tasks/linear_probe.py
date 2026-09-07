@@ -1390,8 +1390,6 @@ class LinearProbeTask(BaseTask):
     def _get_config_summary(self) -> Dict[str, Any]:
         """Return serialisable config summary."""
         return {
-            "backend": "cuML (GPU)" if _CUML_AVAILABLE else "sklearn (CPU)",
-            "max_iter": getattr(self, "max_iter", None),
             "targets": list(self.targets) if self.targets else [],
             "use_project_split": self.use_project_split,
             "project_key": self.project_key,

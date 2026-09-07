@@ -35,14 +35,30 @@ INPUT_PATTERN_ARG = typer.Argument(
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def normalise_sequence(sequence: str) -> str:
-    """Normalise peptide sequence by converting L to I to handle I/L ambiguity."""
+    """Collapse I/L ambiguity by converting L to I.
+
+    Mind the direction. This maps to ``I``; the peptide registry and the splitting
+    pipeline map to ``L`` (``split_labelled_data.py`` builds ``normalised_peptide``
+    with ``str.replace_all("I", "L")``, and the published registry's ``peptide``
+    column contains no ``I`` at all). Both directions define the same equivalence
+    classes -- a peptide and its I/L variants land together either way -- so
+    grouping with either is correct, and this script is self-consistent because it
+    only ever compares keys it produced itself from its own CSV inputs.
+
+    The two conventions are not interchangeable as *keys*, though. A key from here
+    holds ``I`` where a registry key holds ``L``, so looking one up against the
+    registry matches nothing rather than matching something subtly wrong -- a
+    silent empty result, which is easy to misread as "this peptide is new".
+
+    So if this output is ever joined against the registry, convert to the registry's
+    direction at the join. Do not flip this function: that would change the keys
+    written into this script's own outputs and the files already derived from them.
+    """
     return sequence.replace("L", "I")
 
 
@@ -63,9 +79,7 @@ def check_duplicate_assignments(df: pd.DataFrame, file: str) -> None:
             if len(unique_splits) > 1:
                 orig_seqs = group["sequence"].tolist()
                 splits = group["split"].tolist()
-                logger.warning(
-                    f"Found conflicting assignments in {file} for {norm_seq}:"
-                )
+                logger.warning(f"Found conflicting assignments in {file} for {norm_seq}:")
                 logger.warning(f"  {list(zip(orig_seqs, splits))}")
 
 
@@ -173,9 +187,7 @@ def create_consolidated_splits(
 
         # Use the first original sequence (they're equivalent after normalisation)
         original_sequence = next(iter(original_sequences))
-        consolidated_rows.append(
-            {"sequence": original_sequence, "split": next(iter(assignments))}
-        )
+        consolidated_rows.append({"sequence": original_sequence, "split": next(iter(assignments))})
 
     # Create DataFrame and sort by sequence
     consolidated_df = pd.DataFrame(consolidated_rows)

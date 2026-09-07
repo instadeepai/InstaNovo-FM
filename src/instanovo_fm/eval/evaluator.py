@@ -358,7 +358,6 @@ class EmbeddingEvaluator:
         self,
         force_regenerate: bool = False,
         override_max_samples: Optional[int] = None,
-        split: Optional[str] = None,
     ) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
         """Generate embeddings for the validation/test set.
 
@@ -373,10 +372,6 @@ class EmbeddingEvaluator:
                 eval config for this call. Used by multi-split generation to give
                 the train split a larger budget (e.g. 100k) than the global
                 max_samples (e.g. 10k) used for single-split evaluation tasks.
-            split: Name of the split being generated. The cache is keyed by it, so
-                that a multi-split run does not read one split's embeddings back
-                for another. Omit for single-split evaluation, which caches
-                directly in ``output_dir``.
 
         Returns:
             Tuple of (embeddings, metadata, faiss_index)
@@ -386,16 +381,11 @@ class EmbeddingEvaluator:
 
         # Check if we should save embeddings to disk
         save_embeddings = self.eval_config.get("save_embeddings", False)
-
-        # The cache lives in output_dir for a single-split run, and in a per-split
-        # subdirectory otherwise. Without the split in the path, train embeddings
-        # would be written first and then loaded back as valid and test.
-        cache_dir = self.output_dir if split is None else self.output_dir / f"embeddings_{split}"
         
         # Check if cached embeddings exist (only relevant when saving is enabled)
         if save_embeddings and not force_regenerate:
-            embeddings_path = cache_dir / "embeddings.h5"
-            index_path = cache_dir / "index.faiss"
+            embeddings_path = self.output_dir / "embeddings.h5"
+            index_path = self.output_dir / "index.faiss"
             
             if embeddings_path.exists() and index_path.exists():
                 # Validate cached embeddings match requested pooling strategy
@@ -411,10 +401,10 @@ class EmbeddingEvaluator:
                         )
                     else:
                         logger.info(f"Found cached embeddings (pooling={cached_pooling}), loading from disk")
-                        return embedding_io.load(cache_dir)
+                        return embedding_io.load(self.output_dir)
                 except Exception:
                     logger.info("Found cached embeddings, loading from disk")
-                    return embedding_io.load(cache_dir)
+                    return embedding_io.load(self.output_dir)
         
         # Get max_samples limit — per-split override takes precedence over global config
         max_samples = override_max_samples if override_max_samples is not None else self.eval_config.get("max_samples", None)
@@ -464,7 +454,7 @@ class EmbeddingEvaluator:
             device=self.device,
             batch_size=self.eval_config.get("batch_size", 256),
             show_progress=True,
-            save_to=cache_dir if save_embeddings else None,
+            save_to=self.output_dir if save_embeddings else None,
             max_samples=max_samples,
             compute_confidence=compute_confidence,
             store_per_peak_confidence=store_per_peak_confidence,
@@ -1264,7 +1254,6 @@ class EmbeddingEvaluator:
                     emb, meta, _ = self.generate_embeddings(
                         force_regenerate=force_regenerate,
                         override_max_samples=override_max,
-                        split=split_name,
                     )
                     multi_splits[split_name] = (emb, meta)
                     logger.info(
@@ -1770,17 +1759,6 @@ class EmbeddingEvaluator:
             logger.info(
                 "All tasks require multi-split data — skipping primary embedding generation."
             )
-
-            # Every selected task loads train/valid/test itself, so the top-level
-            # `split` setting has no effect here. Say so, rather than letting a run
-            # configured with split=test quietly report numbers it did not scope.
-            requested_split = self.eval_config.get("split", None)
-            if requested_split:
-                logger.warning(
-                    "split=%s is ignored: every selected task loads train/valid/test itself. "
-                    "The setting applies only to single-split tasks.",
-                    requested_split,
-                )
 
             # Check if multi-seed evaluation is requested
             task_configs = self.eval_config.get("task_configs", {})

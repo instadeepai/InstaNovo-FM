@@ -4,14 +4,30 @@ from typing import Dict, List, Tuple
 from collections import defaultdict
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def normalise_sequence(sequence: str) -> str:
-    """Normalise peptide sequence by converting L to I to handle I/L ambiguity."""
+    """Collapse I/L ambiguity by converting L to I.
+
+    Mind the direction. This maps to ``I``; the peptide registry and the splitting
+    pipeline map to ``L`` (``split_labelled_data.py`` builds ``normalised_peptide``
+    with ``str.replace_all("I", "L")``, and the published registry's ``peptide``
+    column contains no ``I`` at all). Both directions define the same equivalence
+    classes -- a peptide and its I/L variants land together either way -- so
+    grouping with either is correct, and this script is self-consistent because it
+    only ever compares keys it produced itself from its own CSV inputs.
+
+    The two conventions are not interchangeable as *keys*, though. A key from here
+    holds ``I`` where a registry key holds ``L``, so looking one up against the
+    registry matches nothing rather than matching something subtly wrong -- a
+    silent empty result, which is easy to misread as "this peptide is new".
+
+    So if this output is ever joined against the registry, convert to the registry's
+    direction at the join. Do not flip this function: that would change the keys
+    written into this script's own outputs and the files already derived from them.
+    """
     return sequence.replace("L", "I")
 
 
@@ -66,19 +82,13 @@ def get_all_files(
 ) -> List[str]:
     """Get sorted list of all files that contain overlapping peptides."""
     return sorted(
-        {
-            file
-            for assignments in overlapping_peptides.values()
-            for file, _, _ in assignments
-        }
+        {file for assignments in overlapping_peptides.values() for file, _, _ in assignments}
     )
 
 
 def group_assignments(
     overlapping_peptides: Dict[str, List[Tuple[str, str, str]]],
-) -> Tuple[
-    Dict[str, Dict[str, List[Tuple[str, str]]]], Dict[str, List[Tuple[str, str, str]]]
-]:
+) -> Tuple[Dict[str, Dict[str, List[Tuple[str, str]]]], Dict[str, List[Tuple[str, str, str]]]]:
     """Group peptide assignments by file and create a flat list of all assignments."""
     file_assignments: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(
         lambda: defaultdict(list)
@@ -127,13 +137,9 @@ def create_conflict_row(
     row = {"normalised_sequence": peptide}
 
     for file in all_files:
-        file_assignments_list = [
-            (split, orig) for f, split, orig in assignments if f == file
-        ]
+        file_assignments_list = [(split, orig) for f, split, orig in assignments if f == file]
         if file_assignments_list:
-            splits_str = "; ".join(
-                f"{split} ({orig})" for split, orig in file_assignments_list
-            )
+            splits_str = "; ".join(f"{split} ({orig})" for split, orig in file_assignments_list)
             logger.info(f"  - {splits_str} in {file}")
             row[file] = splits_str
         else:

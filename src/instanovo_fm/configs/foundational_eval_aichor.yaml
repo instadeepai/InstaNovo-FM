@@ -1,0 +1,66 @@
+# Aichor-specific configuration for embedding evaluation
+# This config runs the embedding statistics task with dashboard on a checkpoint from S3
+
+defaults:
+  - foundational  # Inherit from base foundational config
+  - _self_
+
+# Disable MLFlow for evaluation-only runs (not needed)
+mlflow_enabled: False
+
+# Override evaluation settings for Aichor
+evaluation:
+  enabled: True
+  split: valid
+  batch_size: 256
+  device: auto
+
+  # S3 checkpoint path (note: s3:// prefix is required)
+  checkpoint_path: "s3://<your-bucket>/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
+
+  # Output directory (will be uploaded to S3 automatically on Aichor)
+  output_dir: "instanovo/foundational/eval/embed_eval_results"
+
+  # Sampling
+  max_samples: 10_000
+
+  # Embedding settings
+  save_embeddings: False
+  force_regenerate_embeddings: False
+  compute_spectrum_confidence: True
+
+  # Theoretical spectrum configuration
+  theoretical_spectrum:
+    enabled: True
+    ppm_tol: 10.0
+    ion_types: null
+    use_conditional_annotation: True
+    add_losses: True
+    loss_types: ["H2O", "NH3"]
+    add_isotopes: True
+    isotope_intensity_threshold: 0.02
+    max_isotope: 3
+    add_precursor: True
+    add_custom_ions: True
+    custom_ions: null
+    keep_modifications: True
+    max_mz: 2500.0
+    min_peaks_per_spectrum: 10
+
+  # Run only embedding statistics task with dashboard
+  tasks_to_run:
+    - embeddingstatisticstask
+
+  # Task-specific config
+  task_configs:
+    embeddingstatisticstask:
+      n_clusters: 50
+      n_components_pca: 150
+      compute_clustering: True
+      compute_pca: True
+      compute_similarity_dist: True
+      num_pairs_similarity: 50000
+      seed: 42
+      create_dashboard: True  # Enable quality dashboard
+      dashboard_figsize: [16, 10]
+      dashboard_dpi: 150

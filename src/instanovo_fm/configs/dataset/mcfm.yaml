@@ -1,0 +1,46 @@
+_defaults_:
+  - dataset: default
+
+train_path: /app/fm_mount/mcfm_splits/*train*.parquet
+valid_path: /app/fm_mount/mcfm_splits/*valid*.parquet
+test_path: /app/fm_mount/mcfm_splits/*test*.parquet
+
+metadata_columns:
+  - acquisition
+  - auc_intensity
+  - collision_energy
+  - delta_mass
+  - expectation
+  - experiment_name
+  - frag_type
+  - header
+  - hyperscore
+  - index
+  - intensity_array
+  - isolation_target
+  - lower_offset
+  - mz_array
+  - nextscore
+  - peptide_calc_mz
+  - peptide_observed_mz
+  - precursor_charge
+  - precursor_intensity
+  - precursor_mz
+  - probability
+  - protein
+  - retention
+  - retention_time
+  - scale_factor
+  - scan
+  - sequence
+  - unmodified_peptide
+  - upper_offset
+  - usi
+
+# Search data integration (optional)
+# Set use_search_data: true to enable loading additional metadata from the search-data table
+# The 'usi' column (mzspec:PROJECT:filename:...) is used to match spectra to data/search_data.xlsx
+use_search_data: true
+search_data_path: ${oc.env:INSTANOVO_FM_DATA_DIR,data}/search_data.xlsx
+search_data_filepath_column: "file path"  # Column name in the table
+search_data_spectrum_key: "usi"  # Key in spectrum data for matching

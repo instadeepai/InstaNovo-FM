@@ -188,9 +188,39 @@ InstaNovo-FM/
 
 ## Documentation
 
-Full documentation is planned. _(TODO: add docs site URL.)_ It will cover tutorials (installation,
-first embedding, evaluation), how-to guides (custom datasets, training, downstream tasks), a CLI and
-API reference, and explanations of the architecture and benchmarks.
+A hosted docs site is planned. _(TODO: add docs site URL.)_ Until then, the guides live in
+[`docs/`](docs/):
+
+**Tutorials** — start here
+
+- [Getting started with the Foundation Model](docs/getting_started.md) — install, train a small
+  model on your own spectra, and read embeddings out of it.
+
+**How-to guides** — task-oriented
+
+- [Train the Foundation Model](docs/foundation_model_training.md) — the full set of training and
+  evaluation options, multi-device training, and experiment tracking.
+- [Reproduce the Foundation Model results](docs/reproducing_paper_results.md) — the published
+  configuration and the evaluation protocol behind the paper's numbers.
+- [GPU-accelerated linear probes](docs/gpu-probes.md) — installing cuML, and why it is not a
+  locked dependency.
+
+**Explanation** — background
+
+- [The InstaNovo Foundation Model](docs/foundation_model.md) — what the model is, how masked-peak
+  reconstruction works, and what the embeddings encode.
+
+**Reference**
+
+- `instanovo-fm --help`, and `instanovo-fm train|evaluate --help` for per-command options.
+- Configs live in [`src/instanovo_fm/configs/`](src/instanovo_fm/configs/); every setting is
+  overridable with Hydra syntax on the command line.
+
+**For developers**
+
+- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — full dependency licence list and a CPU-only
+  install recipe.
+- See [Development](#development) below for the test suite and pre-commit hooks.
 
 ## Development
 
@@ -230,6 +260,13 @@ GitHub's "Cite this repository" button and reference managers pick it up directl
 > the **Apache License 2.0** and model checkpoints under a **Creative Commons
 > Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)** license. Update this section once
 > finalized.
+
+Dependency versions are pinned to the ones the manuscript's results were produced with, not to the
+latest patched versions, because reproducing the paper is this repository's purpose. A vulnerability
+scan will therefore report real findings; [`SECURITY.md`](SECURITY.md) enumerates them with a
+reachability assessment, and [`vex.openvex.json`](vex.openvex.json) publishes the same assessment in
+machine-readable [OpenVEX](https://openvex.dev) form. **If you are deploying this code rather than
+reproducing the paper with it, do not use these pins.**
 
 Apache-2.0 covers the code in this repository. It does **not** cover the third-party binaries an
 install fetches. Twelve NVIDIA CUDA wheels arrive transitively and are governed by NVIDIA's

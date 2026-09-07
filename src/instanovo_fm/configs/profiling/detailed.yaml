@@ -1,0 +1,22 @@
+# Detailed profiling configuration — full diagnostics
+# WARNING: Adds overhead (~10-20%) — use for diagnostic runs only
+# Includes CUDA kernel tracing, memory profiling, and Chrome trace export
+
+enabled: false
+use_component_timing: true
+cuda_sync: true
+warmup_steps: 5                # Skip first N steps from stats (avoids JIT/CUDA warmup distortion)
+use_torch_profiler: true       # CUDA kernels, Chrome traces
+torch_profiler:
+  schedule:
+    wait: 2
+    warmup: 2
+    active: 5
+    repeat: 2
+  record_shapes: true
+  profile_memory: true
+  with_stack: true
+  with_flops: true
+  with_modules: true
+use_memory_profiling: true     # Per-step GPU/CPU memory
+tensorboard_profiling_interval: 100

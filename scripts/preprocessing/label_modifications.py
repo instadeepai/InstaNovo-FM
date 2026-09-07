@@ -114,6 +114,9 @@ def create_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
         ValueError: If any residue modifications with multiple modifications on a single amino acid are found.
             These are not supported as they require mapping multiple mods.
     """
+    if modification_df.height == 0:
+        return {}
+
     residue_mods = modification_df.filter(
         ~pl.col("modification").str.contains("n")
         & ~pl.col("modification").str.contains("c")
@@ -178,6 +181,9 @@ def create_n_term_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
         A dictionary of N-terminal modifications
         If no N-terminal modifications are found, returns an empty dictionary
     """
+    if modification_df.height == 0:
+        return {}
+
     n_terminal_mods = modification_df.filter(pl.col("modification").str.contains("n"))
 
     if len(n_terminal_mods) == 0:
@@ -230,6 +236,9 @@ def create_c_term_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
         ValueError: If any C-terminal modifications with preceding residue modifications are found.
             These are not supported as they require mapping two mods.
     """
+    if modification_df.height == 0:
+        return {}
+
     c_terminal_mods = modification_df.filter(pl.col("modification").str.contains("c"))
 
     if len(c_terminal_mods) == 0:

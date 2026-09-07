@@ -384,13 +384,16 @@ class TestLabelModifications:
     def test_label_modifications_empty_modifications(self) -> None:
         """Test label_modifications with empty modification dictionaries."""
         # Create data with no modifications
-        empty_data: dict[str, list[str]] = {
-            "modification": [],
-            "project_name": [],
-            "file_name": [],
-            "proposed_unimod_encoding": [],
+        empty_schema = {
+            "modification": pl.String,
+            "project_name": pl.String,
+            "file_name": pl.String,
+            "proposed_unimod_encoding": pl.String,
         }
-        df = pl.DataFrame(empty_data)
+        df = pl.DataFrame(
+            {col: [] for col in empty_schema},
+            schema=empty_schema,
+        )
         empty_file = self.output_dir / "empty_modifications.xlsx"
         df.write_excel(empty_file)
 

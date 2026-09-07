@@ -32,7 +32,10 @@ from scripts.preprocessing.delete_multi_folder_duplicates import (
     app as delete_multi_app,
 )
 from scripts.preprocessing.infer_isolation_target import app as infer_app
-from scripts.preprocessing.label_modifications import app as label_app
+from scripts.preprocessing.label_modifications import (
+    app as label_app,
+    create_mod_dict,
+)
 from scripts.preprocessing.check_modifications import app as check_mods_app
 
 
@@ -345,13 +348,22 @@ class TestDataConversionScripts:
         with open(file_list, "w") as f:
             f.write(str(test_file) + "\n")
 
-        # Test deleting files
+        # Test deleting files (error log must stay under the temp output dir)
+        error_log = self.output_dir / "error_log.txt"
         result = runner.invoke(
-            delete_files_app, ["delete", str(file_list), "--verbose"]
+            delete_files_app,
+            [
+                "delete",
+                str(file_list),
+                "--error-log",
+                str(error_log),
+                "--verbose",
+            ],
         )
 
         assert result.exit_code == 0
         assert not test_file.exists()
+        assert error_log.exists()
 
     def test_batch_operations(self) -> None:
         """Test batch operations across multiple directories."""
@@ -436,8 +448,11 @@ class TestDataConversionScripts:
 
         for script in scripts:
             result = runner.invoke(script, ["--help"])
-            assert result.exit_code == 0
-            assert "Usage:" in result.stdout
+            assert result.exit_code == 0, (
+                f"help failed for {script}: exit={result.exit_code} "
+                f"exc={result.exception!r}"
+            )
+            assert "Usage:" in result.output
 
     def test_label_modifications_unimod(self) -> None:
         """Test label_modifications script with UniMod modifications."""
@@ -461,22 +476,21 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        # Create Excel file with modifications that exist in mod_dict
-        from scripts.preprocessing.label_modifications import mod_dict
-
-        # Get some modifications from mod_dict
-        test_mods = list(mod_dict.keys())[:5]  # Use first 5 modifications
+        # Modifications present in the gold-standard / PXD fixture dicts
+        mod_dict = create_mod_dict(pl.read_excel(self.gold_standard_file))
+        test_mods = list(mod_dict.keys())[:3]
         excel_data = {"modification": test_mods}
         excel_df = pl.DataFrame(excel_data)
         excel_file = self.output_dir / "test_mods.xlsx"
         excel_df.write_excel(excel_file)
 
-        # Test checking modifications
         result = runner.invoke(
             check_mods_app,
             [
                 "check-mods",
                 str(excel_file),
+                str(self.gold_standard_file),
+                str(self.pxd009449_file),
                 "--verbose",
             ],
         )
@@ -494,22 +508,20 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        # Create Excel file with some valid and some missing modifications
-        from scripts.preprocessing.label_modifications import mod_dict
-
-        # Mix of valid and invalid modifications
-        test_mods = list(mod_dict.keys())[:3] + ["[9999]", "[INVALID]", "[MISSING]"]
+        mod_dict = create_mod_dict(pl.read_excel(self.gold_standard_file))
+        test_mods = list(mod_dict.keys())[:2] + ["[9999]", "[INVALID]", "[MISSING]"]
         excel_data = {"modification": test_mods}
         excel_df = pl.DataFrame(excel_data)
         excel_file = self.output_dir / "test_missing_mods.xlsx"
         excel_df.write_excel(excel_file)
 
-        # Test checking modifications
         result = runner.invoke(
             check_mods_app,
             [
                 "check-mods",
                 str(excel_file),
+                str(self.gold_standard_file),
+                str(self.pxd009449_file),
             ],
         )
 
@@ -526,16 +538,12 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        # Import override dict to test with
-        from scripts.preprocessing.label_modifications import (
-            mod_dict,
-            PXD009449_override_mod_dict,
-        )
-
-        # Create Excel file with PXD009449 override modifications
-        override_mods = list(PXD009449_override_mod_dict.keys())
-        # Also include some regular modifications
-        regular_mods = [k for k in list(mod_dict.keys())[:3] if k not in override_mods]
+        gold_mod_dict = create_mod_dict(pl.read_excel(self.gold_standard_file))
+        pxd_mod_dict = create_mod_dict(pl.read_excel(self.pxd009449_file))
+        override_mods = list(pxd_mod_dict.keys())
+        regular_mods = [
+            k for k in list(gold_mod_dict.keys())[:3] if k not in override_mods
+        ]
         test_mods = override_mods + regular_mods
 
         excel_data = {"modification": test_mods}
@@ -543,21 +551,20 @@ class TestDataConversionScripts:
         excel_file = self.output_dir / "test_pxd009449_mods.xlsx"
         excel_df.write_excel(excel_file)
 
-        # Test checking modifications
         result = runner.invoke(
             check_mods_app,
             [
                 "check-mods",
                 str(excel_file),
+                str(self.gold_standard_file),
+                str(self.pxd009449_file),
                 "--verbose",
             ],
         )
 
         assert result.exit_code == 0
         assert "SUCCESS" in result.stdout
-        # Should mention PXD009449 override modifications
         assert "PXD009449 OVERRIDE MODIFICATIONS" in result.stdout
-        # Should show the override values
         for mod in override_mods:
             assert mod in result.stdout
 
@@ -568,27 +575,26 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        from scripts.preprocessing.label_modifications import mod_dict
-
-        # Create multiple Excel files
-        mods1 = list(mod_dict.keys())[:3]
-        mods2 = list(mod_dict.keys())[3:6]
-        excel_data1 = {"modification": mods1}
-        excel_data2 = {"modification": mods2}
-        excel_df1 = pl.DataFrame(excel_data1)
-        excel_df2 = pl.DataFrame(excel_data2)
+        mod_keys = list(create_mod_dict(pl.read_excel(self.gold_standard_file)).keys())
+        mods1 = mod_keys[:2]
+        mods2 = mod_keys[1:]  # overlap is fine; both must be in the merged dict
+        excel_df1 = pl.DataFrame({"modification": mods1})
+        excel_df2 = pl.DataFrame({"modification": mods2})
         excel_file1 = self.output_dir / "batch_test1.xlsx"
         excel_file2 = self.output_dir / "batch_test2.xlsx"
         excel_df1.write_excel(excel_file1)
         excel_df2.write_excel(excel_file2)
 
-        # Test batch checking
         result = runner.invoke(
             check_mods_app,
             [
                 "batch-check-mods",
                 str(excel_file1),
                 str(excel_file2),
+                "--gold-standard",
+                str(self.gold_standard_file),
+                "--pxd009449",
+                str(self.pxd009449_file),
             ],
         )
 
@@ -603,27 +609,26 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        from scripts.preprocessing.label_modifications import mod_dict
-
-        # Create files with valid and invalid modifications
-        valid_mods = list(mod_dict.keys())[:2]
+        mod_keys = list(create_mod_dict(pl.read_excel(self.gold_standard_file)).keys())
+        valid_mods = mod_keys[:2]
         invalid_mods = ["[MISSING1]", "[MISSING2]"]
-        excel_data1 = {"modification": valid_mods}
-        excel_data2 = {"modification": invalid_mods}
-        excel_df1 = pl.DataFrame(excel_data1)
-        excel_df2 = pl.DataFrame(excel_data2)
+        excel_df1 = pl.DataFrame({"modification": valid_mods})
+        excel_df2 = pl.DataFrame({"modification": invalid_mods})
         excel_file1 = self.output_dir / "batch_valid.xlsx"
         excel_file2 = self.output_dir / "batch_invalid.xlsx"
         excel_df1.write_excel(excel_file1)
         excel_df2.write_excel(excel_file2)
 
-        # Test batch checking
         result = runner.invoke(
             check_mods_app,
             [
                 "batch-check-mods",
                 str(excel_file1),
                 str(excel_file2),
+                "--gold-standard",
+                str(self.gold_standard_file),
+                "--pxd009449",
+                str(self.pxd009449_file),
             ],
         )
 
@@ -640,18 +645,20 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        # Create empty Excel file
-        excel_data: dict[str, list[str]] = {"modification": []}
-        excel_df = pl.DataFrame(excel_data)
+        excel_df = pl.DataFrame(
+            {"modification": []},
+            schema={"modification": pl.String},
+        )
         excel_file = self.output_dir / "empty_mods.xlsx"
         excel_df.write_excel(excel_file)
 
-        # Test checking modifications
         result = runner.invoke(
             check_mods_app,
             [
                 "check-mods",
                 str(excel_file),
+                str(self.gold_standard_file),
+                str(self.pxd009449_file),
             ],
         )
 
@@ -665,23 +672,24 @@ class TestDataConversionScripts:
 
         runner = CliRunner()
 
-        # Create Excel file without modification column
         excel_data = {"other_column": ["value1", "value2"]}
         excel_df = pl.DataFrame(excel_data)
         excel_file = self.output_dir / "invalid_mods.xlsx"
         excel_df.write_excel(excel_file)
 
-        # Test checking modifications
         result = runner.invoke(
             check_mods_app,
             [
                 "check-mods",
                 str(excel_file),
+                str(self.gold_standard_file),
+                str(self.pxd009449_file),
             ],
         )
 
         assert result.exit_code == 1
-        assert "modification' column not found" in result.stdout
+        # Error is written to stderr; result.output combines stdout+stderr
+        assert "modification' column not found" in result.output
 
     def _run_label_modifications_script(self, data_dir: Path) -> int:
         """Run the label modifications script and return exit code."""
@@ -691,31 +699,33 @@ class TestDataConversionScripts:
         original_cwd = Path.cwd()
         try:
             os.chdir(data_dir)
-            # Run label_modifications on the subfolder
             result = runner.invoke(
                 label_app,
                 [
                     "label-mods",
                     "mcfm_mods",
+                    str(self.gold_standard_file),
+                    str(self.pxd009449_file),
                     "--sequence-col",
                     "unmodified_peptide",
-                    "--verbose",
                 ],
             )
             return int(result.exit_code)
         finally:
-            # Restore original working directory
             os.chdir(original_cwd)
 
     def _create_modification_test_data(self) -> Path:
         """Create test data for modification testing."""
-        # Create the directory structure that the script expects: subfolder
         mod_dir = self.data_dir / "mcfm_mods"
         mod_dir.mkdir(parents=True, exist_ok=True)
 
         mod_data = {
-            "unmodified_peptide": ["PEPTIDEK", "PEPTIDER", "PEPTIDEK"],
-            "modified_peptide": ["PEPTIDE[142]K", "PEPTIDE[3562]R", "PEPTIDE[2346]K"],
+            "unmodified_peptide": ["PEPTIDEK", "PEPTIDER", "PEPTIDEM"],
+            "modified_peptide": [
+                "PEPTIDEK[242]",
+                "PEPTIDER[170]",
+                "PEPTIDEM[142]",
+            ],
         }
         mod_df = pl.DataFrame(mod_data)
         mod_file = mod_dir / "test_mods.parquet"
@@ -723,9 +733,62 @@ class TestDataConversionScripts:
 
         return mod_file
 
+    def _create_gold_standard_modifications(self) -> Path:
+        """Create a gold standard modifications Excel file for check/label tests."""
+        gold_standard_data = {
+            "modification": [
+                "K[242]",
+                "R[170]",
+                "n[43]V",
+                "Qc[111]",
+                "M[142]",
+                "n[145]P",
+            ],
+            "project_name": [
+                "PXD037009",
+                "PXD037009",
+                "PXD037009",
+                "PXD037009",
+                "PXD037009",
+                "PXD037009",
+            ],
+            "file_name": [
+                "file1.mzML",
+                "file2.mzML",
+                "file3.mzML",
+                "file4.mzML",
+                "file5.mzML",
+                "file6.mzML",
+            ],
+            "proposed_unimod_encoding": [
+                "[UNIMOD:121]",
+                "[UNIMOD:1]",
+                "[UNIMOD:1]",
+                "[UNIMOD:23]",
+                "[UNIMOD:34]",
+                "[UNIMOD:214]",
+            ],
+        }
+        df = pl.DataFrame(gold_standard_data)
+        file_path = self.output_dir / "gold_standard_modifications.xlsx"
+        df.write_excel(file_path)
+        return file_path
+
+    def _create_pxd009449_ambiguous_modifications(self) -> Path:
+        """Create a PXD009449 ambiguous modifications Excel file."""
+        ambiguous_data = {
+            "modification": ["K[242]", "K[242]"],
+            "project_name": ["PXD009449", "PXD009449"],
+            "modification_in_file_name": ["ubiquitin", "acetylation"],
+            "proposed_unimod_encoding": ["[UNIMOD:1848]", "[UNIMOD:21]"],
+        }
+        df = pl.DataFrame(ambiguous_data)
+        file_path = self.output_dir / "pxd009449_ambiguous_modifications.xlsx"
+        df.write_excel(file_path)
+        return file_path
+
     def _verify_modification_output(self, mod_file: Path) -> None:
         """Verify that the modification output has the expected structure."""
-        # Check that the output .parquet file has the expected column
         out_df = pl.read_parquet(mod_file)
         assert "sequence" in out_df.columns
 
@@ -745,6 +808,10 @@ class TestDataConversionScripts:
         (self.data_dir / "lcfm").mkdir(exist_ok=True)
         (self.data_dir / "mcfm").mkdir(exist_ok=True)
         (self.data_dir / "hcfm").mkdir(exist_ok=True)
+
+        # Modification reference files used by check_mods / label_mods
+        self.gold_standard_file = self._create_gold_standard_modifications()
+        self.pxd009449_file = self._create_pxd009449_ambiguous_modifications()
 
         # Create test data
         self.create_test_data()

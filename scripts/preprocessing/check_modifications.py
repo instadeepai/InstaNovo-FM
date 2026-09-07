@@ -60,7 +60,11 @@ def _load_modifications(excel_file: str) -> set:
         )
         raise typer.Exit(1)
 
-    return set(df["modification"].unique().to_list())
+    if df.height == 0 or df["modification"].dtype == pl.Null:
+        return set()
+
+    mods = df["modification"].drop_nulls().unique().to_list()
+    return {m for m in mods if m is not None}
 
 
 def _report_overrides(

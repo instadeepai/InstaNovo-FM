@@ -20,8 +20,31 @@ from scripts.preprocessing.parquet_io import (
     atomic_write_parquet,
     experiment_name_from_path,
 )
-from scripts.preprocessing.recombine_acfm_random_splits import ACFM_REFERENCE_DTYPES
 from scripts.verification.add_usi_column import build_usi_string
+
+# Unlabelled ACFM columns, plus the pre-inference isolation column kept by
+# ``infer_isolation_target.py``.
+ACFM_REFERENCE_DTYPES: Dict[str, pl.DataType] = {
+    "usi": pl.String,
+    "index": pl.Int64,
+    "scan": pl.String,
+    "header": pl.String,
+    "retention_time": pl.Float64,
+    "frag_type": pl.String,
+    "acquisition": pl.String,
+    "collision_energy": pl.Float64,
+    "isolation_target": pl.Float64,
+    "precursor_mz": pl.Float64,
+    "precursor_charge": pl.Int64,
+    "precursor_intensity": pl.Float64,
+    "lower_offset": pl.Float64,
+    "upper_offset": pl.Float64,
+    "mz_array": pl.List(pl.Float64),
+    "intensity_array": pl.List(pl.Float32),
+    "scale_factor": pl.Float32,
+    "experiment_name": pl.String,
+    "isolation_target_old": pl.Float64,
+}
 
 app = typer.Typer(help="Convert IPC files to Parquet format")
 

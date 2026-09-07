@@ -1,0 +1,45 @@
+{
+  "formats": [
+    {
+      "format": "raw",
+      "files": 26609,
+      "bytes": 28162496384779,
+      "size": "25.6 TiB"
+    },
+    {
+      "format": "mzML",
+      "files": 28235,
+      "bytes": 6584399084703,
+      "size": "6.0 TiB"
+    },
+    {
+      "format": "acfm",
+      "files": 25836,
+      "bytes": 5811501422384,
+      "size": "5.3 TiB"
+    },
+    {
+      "format": "lcfm",
+      "files": 18895,
+      "bytes": 1011848560526,
+      "size": "942.4 GiB"
+    },
+    {
+      "format": "mcfm",
+      "files": 14833,
+      "bytes": 25663931044,
+      "size": "23.9 GiB"
+    },
+    {
+      "format": "hcfm",
+      "files": 14833,
+      "bytes": 1602330484,
+      "size": "1.5 GiB"
+    }
+  ],
+  "total": {
+    "files": 129241,
+    "bytes": 41597511713920,
+    "size": "37.8 TiB"
+  }
+}

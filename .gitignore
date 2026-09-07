@@ -1,0 +1,34 @@
+# Virtual environment — recreate with requirements.txt, never commit
+instafm/
+.venv/
+venv/
+
+# Generated figures. Every file under figures/ is reproducible by running the
+# notebooks, and figures/3/plotly alone is ~292 MB of vector SVG, so the tree is
+# kept out of git rather than versioned.
+figures/
+
+# Notebook cruft
+.ipynb_checkpoints/
+*.ipynb.bak
+
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Never commit credentials. verify_precursor_charges_and_acq_type.py in the
+# internal repo looked for .aws/credentials at the repo root before ~/.aws.
+.aws/
+*.pem
+.env
+
+# uv
+.venv/
+
+# written by scripts/preprocessing/delete_files.py as its default --error-log path,
+# so any run or test that exercises it drops these in the working tree
+error_log.txt
+batch_error_log.txt

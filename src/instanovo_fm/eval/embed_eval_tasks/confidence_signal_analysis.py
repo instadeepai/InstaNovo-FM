@@ -22,23 +22,20 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
-import torch
 from tqdm import tqdm
 
 from instanovo.__init__ import console
-from instanovo.common import DataProcessor
 from instanovo_fm.eval.embed_eval_tasks import BaseTask
 from instanovo_fm.utils.ion_visualization import (
-    categorize_ion,
     CATEGORY_COLORS,
     TEXT_COLORS,
+    categorize_ion,
     format_annotation_display,
 )
 from instanovo_fm.utils.peak_classification import (
-    extract_ion_type,
     extract_fragment_position,
+    extract_ion_type,
 )
-from instanovo_fm.utils.theoretical_spectra import match_theoretical_to_experimental
 from instanovo.utils.colorlogging import ColorLog
 
 logger = ColorLog(console, __name__).logger
@@ -47,6 +44,7 @@ logger = ColorLog(console, __name__).logger
 try:
     import matplotlib.pyplot as plt
     import seaborn as sns
+
     PLOTTING_AVAILABLE = True
 except ImportError:
     PLOTTING_AVAILABLE = False
@@ -55,13 +53,14 @@ except ImportError:
 
 # Optional imports for metrics
 try:
+    from scipy.stats import ks_2samp, spearmanr
     from sklearn.metrics import (
+        average_precision_score,
+        precision_recall_curve,
         roc_auc_score,
         roc_curve,
-        precision_recall_curve,
-        average_precision_score,
     )
-    from scipy.stats import ks_2samp, spearmanr
+
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
@@ -95,8 +94,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         max_individual_plots: int = 30,  # Maximum number of individual spectrum plots to create
         min_backbone_coverage: float = 0.0,  # Backbone coverage quality gate (0 = disabled)
         min_fragment_groups: int = 0,  # Fragment group quality gate (0 = disabled)
-        **kwargs: Any
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize the Confidence-Signal Analysis Task.
 
         Note: Theoretical spectrum generation parameters are now configured globally
@@ -126,7 +125,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Store max_mz for denormalization (will be updated from config if available)
         self.max_mz = 2500.0  # Default value
 
-    def run(
+    def run(  # type: ignore[override]  # base class run() signature differs across tasks
         self,
         embeddings: np.ndarray,
         metadata: Dict[str, np.ndarray],
@@ -142,19 +141,17 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         Returns:
             Dictionary with analysis results and metrics
         """
-
-
         # Check dependencies
         if not SKLEARN_AVAILABLE:
             logger.error("sklearn is required for this task. Install with: pip install scikit-learn")
             return {"error": "sklearn not available", "success": False}
 
         # Check if theoretical spectra are precomputed
-        has_theoretical = all(k in metadata for k in ['theoretical_mz', 'theoretical_annotations', 'theoretical_match_mask'])
+        has_theoretical = all(k in metadata for k in ["theoretical_mz", "theoretical_annotations", "theoretical_match_mask"])
 
         # Extract max_mz from metadata if available (stored during theoretical generation)
-        if 'theoretical_max_mz' in metadata:
-            self.max_mz = float(metadata['theoretical_max_mz'])
+        if "theoretical_max_mz" in metadata:
+            self.max_mz = float(metadata["theoretical_max_mz"])
 
         if not has_theoretical:
             logger.error("Theoretical spectra not found in metadata!")
@@ -171,26 +168,25 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         n_spectra = len(sequences)
 
         # Extract per-peak confidence from metadata if available (before limiting samples)
-        per_peak_confidence = metadata.get('per_peak_confidence', None)
+        per_peak_confidence = metadata.get("per_peak_confidence", None)
         if per_peak_confidence is None:
             logger.warning("Per-peak confidence not found in metadata - task requires real confidence scores")
 
         # Extract decomposed confidence components (group and offset)
-        per_peak_conf_group = metadata.get('per_peak_conf_group', None)
-        per_peak_conf_offset = metadata.get('per_peak_conf_offset', None)
-        has_decomposed = per_peak_conf_group is not None and per_peak_conf_offset is not None
+        per_peak_conf_group = metadata.get("per_peak_conf_group", None)
+        per_peak_conf_offset = metadata.get("per_peak_conf_offset", None)
 
         # Extract per-spectrum confidence from metadata if available
-        spectrum_confidences = metadata.get('spectrum_confidence', None)
+        spectrum_confidences = metadata.get("spectrum_confidence", None)
 
         # Extract fragmentation types from metadata if available (needed for limiting samples)
-        frag_types = metadata.get('frag_type', None)
+        frag_types = metadata.get("frag_type", None)
 
         # Extract precomputed theoretical data before limiting samples
-        theoretical_match_masks = metadata.get('theoretical_match_mask', None)
+        theoretical_match_masks = metadata.get("theoretical_match_mask", None)
 
         # Extract matched_annotation list (per-peak annotations aligned with valid peaks)
-        matched_annotations = metadata.get('matched_annotation', None)
+        matched_annotations = metadata.get("matched_annotation", None)
 
         # Limit samples if requested
         # Use sequential indices (0, 1, 2, ..., max_samples-1) to match head_analysis task
@@ -217,14 +213,18 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             n_spectra = self.max_samples
 
         # Extract spectrum quality metrics (if available from embedding_io)
-        spectrum_quality_arr = metadata.get('spectrum_quality', None)
+        spectrum_quality_arr = metadata.get("spectrum_quality", None)
         if spectrum_quality_arr is not None and self.max_samples is not None and n_spectra == self.max_samples:
             # indices were sequential [0..max_samples-1], slice accordingly
             spectrum_quality_arr = spectrum_quality_arr[:n_spectra]
 
         # Collect per-peak confidence and theoretical labels
         results = self._collect_peak_data(
-            sequences, spectra, precursor_charges, per_peak_confidence, theoretical_match_masks,
+            sequences,
+            spectra,
+            precursor_charges,
+            per_peak_confidence,
+            theoretical_match_masks,
             spectrum_quality=spectrum_quality_arr,
             per_peak_conf_group=per_peak_conf_group,
             per_peak_conf_offset=per_peak_conf_offset,
@@ -234,32 +234,36 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         if results is None:
             return {"error": "Failed to collect peak data", "success": False}
 
-        (confidence_scores, is_theoretical, n_analyzed,
-         conf_group_scores, conf_offset_scores,
-         spectrum_boundaries, peak_annotations,
-         intensity_scores) = results
+        (
+            confidence_scores,
+            is_theoretical,
+            n_analyzed,
+            conf_group_scores,
+            conf_offset_scores,
+            spectrum_boundaries,
+            peak_annotations,
+            intensity_scores,
+        ) = results
 
         n_peaks = len(confidence_scores)
         pct_ann = is_theoretical.mean() * 100
-        logger.info(
-            f"  {n_analyzed}/{n_spectra} spectra, {n_peaks:,} peaks ({pct_ann:.1f}% annotated)"
-        )
+        logger.info(f"  {n_analyzed}/{n_spectra} spectra, {n_peaks:,} peaks ({pct_ann:.1f}% annotated)")
 
         # Compute separation metrics
         metrics = self._compute_metrics(confidence_scores, is_theoretical)
 
         # Intensity-confidence analysis (compute first to include in headline)
         intensity_analysis = self._compute_intensity_confidence_analysis(
-            confidence_scores, intensity_scores, is_theoretical,
+            confidence_scores,
+            intensity_scores,
+            is_theoretical,
         )
-        metrics["intensity_analysis"] = {
-            k: v for k, v in intensity_analysis.items() if k != "stratified_bins"
-        }
+        metrics["intensity_analysis"] = {k: v for k, v in intensity_analysis.items() if k != "stratified_bins"}
         metrics["intensity_analysis"]["stratified_bins"] = intensity_analysis["stratified_bins"]
 
         # Log headline: confidence vs intensity baseline + residual
-        delta = intensity_analysis['confidence_delta_over_intensity']
-        residual = intensity_analysis['residual_confidence_auroc']
+        delta = intensity_analysis["confidence_delta_over_intensity"]
+        residual = intensity_analysis["residual_confidence_auroc"]
         logger.info(
             f"  AUROC={metrics['auroc']:.4f}  Intensity baseline={intensity_analysis['intensity_auroc']:.4f}  "
             f"Delta={delta:+.4f}  Residual={residual:.4f}"
@@ -268,13 +272,18 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Decomposed confidence analysis (group vs offset vs joint)
         if conf_group_scores is not None and conf_offset_scores is not None:
             decomposed = self._compute_decomposed_metrics(
-                confidence_scores, conf_group_scores, conf_offset_scores, is_theoretical,
+                confidence_scores,
+                conf_group_scores,
+                conf_offset_scores,
+                is_theoretical,
             )
             metrics["decomposed"] = decomposed
 
         # Per-spectrum AUROC distribution
         per_spectrum_results = self._compute_per_spectrum_metrics(
-            confidence_scores, is_theoretical, spectrum_boundaries,
+            confidence_scores,
+            is_theoretical,
+            spectrum_boundaries,
         )
         per_spectrum_aurocs = per_spectrum_results.pop("per_spectrum_aurocs")
         metrics["per_spectrum_auroc"] = per_spectrum_results
@@ -290,7 +299,9 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Confidence-quality correlation: does mean per-spectrum confidence
         # correlate with theoretical annotation quality?
         quality_corr = self._compute_quality_correlation(
-            confidence_scores, is_theoretical, spectrum_boundaries,
+            confidence_scores,
+            is_theoretical,
+            spectrum_boundaries,
             spectrum_quality_arr,
         )
         if quality_corr:
@@ -300,7 +311,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         has_annotations = any(ann != "" for ann in peak_annotations)
         if has_annotations:
             ion_breakdown = self._compute_ion_type_breakdown(
-                confidence_scores, peak_annotations,
+                confidence_scores,
+                peak_annotations,
                 conf_group_scores=conf_group_scores,
                 conf_offset_scores=conf_offset_scores,
             )
@@ -310,11 +322,14 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             # individual scatter points, not just per-type summary statistics.
             try:
                 import polars as _pl
+
                 _cats = [categorize_ion(a) for a in peak_annotations]
-                _pl.DataFrame({
-                    "ion_category": _cats,
-                    "confidence": np.asarray(confidence_scores, dtype=float),
-                }).write_parquet(str(Path(self.output_dir) / "per_peak_confidence_by_type.parquet"))
+                _pl.DataFrame(
+                    {
+                        "ion_category": _cats,
+                        "confidence": np.asarray(confidence_scores, dtype=float),
+                    }
+                ).write_parquet(str(Path(self.output_dir) / "per_peak_confidence_by_type.parquet"))
                 logger.info(f"Wrote per-peak confidence dump ({len(_cats):,} peaks)")
             except Exception as _e:  # never break the task on the dump
                 logger.warning(f"per-peak confidence dump failed: {_e}")
@@ -323,7 +338,10 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         fragment_position_data = None
         if has_annotations:
             fragment_position_data = self._compute_fragment_position_confidence(
-                confidence_scores, peak_annotations, spectrum_boundaries, sequences,
+                confidence_scores,
+                peak_annotations,
+                spectrum_boundaries,
+                sequences,
             )
             if fragment_position_data is not None:
                 metrics["fragment_position_confidence"] = fragment_position_data
@@ -334,7 +352,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
 
             if has_annotations:
                 self._create_ion_type_plot(
-                    confidence_scores, peak_annotations,
+                    confidence_scores,
+                    peak_annotations,
                     conf_group_scores=conf_group_scores,
                     conf_offset_scores=conf_offset_scores,
                 )
@@ -342,22 +361,27 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             if fragment_position_data is not None:
                 unannotated_mean = float(np.mean(confidence_scores[~is_theoretical]))
                 self._create_fragment_position_plot(
-                    fragment_position_data, unannotated_mean,
-                    max_position=15, max_peptide_length=20,
+                    fragment_position_data,
+                    unannotated_mean,
+                    max_position=15,
+                    max_peptide_length=20,
                 )
 
             self._create_intensity_confidence_plot(
-                confidence_scores, intensity_scores, is_theoretical, intensity_analysis,
+                confidence_scores,
+                intensity_scores,
+                is_theoretical,
+                intensity_analysis,
             )
 
             # Create individual spectrum plots
             if self.max_individual_plots > 0 and per_peak_confidence is not None:
                 # Extract precomputed theoretical data
-                theoretical_mz_list = metadata.get('theoretical_mz', None)
-                theoretical_annotations_list = metadata.get('theoretical_annotations', None)
-                theoretical_match_masks = metadata.get('theoretical_match_mask', None)
-                theoretical_match_idx_list = metadata.get('theoretical_match_idx', None)
-                frag_types = metadata.get('frag_type', None)
+                theoretical_mz_list = metadata.get("theoretical_mz", None)
+                theoretical_annotations_list = metadata.get("theoretical_annotations", None)
+                theoretical_match_masks = metadata.get("theoretical_match_mask", None)
+                theoretical_match_idx_list = metadata.get("theoretical_match_idx", None)
+                frag_types = metadata.get("frag_type", None)
 
                 # Re-apply sample limiting to these arrays
                 if self.max_samples is not None and theoretical_mz_list is not None:
@@ -386,15 +410,13 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                     spectrum_confidences=spectrum_confidences,
                     matched_annotations=matched_annotations,
                     dataset_metrics=metrics,
-                    spectrum_quality=metadata.get('spectrum_quality', None),
+                    spectrum_quality=metadata.get("spectrum_quality", None),
                 )
         elif self.create_plots:
             logger.warning("Plotting libraries not available. Skipping visualizations.")
 
         # Save results
         self._save_results(metrics, n_analyzed, n_spectra)
-
-
 
         # Strip large curve arrays before returning — they were only needed for plotting
         metrics.pop("roc_curve", None)
@@ -410,17 +432,14 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             "fraction_theoretical": float(is_theoretical.mean()),
         }
 
-    def _extract_data(
-        self,
-        metadata: Dict[str, np.ndarray]
-    ) -> Optional[tuple]:
+    def _extract_data(self, metadata: Dict[str, np.ndarray]) -> Optional[tuple]:
         """Extract required data from metadata.
 
         Returns:
             Tuple of (sequences, spectra, charges) or None
         """
         # Try different sequence keys
-        sequence_keys = ['sequence', 'peptides', 'peptide', 'seq']
+        sequence_keys = ["sequence", "peptides", "peptide", "seq"]
         sequences = None
         for key in sequence_keys:
             if key in metadata:
@@ -432,14 +451,14 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             return None
 
         # Get spectra (should be in metadata as 'spectra')
-        if 'spectra' not in metadata:
+        if "spectra" not in metadata:
             logger.error("'spectra' not found in metadata")
             return None
 
-        spectra = metadata['spectra']
+        spectra = metadata["spectra"]
 
         # Get precursor charges
-        charge_keys = ['precursor_charge', 'charge', 'precursor_charge_id']
+        charge_keys = ["precursor_charge", "charge", "precursor_charge_id"]
         precursor_charges = None
         for key in charge_keys:
             if key in metadata:
@@ -488,11 +507,11 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             all_peak_annotations is a flat list of per-peak annotation strings.
             intensity_scores is a flat numpy array of per-peak normalized intensities.
         """
-        all_confidence = []
-        all_intensity = []
-        all_conf_group = [] if per_peak_conf_group is not None else None
-        all_conf_offset = [] if per_peak_conf_offset is not None else None
-        all_is_theoretical = []
+        all_confidence: list[Any] = []
+        all_intensity: list[Any] = []
+        all_conf_group: list[Any] | None = [] if per_peak_conf_group is not None else None
+        all_conf_offset: list[Any] | None = [] if per_peak_conf_offset is not None else None
+        all_is_theoretical: list[Any] = []
         spectrum_boundaries = [0]
         all_peak_annotations: list[str] = []
         n_analyzed = 0
@@ -522,11 +541,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 continue
 
             # Apply backbone coverage quality gate
-            if (
-                spectrum_quality is not None
-                and idx < len(spectrum_quality)
-                and spectrum_quality[idx] is not None
-            ):
+            if spectrum_quality is not None and idx < len(spectrum_quality) and spectrum_quality[idx] is not None:
                 sq = spectrum_quality[idx]
                 bc = sq.get("backbone_coverage", 0.0)
                 ng = sq.get("n_fragment_groups", 0)
@@ -554,14 +569,14 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             is_theoretical_peaks = theo_mask
 
             # Get confidence scores for these peaks
-            if has_confidence and idx < len(per_peak_confidence):
+            if has_confidence and per_peak_confidence is not None and idx < len(per_peak_confidence):
                 spectrum_conf = per_peak_confidence[idx]  # (L,) array
 
                 # Match confidence to valid peaks (filter out padding)
                 if len(spectrum_conf) >= len(mz):
                     peak_confidences = spectrum_conf[valid_mask]
                 else:
-                    peak_confidences = spectrum_conf[:len(mz)]
+                    peak_confidences = spectrum_conf[: len(mz)]
 
                 # Ensure lengths match
                 if len(peak_confidences) != len(mz):
@@ -574,10 +589,10 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 peak_conf_offset = None
                 if per_peak_conf_group is not None and idx < len(per_peak_conf_group):
                     g = per_peak_conf_group[idx]
-                    peak_conf_group = g[valid_mask] if len(g) >= len(mz) else g[:len(mz)]
+                    peak_conf_group = g[valid_mask] if len(g) >= len(mz) else g[: len(mz)]
                 if per_peak_conf_offset is not None and idx < len(per_peak_conf_offset):
                     o = per_peak_conf_offset[idx]
-                    peak_conf_offset = o[valid_mask] if len(o) >= len(mz) else o[:len(mz)]
+                    peak_conf_offset = o[valid_mask] if len(o) >= len(mz) else o[: len(mz)]
             else:
                 # No confidence available — skip this spectrum entirely
                 n_no_confidence += 1
@@ -610,7 +625,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Log skip warnings (only when something was actually skipped)
         n_skipped_total = n_skipped_invalid + n_no_theoretical + n_skipped_low_quality + n_no_confidence
         if n_skipped_total > 0:
-            parts = []
+            parts: list[Any] = []
             if n_skipped_invalid > 0:
                 parts.append(f"invalid={n_skipped_invalid}")
             if n_no_theoretical > 0:
@@ -643,11 +658,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             np.array(all_intensity),
         )
 
-    def _compute_metrics(
-        self,
-        confidence_scores: np.ndarray,
-        is_theoretical: np.ndarray
-    ) -> Dict[str, float]:
+    def _compute_metrics(self, confidence_scores: np.ndarray, is_theoretical: np.ndarray) -> Dict[str, Any]:
         """Compute separation metrics between signal and noise confidence.
 
         Args:
@@ -690,7 +701,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Class imbalance ratio
         n_signal = int(is_theoretical.sum())
         n_noise = int((~is_theoretical).sum())
-        class_imbalance_ratio = n_noise / n_signal if n_signal > 0 else float('inf')
+        class_imbalance_ratio = n_noise / n_signal if n_signal > 0 else float("inf")
 
         return {
             "auroc": float(auroc),
@@ -729,7 +740,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             auroc, average_precision, cohens_d.
         """
         labels = is_theoretical.astype(int)
-        result = {}
+        result: dict[str, Any] = {}
 
         for name, scores in [("joint", conf_joint), ("group", conf_group), ("offset", conf_offset)]:
             signal = scores[is_theoretical]
@@ -777,7 +788,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             Dict with 'per_spectrum_aurocs' (np.ndarray) and summary statistics.
         """
         n_spectra = len(spectrum_boundaries) - 1
-        aurocs = []
+        aurocs: list[Any] = []
 
         for i in range(n_spectra):
             start, end = spectrum_boundaries[i], spectrum_boundaries[i + 1]
@@ -803,13 +814,15 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             "n_spectra_skipped": n_spectra - len(auroc_arr),
         }
         if len(auroc_arr) > 0:
-            summary.update({
-                "mean": float(np.mean(auroc_arr)),
-                "median": float(np.median(auroc_arr)),
-                "std": float(np.std(auroc_arr)),
-                "q25": float(np.percentile(auroc_arr, 25)),
-                "q75": float(np.percentile(auroc_arr, 75)),
-            })
+            summary.update(
+                {
+                    "mean": float(np.mean(auroc_arr)),
+                    "median": float(np.median(auroc_arr)),
+                    "std": float(np.std(auroc_arr)),
+                    "q25": float(np.percentile(auroc_arr, 25)),
+                    "q75": float(np.percentile(auroc_arr, 75)),
+                }
+            )
 
         return summary
 
@@ -844,11 +857,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             buckets[cat].append(i)
 
         # Merge rare categories (< 50 peaks) into "Other"
-        MIN_CATEGORY_SIZE = 500
-        rare_cats = [
-            c for c, idxs in buckets.items()
-            if len(idxs) < MIN_CATEGORY_SIZE and c != "unannotated"
-        ]
+        MIN_CATEGORY_SIZE = 500  # noqa: N806
+        rare_cats = [c for c, idxs in buckets.items() if len(idxs) < MIN_CATEGORY_SIZE and c != "unannotated"]
         if rare_cats:
             other_idxs: list[int] = []
             for c in rare_cats:
@@ -911,6 +921,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Collect confidence by (ion_series, position, subtype)
         # subtype: "base", "isotope", "loss"
         from collections import defaultdict
+
         data: dict[str, dict[int, dict[str, list[float]]]] = {
             "b": defaultdict(lambda: defaultdict(list)),
             "y": defaultdict(lambda: defaultdict(list)),
@@ -1002,12 +1013,14 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         fig, (ax_y, ax_b) = plt.subplots(2, 1, figsize=(14, 8), sharex=False)
         fig.suptitle(
             f"Fragment Ion Confidence by Position ({filter_text})",
-            fontsize=14, fontweight='bold', y=1.01,
+            fontsize=14,
+            fontweight="bold",
+            y=1.01,
         )
 
         subtypes = ["base", "isotope", "loss"]
-        subtype_colors = {"base": "#2ca02c", "isotope": "#1f77b4", "loss": "#ff7f0e"}
-        subtype_labels = {"base": "Base ion", "isotope": "Isotope", "loss": "Neutral loss"}
+        subtype_colors: dict[str, Any] = {"base": "#2ca02c", "isotope": "#1f77b4", "loss": "#ff7f0e"}
+        subtype_labels: dict[str, Any] = {"base": "Base ion", "isotope": "Isotope", "loss": "Neutral loss"}
         bar_width = 0.25
 
         for ax, ion_series, title in [
@@ -1016,18 +1029,17 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         ]:
             pos_data = fragment_position_data.get(ion_series, {})
             if not pos_data:
-                ax.text(0.5, 0.5, f"No {title} data", transform=ax.transAxes,
-                        ha='center', va='center', fontsize=12, color='gray')
-                ax.set_title(title, fontsize=13, fontweight='bold')
+                ax.text(0.5, 0.5, f"No {title} data", transform=ax.transAxes, ha="center", va="center", fontsize=12, color="gray")
+                ax.set_title(title, fontsize=13, fontweight="bold")
                 continue
 
             positions = sorted(int(p) for p in pos_data.keys())
             x = np.arange(len(positions))
 
             for i, subtype in enumerate(subtypes):
-                means = []
-                stds = []
-                counts = []
+                means: list[Any] = []
+                stds: list[Any] = []
+                counts: list[Any] = []
                 for pos in positions:
                     stats = pos_data.get(pos, {}).get(subtype, {})
                     if stats:
@@ -1049,30 +1061,37 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                     continue
 
                 offset = (i - 1) * bar_width
-                bars = ax.bar(
-                    x[mask] + offset, means_arr[mask], bar_width,
-                    yerr=stds_arr[mask], capsize=2, label=subtype_labels[subtype],
-                    color=subtype_colors[subtype], alpha=0.8, edgecolor='white',
-                    error_kw={'linewidth': 0.8, 'alpha': 0.6},
+                ax.bar(
+                    x[mask] + offset,
+                    means_arr[mask],
+                    bar_width,
+                    yerr=stds_arr[mask],
+                    capsize=2,
+                    label=subtype_labels[subtype],
+                    color=subtype_colors[subtype],
+                    alpha=0.8,
+                    edgecolor="white",
+                    error_kw={"linewidth": 0.8, "alpha": 0.6},
                 )
 
                 # (counts available in JSON output)
 
             # Reference line: unannotated mean confidence
-            ax.axhline(unannotated_mean_conf, color='gray', linestyle='--',
-                       linewidth=1.2, alpha=0.7, label=f'Unannotated mean ({unannotated_mean_conf:.3f})')
+            ax.axhline(
+                unannotated_mean_conf, color="gray", linestyle="--", linewidth=1.2, alpha=0.7, label=f"Unannotated mean ({unannotated_mean_conf:.3f})"
+            )
 
             ax.set_xticks(x)
             ax.set_xticklabels([f"{ion_series}{p}" for p in positions], fontsize=10)
             ax.set_ylabel("Mean Confidence", fontsize=11)
-            ax.set_title(title, fontsize=13, fontweight='bold')
-            ax.legend(fontsize=9, loc='upper right')
+            ax.set_title(title, fontsize=13, fontweight="bold")
+            ax.legend(fontsize=9, loc="upper right")
             ax.set_ylim(bottom=0)
-            ax.grid(axis='y', alpha=0.3)
+            ax.grid(axis="y", alpha=0.3)
 
         plt.tight_layout()
         save_path = Path(self.output_dir) / "confidence_fragment_position.png"
-        fig.savefig(save_path, dpi=150, bbox_inches='tight')
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
 
     def _compute_intensity_confidence_analysis(
@@ -1134,7 +1153,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         bin_edges = np.unique(bin_edges)
         actual_bins = len(bin_edges) - 1
 
-        stratified = []
+        stratified: list[Any] = []
         for b in range(actual_bins):
             lo, hi = bin_edges[b], bin_edges[b + 1]
             if b < actual_bins - 1:
@@ -1204,9 +1223,9 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         confidence_auroc = analysis["confidence_auroc"]
 
         # === Panel A: Intensity-stratified confidence AUROC ===
-        bin_labels = []
-        auroc_vals = []
-        pct_ann_vals = []
+        bin_labels: list[Any] = []
+        auroc_vals: list[Any] = []
+        pct_ann_vals: list[Any] = []
         for i, s in enumerate(stratified):
             label = f"Q{i + 1}\n({s['intensity_lo']:.2f}-{s['intensity_hi']:.2f})"
             bin_labels.append(label)
@@ -1221,17 +1240,15 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             bar_v = [v for _, v in valid_aurocs]
             # Bars start from 0.5 baseline — height represents AUROC above chance
             bar_heights = [v - 0.5 for v in bar_v]
-            colors = ['#2ca02c' if h > 0 else '#d62728' for h in bar_heights]
-            ax_a.bar(bar_x, bar_heights, bottom=0.5, color=colors, alpha=0.7, width=0.6,
-                     edgecolor="black", linewidth=0.5)
+            colors = ["#2ca02c" if h > 0 else "#d62728" for h in bar_heights]
+            ax_a.bar(bar_x, bar_heights, bottom=0.5, color=colors, alpha=0.7, width=0.6, edgecolor="black", linewidth=0.5)
 
         # Reference lines
-        ax_a.axhline(0.5, color="gray", linestyle=":", linewidth=1.2, alpha=0.7,
-                      label="Random (0.5)")
-        ax_a.axhline(confidence_auroc, color="#1f77b4", linestyle="--", linewidth=1.5,
-                      alpha=0.8, label=f"Overall conf AUROC ({confidence_auroc:.3f})")
-        ax_a.axhline(intensity_auroc, color="#ff7f0e", linestyle="--", linewidth=1.5,
-                      alpha=0.8, label=f"Intensity AUROC ({intensity_auroc:.3f})")
+        ax_a.axhline(0.5, color="gray", linestyle=":", linewidth=1.2, alpha=0.7, label="Random (0.5)")
+        ax_a.axhline(
+            confidence_auroc, color="#1f77b4", linestyle="--", linewidth=1.5, alpha=0.8, label=f"Overall conf AUROC ({confidence_auroc:.3f})"
+        )
+        ax_a.axhline(intensity_auroc, color="#ff7f0e", linestyle="--", linewidth=1.5, alpha=0.8, label=f"Intensity AUROC ({intensity_auroc:.3f})")
 
         ax_a.set_xticks(x_pos)
         ax_a.set_xticklabels(bin_labels, fontsize=8)
@@ -1246,8 +1263,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Annotated % as secondary annotation
         for i, s in enumerate(stratified):
             if s["confidence_auroc"] is not None:
-                ax_a.text(i, s["confidence_auroc"] + 0.01, f"{s['pct_annotated']:.0f}%",
-                          ha="center", fontsize=7, color="#555555")
+                ax_a.text(i, s["confidence_auroc"] + 0.01, f"{s['pct_annotated']:.0f}%", ha="center", fontsize=7, color="#555555")
 
         # === Panel B: Mean confidence vs intensity percentile, by annotation status ===
         # Use quantile-based bins and plot on percentile x-axis so each bin has
@@ -1258,12 +1274,12 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         bin_edges = np.unique(bin_edges)
         n_actual = len(bin_edges) - 1
 
-        ann_means = []
-        unann_means = []
-        ann_stds = []
-        unann_stds = []
+        ann_means: list[Any] = []
+        unann_means: list[Any] = []
+        ann_stds: list[Any] = []
+        unann_stds: list[Any] = []
         # Evenly-spaced percentile centers for x-axis
-        pct_centers = []
+        pct_centers: list[Any] = []
 
         for b in range(n_actual):
             lo, hi = bin_edges[b], bin_edges[b + 1]
@@ -1292,25 +1308,25 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Plot annotated line
         valid_ann = ~np.isnan(ann_means)
         if valid_ann.any():
-            ax_b.plot(pct_centers[valid_ann], ann_means[valid_ann], color="#2ca02c",
-                      linewidth=2, label="Annotated", zorder=3)
+            ax_b.plot(pct_centers[valid_ann], ann_means[valid_ann], color="#2ca02c", linewidth=2, label="Annotated", zorder=3)
             ax_b.fill_between(
                 pct_centers[valid_ann],
                 ann_means[valid_ann] - ann_stds[valid_ann],
                 ann_means[valid_ann] + ann_stds[valid_ann],
-                color="#2ca02c", alpha=0.15,
+                color="#2ca02c",
+                alpha=0.15,
             )
 
         # Plot unannotated line
         valid_unann = ~np.isnan(unann_means)
         if valid_unann.any():
-            ax_b.plot(pct_centers[valid_unann], unann_means[valid_unann], color="#d62728",
-                      linewidth=2, label="Unannotated", zorder=3)
+            ax_b.plot(pct_centers[valid_unann], unann_means[valid_unann], color="#d62728", linewidth=2, label="Unannotated", zorder=3)
             ax_b.fill_between(
                 pct_centers[valid_unann],
                 unann_means[valid_unann] - unann_stds[valid_unann],
                 unann_means[valid_unann] + unann_stds[valid_unann],
-                color="#d62728", alpha=0.15,
+                color="#d62728",
+                alpha=0.15,
             )
 
         # Annotate Spearman correlations
@@ -1320,9 +1336,16 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             f"  annotated = {analysis['spearman_annotated']:.3f}\n"
             f"  unannotated = {analysis['spearman_unannotated']:.3f}"
         )
-        ax_b.text(0.97, 0.03, textstr, transform=ax_b.transAxes, fontsize=8,
-                  verticalalignment="bottom", horizontalalignment="right",
-                  bbox=dict(boxstyle="round,pad=0.4", facecolor="wheat", alpha=0.8))
+        ax_b.text(
+            0.97,
+            0.03,
+            textstr,
+            transform=ax_b.transAxes,
+            fontsize=8,
+            verticalalignment="bottom",
+            horizontalalignment="right",
+            bbox={"boxstyle": "round,pad=0.4", "facecolor": "wheat", "alpha": 0.8},
+        )
 
         ax_b.set_xlabel("Intensity Percentile", fontsize=11)
         ax_b.set_ylabel("Mean Confidence", fontsize=11)
@@ -1334,11 +1357,10 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         plt.tight_layout()
         plt.savefig(
             Path(self.output_dir) / "confidence_intensity_analysis.png",
-            dpi=300, bbox_inches="tight",
+            dpi=300,
+            bbox_inches="tight",
         )
         plt.close()
-
-
 
     def _create_ion_type_plot(
         self,
@@ -1384,6 +1406,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
 
         # Sort by median confidence (descending), but keep unannotated last
         def sort_key(cat: str) -> tuple[int, float]:
+            """Sort key."""
             idxs = np.array(buckets[cat])
             median = float(np.median(confidence_scores[idxs]))
             # unannotated sorts last (1, ...), everything else first (0, ...)
@@ -1394,16 +1417,16 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # Compute unannotated median for reference line
         unannotated_median = None
         if "unannotated" in buckets and len(buckets["unannotated"]) >= min_peaks:
-            unannotated_median = float(
-                np.median(confidence_scores[np.array(buckets["unannotated"])])
-            )
+            unannotated_median = float(np.median(confidence_scores[np.array(buckets["unannotated"])]))
 
         has_decomposed = conf_group_scores is not None and conf_offset_scores is not None
 
         # --- Figure layout ---
         if has_decomposed:
             fig, (ax_a, ax_b) = plt.subplots(
-                1, 2, figsize=(16, max(5, 0.6 * len(categories))),
+                1,
+                2,
+                figsize=(16, max(5, 0.6 * len(categories))),
                 gridspec_kw={"width_ratios": [3, 2], "wspace": 0.35},
             )
         else:
@@ -1413,8 +1436,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
 
         # === Panel A: Horizontal violin plot ===
         # Build data for seaborn
-        violin_data = []
-        violin_cats = []
+        violin_data: list[Any] = []
+        violin_cats: list[Any] = []
         for cat in categories:
             idxs = np.array(buckets[cat])
             conf = confidence_scores[idxs]
@@ -1422,8 +1445,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             violin_cats.append(cat)
 
         # Collect colors and counts for labeling
-        cat_colors = []
-        cat_counts = []
+        cat_colors: list[Any] = []
+        cat_counts: list[Any] = []
         for cat in categories:
             color, _ = CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
             cat_colors.append(color)
@@ -1458,16 +1481,21 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             # IQR whisker
             ax_a.hlines(i, q25, q75, color="black", linewidth=1.5, zorder=3)
             # Median dot
-            ax_a.scatter([median_val], [i], color="white", edgecolor="black",
-                         s=40, zorder=4, linewidths=0.8)
+            ax_a.scatter([median_val], [i], color="white", edgecolor="black", s=40, zorder=4, linewidths=0.8)
             # Mean tick
             ax_a.scatter([mean_val], [i], color="black", marker="|", s=60, zorder=4, linewidths=1.2)
 
         # Unannotated median reference line
         if unannotated_median is not None:
-            ax_a.axvline(unannotated_median, color="#BDBDBD", linestyle="--",
-                         linewidth=1.5, alpha=0.8, zorder=1,
-                         label=f"Unannotated median ({unannotated_median:.3f})")
+            ax_a.axvline(
+                unannotated_median,
+                color="#BDBDBD",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.8,
+                zorder=1,
+                label=f"Unannotated median ({unannotated_median:.3f})",
+            )
             ax_a.legend(fontsize=8, loc="upper right")
 
         # Y-axis: category names
@@ -1481,7 +1509,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         ax_a_twin.set_yticks(range(len(categories)))
         ax_a_twin.set_yticklabels(
             [f"n={cat_counts[i]:,}" for i in range(len(categories))],
-            fontsize=8, color="#555555",
+            fontsize=8,
+            color="#555555",
         )
         ax_a_twin.tick_params(axis="y", length=0)
 
@@ -1491,7 +1520,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         ax_a.grid(axis="x", alpha=0.3)
 
         # === Panel B: Group vs Offset dot plot (conditional) ===
-        if has_decomposed:
+        if has_decomposed and conf_group_scores is not None and conf_offset_scores is not None:
             for i, cat in enumerate(categories):
                 idxs = np.array(buckets[cat])
                 mean_g = float(np.mean(conf_group_scores[idxs]))
@@ -1501,17 +1530,13 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 # Connecting line
                 ax_b.plot([mean_g, mean_o], [i, i], color=color, linewidth=1.2, alpha=0.6)
                 # Group confidence (circle)
-                ax_b.scatter([mean_g], [i], color=color, marker="o", s=50,
-                             edgecolor="black", linewidths=0.5, zorder=3)
+                ax_b.scatter([mean_g], [i], color=color, marker="o", s=50, edgecolor="black", linewidths=0.5, zorder=3)
                 # Offset confidence (triangle)
-                ax_b.scatter([mean_o], [i], color=color, marker="^", s=50,
-                             edgecolor="black", linewidths=0.5, zorder=3)
+                ax_b.scatter([mean_o], [i], color=color, marker="^", s=50, edgecolor="black", linewidths=0.5, zorder=3)
 
             # Legend for markers
-            ax_b.scatter([], [], color="gray", marker="o", s=50,
-                         edgecolor="black", linewidths=0.5, label="Group (P(top1_group))")
-            ax_b.scatter([], [], color="gray", marker="^", s=50,
-                         edgecolor="black", linewidths=0.5, label="Offset (P(top1_offset))")
+            ax_b.scatter([], [], color="gray", marker="o", s=50, edgecolor="black", linewidths=0.5, label="Group (P(top1_group))")
+            ax_b.scatter([], [], color="gray", marker="^", s=50, edgecolor="black", linewidths=0.5, label="Offset (P(top1_offset))")
             ax_b.legend(fontsize=8, loc="upper right")
 
             ax_b.set_yticks(range(len(categories)))
@@ -1524,17 +1549,16 @@ class ConfidenceSignalAnalysisTask(BaseTask):
 
         plt.savefig(
             Path(self.output_dir) / "confidence_ion_type_breakdown.png",
-            dpi=300, bbox_inches="tight",
+            dpi=300,
+            bbox_inches="tight",
         )
         plt.close()
-
-
 
     def _create_plots(
         self,
         confidence_scores: np.ndarray,
         is_theoretical: np.ndarray,
-        metrics: Dict[str, float],
+        metrics: Dict[str, Any],
         per_spectrum_aurocs: Optional[np.ndarray] = None,
     ) -> None:
         """Create 4-panel dataset-level dashboard.
@@ -1558,43 +1582,44 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # --- Panel A: Confidence Distributions ---
         ax_a = fig.add_subplot(gs[0, 0])
 
-        ax_a.hist(unann_conf, bins=50, alpha=0.5, label=f'Unannotated (n={len(unann_conf):,})',
-                  color='#d62728', density=True)
-        ax_a.hist(ann_conf, bins=50, alpha=0.5, label=f'Annotated (n={len(ann_conf):,})',
-                  color='#2ca02c', density=True)
+        ax_a.hist(unann_conf, bins=50, alpha=0.5, label=f"Unannotated (n={len(unann_conf):,})", color="#d62728", density=True)
+        ax_a.hist(ann_conf, bins=50, alpha=0.5, label=f"Annotated (n={len(ann_conf):,})", color="#2ca02c", density=True)
 
         # KDE curves
         from scipy.stats import gaussian_kde
+
         if len(ann_conf) > 1 and len(unann_conf) > 1:
             x_grid = np.linspace(0, 1, 200)
             try:
                 kde_ann = gaussian_kde(ann_conf)
                 kde_unann = gaussian_kde(unann_conf)
-                ax_a.plot(x_grid, kde_ann(x_grid), color='#2ca02c', linewidth=2)
-                ax_a.plot(x_grid, kde_unann(x_grid), color='#d62728', linewidth=2)
+                ax_a.plot(x_grid, kde_ann(x_grid), color="#2ca02c", linewidth=2)
+                ax_a.plot(x_grid, kde_unann(x_grid), color="#d62728", linewidth=2)
             except np.linalg.LinAlgError:
                 pass  # KDE can fail with degenerate data
 
         mean_ann = float(np.mean(ann_conf))
         mean_unann = float(np.mean(unann_conf))
-        ax_a.axvline(mean_ann, color='#2ca02c', linestyle='--',
-                     linewidth=1.5, label=f'Mean Annotated ({mean_ann:.3f})')
-        ax_a.axvline(mean_unann, color='#d62728', linestyle='--',
-                     linewidth=1.5, label=f'Mean Unannotated ({mean_unann:.3f})')
+        ax_a.axvline(mean_ann, color="#2ca02c", linestyle="--", linewidth=1.5, label=f"Mean Annotated ({mean_ann:.3f})")
+        ax_a.axvline(mean_unann, color="#d62728", linestyle="--", linewidth=1.5, label=f"Mean Unannotated ({mean_unann:.3f})")
 
         # Text box with summary stats
-        textstr = (
-            f"Cohen's d = {metrics['cohens_d']:.3f}\n"
-            f"KS stat = {metrics['ks_statistic']:.3f}"
+        textstr = f"Cohen's d = {metrics['cohens_d']:.3f}\nKS stat = {metrics['ks_statistic']:.3f}"
+        ax_a.text(
+            0.97,
+            0.97,
+            textstr,
+            transform=ax_a.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            horizontalalignment="right",
+            bbox={"boxstyle": "round,pad=0.4", "facecolor": "wheat", "alpha": 0.8},
         )
-        ax_a.text(0.97, 0.97, textstr, transform=ax_a.transAxes, fontsize=9,
-                  verticalalignment='top', horizontalalignment='right',
-                  bbox=dict(boxstyle='round,pad=0.4', facecolor='wheat', alpha=0.8))
 
-        ax_a.set_xlabel('Confidence Score', fontsize=11)
-        ax_a.set_ylabel('Density', fontsize=11)
-        ax_a.set_title('A: Confidence Distributions', fontsize=13, fontweight='bold')
-        ax_a.legend(fontsize=9, loc='upper left')
+        ax_a.set_xlabel("Confidence Score", fontsize=11)
+        ax_a.set_ylabel("Density", fontsize=11)
+        ax_a.set_title("A: Confidence Distributions", fontsize=13, fontweight="bold")
+        ax_a.legend(fontsize=9, loc="upper left")
         ax_a.grid(alpha=0.3)
 
         # --- Panel B: ROC Curve ---
@@ -1603,19 +1628,24 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         fpr = np.array(metrics["roc_curve"]["fpr"])
         tpr = np.array(metrics["roc_curve"]["tpr"])
 
-        ax_b.plot(fpr, tpr, linewidth=2, color='#1f77b4',
-                  label=f'ROC (AUC = {metrics["auroc"]:.4f})')
-        ax_b.plot([0, 1], [0, 1], 'k--', linewidth=1, alpha=0.5, label='Random')
+        ax_b.plot(fpr, tpr, linewidth=2, color="#1f77b4", label=f"ROC (AUC = {metrics['auroc']:.4f})")
+        ax_b.plot([0, 1], [0, 1], "k--", linewidth=1, alpha=0.5, label="Random")
 
         # Mark optimal threshold point (Youden's J)
         youdens_j = tpr - fpr
         best_roc_idx = int(np.argmax(youdens_j))
-        ax_b.scatter([fpr[best_roc_idx]], [tpr[best_roc_idx]], s=80, color='red',
-                     zorder=5, label=f'Youden J ({fpr[best_roc_idx]:.2f}, {tpr[best_roc_idx]:.2f})')
+        ax_b.scatter(
+            [fpr[best_roc_idx]],
+            [tpr[best_roc_idx]],
+            s=80,
+            color="red",
+            zorder=5,
+            label=f"Youden J ({fpr[best_roc_idx]:.2f}, {tpr[best_roc_idx]:.2f})",
+        )
 
-        ax_b.set_xlabel('False Positive Rate', fontsize=11)
-        ax_b.set_ylabel('True Positive Rate', fontsize=11)
-        ax_b.set_title('B: ROC Curve', fontsize=13, fontweight='bold')
+        ax_b.set_xlabel("False Positive Rate", fontsize=11)
+        ax_b.set_ylabel("True Positive Rate", fontsize=11)
+        ax_b.set_title("B: ROC Curve", fontsize=13, fontweight="bold")
         ax_b.legend(fontsize=9)
         ax_b.grid(alpha=0.3)
 
@@ -1625,17 +1655,15 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         pr_precision = np.array(metrics["pr_curve"]["precision"])
         pr_recall = np.array(metrics["pr_curve"]["recall"])
 
-        ax_c.plot(pr_recall, pr_precision, linewidth=2, color='#ff7f0e',
-                  label=f'PR (AP = {metrics["average_precision"]:.4f})')
+        ax_c.plot(pr_recall, pr_precision, linewidth=2, color="#ff7f0e", label=f"PR (AP = {metrics['average_precision']:.4f})")
 
         # Prevalence baseline
         prevalence = float(is_theoretical.mean())
-        ax_c.axhline(prevalence, color='gray', linestyle='--', linewidth=1,
-                     alpha=0.7, label=f'Prevalence ({prevalence:.3f})')
+        ax_c.axhline(prevalence, color="gray", linestyle="--", linewidth=1, alpha=0.7, label=f"Prevalence ({prevalence:.3f})")
 
-        ax_c.set_xlabel('Recall', fontsize=11)
-        ax_c.set_ylabel('Precision', fontsize=11)
-        ax_c.set_title('C: Precision-Recall Curve', fontsize=13, fontweight='bold')
+        ax_c.set_xlabel("Recall", fontsize=11)
+        ax_c.set_ylabel("Precision", fontsize=11)
+        ax_c.set_title("C: Precision-Recall Curve", fontsize=13, fontweight="bold")
         ax_c.legend(fontsize=9)
         ax_c.grid(alpha=0.3)
 
@@ -1643,49 +1671,43 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         ax_d = fig.add_subplot(gs[1, 1])
 
         if per_spectrum_aurocs is not None and len(per_spectrum_aurocs) > 0:
-            ax_d.hist(per_spectrum_aurocs, bins=50, alpha=0.7, color='#1f77b4',
-                      edgecolor='white', linewidth=0.5)
+            ax_d.hist(per_spectrum_aurocs, bins=50, alpha=0.7, color="#1f77b4", edgecolor="white", linewidth=0.5)
 
             mean_auroc = float(np.mean(per_spectrum_aurocs))
             median_auroc = float(np.median(per_spectrum_aurocs))
 
-            ax_d.axvline(mean_auroc, color='red', linestyle='--', linewidth=1.5,
-                         label=f'Mean ({mean_auroc:.3f})')
-            ax_d.axvline(median_auroc, color='orange', linestyle='--', linewidth=1.5,
-                         label=f'Median ({median_auroc:.3f})')
-            ax_d.axvline(0.5, color='gray', linestyle=':', linewidth=1.2, alpha=0.7,
-                         label='Random (0.5)')
+            ax_d.axvline(mean_auroc, color="red", linestyle="--", linewidth=1.5, label=f"Mean ({mean_auroc:.3f})")
+            ax_d.axvline(median_auroc, color="orange", linestyle="--", linewidth=1.5, label=f"Median ({median_auroc:.3f})")
+            ax_d.axvline(0.5, color="gray", linestyle=":", linewidth=1.2, alpha=0.7, label="Random (0.5)")
 
             # Stats text box
             std_auroc = float(np.std(per_spectrum_aurocs))
             q25 = float(np.percentile(per_spectrum_aurocs, 25))
             q75 = float(np.percentile(per_spectrum_aurocs, 75))
-            textstr = (
-                f"n = {len(per_spectrum_aurocs):,}\n"
-                f"std = {std_auroc:.3f}\n"
-                f"Q25 = {q25:.3f}\n"
-                f"Q75 = {q75:.3f}"
+            textstr = f"n = {len(per_spectrum_aurocs):,}\nstd = {std_auroc:.3f}\nQ25 = {q25:.3f}\nQ75 = {q75:.3f}"
+            ax_d.text(
+                0.03,
+                0.97,
+                textstr,
+                transform=ax_d.transAxes,
+                fontsize=9,
+                verticalalignment="top",
+                horizontalalignment="left",
+                bbox={"boxstyle": "round,pad=0.4", "facecolor": "wheat", "alpha": 0.8},
             )
-            ax_d.text(0.03, 0.97, textstr, transform=ax_d.transAxes, fontsize=9,
-                      verticalalignment='top', horizontalalignment='left',
-                      bbox=dict(boxstyle='round,pad=0.4', facecolor='wheat', alpha=0.8))
 
-            ax_d.set_xlabel('Per-Spectrum AUROC', fontsize=11)
-            ax_d.set_ylabel('Count', fontsize=11)
-            ax_d.set_title('D: Per-Spectrum AUROC Distribution', fontsize=13, fontweight='bold')
+            ax_d.set_xlabel("Per-Spectrum AUROC", fontsize=11)
+            ax_d.set_ylabel("Count", fontsize=11)
+            ax_d.set_title("D: Per-Spectrum AUROC Distribution", fontsize=13, fontweight="bold")
             ax_d.legend(fontsize=9)
         else:
-            ax_d.text(0.5, 0.5, 'Per-spectrum AUROC\nnot available',
-                      transform=ax_d.transAxes, ha='center', va='center', fontsize=12)
-            ax_d.set_title('D: Per-Spectrum AUROC Distribution', fontsize=13, fontweight='bold')
+            ax_d.text(0.5, 0.5, "Per-spectrum AUROC\nnot available", transform=ax_d.transAxes, ha="center", va="center", fontsize=12)
+            ax_d.set_title("D: Per-Spectrum AUROC Distribution", fontsize=13, fontweight="bold")
 
         ax_d.grid(alpha=0.3)
 
-        plt.savefig(output_dir / "confidence_signal_dashboard.png", dpi=300, bbox_inches='tight')
+        plt.savefig(output_dir / "confidence_signal_dashboard.png", dpi=300, bbox_inches="tight")
         plt.close()
-
-
-
 
     def _create_individual_spectrum_plots(
         self,
@@ -1700,7 +1722,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         frag_types: Optional[np.ndarray] = None,
         spectrum_confidences: Optional[np.ndarray] = None,
         matched_annotations: Optional[np.ndarray] = None,
-        dataset_metrics: Optional[Dict[str, float]] = None,
+        dataset_metrics: Optional[Dict[str, Any]] = None,
         spectrum_quality: Optional[np.ndarray] = None,
     ) -> None:
         """Create individual spectrum plots with confidence scores.
@@ -1728,11 +1750,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         plot_dir.mkdir(parents=True, exist_ok=True)
 
         # Build candidate indices, filtered by the quality gate when available
-        gate_active = (
-            (self.min_backbone_coverage > 0 or self.min_fragment_groups > 0)
-            and spectrum_quality is not None
-        )
-        if gate_active:
+        gate_active = (self.min_backbone_coverage > 0 or self.min_fragment_groups > 0) and spectrum_quality is not None
+        if gate_active and spectrum_quality is not None:
             passing: list[int] = []
             for i in range(len(sequences)):
                 sq = spectrum_quality[i] if i < len(spectrum_quality) else None
@@ -1759,10 +1778,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 return
             indices = np.arange(n_spectra)
 
-
-
-
-        for plot_idx, spec_idx in enumerate(tqdm(indices, desc="Creating individual plots", disable=True)):
+        for _plot_idx, spec_idx in enumerate(tqdm(indices, desc="Creating individual plots", disable=True)):
             try:
                 # Extract data for this spectrum
                 sequence = sequences[spec_idx]
@@ -1794,9 +1810,13 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                     # peak_annotations is aligned with valid peaks already from embedding_io
                     # But if it was stored for full spectrum, filter
                     if len(peak_annotations) > len(mz):
-                        peak_annotations = [peak_annotations[i] for i in range(len(peak_annotations)) if valid_mask[i]] if len(peak_annotations) == len(valid_mask) else peak_annotations[:len(mz)]
+                        peak_annotations = (
+                            [peak_annotations[i] for i in range(len(peak_annotations)) if valid_mask[i]]
+                            if len(peak_annotations) == len(valid_mask)
+                            else peak_annotations[: len(mz)]
+                        )
                     else:
-                        peak_annotations = list(peak_annotations[:len(mz)])
+                        peak_annotations = list(peak_annotations[: len(mz)])
                 elif peak_annotations is not None:
                     peak_annotations = list(peak_annotations)
 
@@ -1832,9 +1852,6 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             except Exception as e:
                 logger.warning(f"Failed to create plot for spectrum {spec_idx}: {e}")
                 continue
-
-
-
 
     def _plot_single_spectrum_with_confidence(
         self,
@@ -1874,7 +1891,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         n_valid = len(mz)
 
         # --- Build per-peak categories and annotation lists ---
-        peak_categories = []
+        peak_categories: list[Any] = []
         peak_ann_display = []  # formatted annotations for display
 
         if matched_annotations is not None:
@@ -1917,13 +1934,15 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         # so that panels 2 and 3 share the exact same main-axes width.
         fig = plt.figure(figsize=(20, 18))
         gs = fig.add_gridspec(
-            3, 2,
+            3,
+            2,
             height_ratios=[3, 4, 4],
             width_ratios=[1, 0.02],  # narrow column for colorbar
-            hspace=0.30, wspace=0.02,
+            hspace=0.30,
+            wspace=0.02,
             top=0.96,  # reduce gap between suptitle and first panel
         )
-        fig.suptitle(" | ".join(suptitle_parts), fontsize=13, fontweight='bold', y=0.985)
+        fig.suptitle(" | ".join(suptitle_parts), fontsize=13, fontweight="bold", y=0.985)
 
         # ===== Panel 1: m/z Spectrum with Ion-Type Coloring =====
         ax1 = fig.add_subplot(gs[0, :])  # span both columns (no colorbar)
@@ -1934,17 +1953,24 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         self._draw_index_panel(ax2, mz, norm_int, peak_categories, peak_ann_display, n_valid)
         # Hide the spare cell next to panel 2
         ax2_spare = fig.add_subplot(gs[1, 1])
-        ax2_spare.axis('off')
+        ax2_spare.axis("off")
 
         # ===== Panel 3: Index-Based Confidence Coloring =====
         ax3 = fig.add_subplot(gs[2, 0])
         ax_cbar = fig.add_subplot(gs[2, 1])  # dedicated colorbar axes
         self._draw_confidence_panel(
-            ax3, ax_cbar, mz, norm_int, confidence, peak_categories, peak_ann_display,
-            n_valid, dataset_metrics,
+            ax3,
+            ax_cbar,
+            mz,
+            norm_int,
+            confidence,
+            peak_categories,
+            peak_ann_display,
+            n_valid,
+            dataset_metrics,
         )
 
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
         plt.close()
 
     # -----------------------------------------------------------------
@@ -1970,10 +1996,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 if layer == "annotated" and cat == "unannotated":
                     continue
                 color, alpha = CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
-                ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=1.2,
-                        alpha=alpha, zorder=2 if cat == "unannotated" else 3)
-                ax.scatter([mz[i]], [norm_int[i]], color=color, s=20, alpha=alpha,
-                           zorder=2 if cat == "unannotated" else 3)
+                ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=1.2, alpha=alpha, zorder=2 if cat == "unannotated" else 3)
+                ax.scatter([mz[i]], [norm_int[i]], color=color, s=20, alpha=alpha, zorder=2 if cat == "unannotated" else 3)
 
         # Annotation labels — with intensity threshold + m/z anti-collision
         max_int = norm_int.max() if n_valid > 0 else 1.0
@@ -1983,9 +2007,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         placed_mz: list[float] = []
         # Annotated peaks sorted by intensity descending
         annotated = [
-            (i, mz[i], norm_int[i], peak_ann_display[i])
-            for i in range(n_valid)
-            if peak_categories[i] != "unannotated" and peak_ann_display[i]
+            (i, mz[i], norm_int[i], peak_ann_display[i]) for i in range(n_valid) if peak_categories[i] != "unannotated" and peak_ann_display[i]
         ]
         annotated.sort(key=lambda t: t[2], reverse=True)
 
@@ -1998,9 +2020,16 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             cat = peak_categories[idx]
             text_color = TEXT_COLORS.get(cat, "black")
             ax.annotate(
-                display, xy=(m, inten), xytext=(0, 5), textcoords='offset points',
-                ha='center', fontsize=7, color=text_color, rotation=90,
-                alpha=0.9, fontweight='bold',
+                display,
+                xy=(m, inten),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                color=text_color,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
             )
 
         # Top-20 unannotated peaks labeled with m/z in gray italic
@@ -2016,15 +2045,21 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                     continue
                 placed_mz.append(mz[i])
                 ax.annotate(
-                    f"{mz[i]:.1f}", xy=(mz[i], norm_int[i]),
-                    xytext=(0, 5), textcoords='offset points',
-                    ha='center', fontsize=6, color='#555555',
-                    rotation=90, alpha=0.7, fontstyle='italic',
+                    f"{mz[i]:.1f}",
+                    xy=(mz[i], norm_int[i]),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=6,
+                    color="#555555",
+                    rotation=90,
+                    alpha=0.7,
+                    fontstyle="italic",
                 )
 
-        ax.set_xlabel('m/z', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
-        ax.set_title('m/z Spectrum with Ion-Type Coloring', fontsize=12, fontweight='bold')
+        ax.set_xlabel("m/z", fontsize=11, fontweight="bold")
+        ax.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
+        ax.set_title("m/z Spectrum with Ion-Type Coloring", fontsize=12, fontweight="bold")
         ax.grid(True, alpha=0.3)
         ax.set_xlim(50, self.max_mz)
         ax.set_ylim(0, max_int * 1.45)
@@ -2052,8 +2087,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         if unann:
             arr = np.array(unann)
             color, alpha = CATEGORY_COLORS["unannotated"]
-            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label="unannotated")
+            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha, width=1.0, linewidth=0, label="unannotated")
 
         # Then annotated categories
         for cat in sorted(set(peak_categories) - {"unannotated"}):
@@ -2062,16 +2096,22 @@ class ConfidenceSignalAnalysisTask(BaseTask):
                 continue
             arr = np.array(idxs)
             color, alpha = CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
-            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label=cat)
+            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
         # Label every annotated peak
         for i in range(n_valid):
             if peak_categories[i] != "unannotated" and peak_ann_display[i]:
                 ax.annotate(
-                    peak_ann_display[i], xy=(i, norm_int[i]), xytext=(0, 4),
-                    textcoords='offset points', ha='center', fontsize=7,
-                    rotation=90, alpha=0.9, fontweight='bold', color='black',
+                    peak_ann_display[i],
+                    xy=(i, norm_int[i]),
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=7,
+                    rotation=90,
+                    alpha=0.9,
+                    fontweight="bold",
+                    color="black",
                 )
 
         # Top-20 unannotated peaks labeled with m/z
@@ -2081,23 +2121,30 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             top_unann = unannotated_arr[np.argsort(norm_int[unannotated_arr])[-top_k:]]
             for i in top_unann:
                 ax.annotate(
-                    f"{mz[i]:.2f}", xy=(i, norm_int[i]), xytext=(0, 4),
-                    textcoords='offset points', ha='center', fontsize=6,
-                    rotation=90, alpha=0.7, fontstyle='italic', color='#555555',
+                    f"{mz[i]:.2f}",
+                    xy=(i, norm_int[i]),
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=6,
+                    rotation=90,
+                    alpha=0.7,
+                    fontstyle="italic",
+                    color="#555555",
                 )
 
         # X-tick labels at regular intervals
         tick_step = max(1, n_valid // 20)
         tick_pos = np.arange(0, n_valid, tick_step)
         ax.set_xticks(tick_pos)
-        ax.set_xticklabels([f"{mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha='right')
+        ax.set_xticklabels([f"{mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha="right")
         ax.set_xlim(-1, n_valid)
         max_int = norm_int.max() if n_valid > 0 else 1.0
         ax.set_ylim(0, max_int * 1.3)
 
-        ax.set_xlabel('m/z (at peak index)', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
-        ax.set_title('Index-Based View with Ion-Type Coloring', fontsize=12, fontweight='bold')
+        ax.set_xlabel("m/z (at peak index)", fontsize=11, fontweight="bold")
+        ax.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
+        ax.set_title("Index-Based View with Ion-Type Coloring", fontsize=12, fontweight="bold")
         ax.grid(True, alpha=0.3)
 
     def _draw_confidence_panel(
@@ -2123,8 +2170,8 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             ax_cbar: Dedicated axes for the colorbar (keeps main axes width
                      identical to Panel 2).
         """
-        from matplotlib.colors import Normalize
         from matplotlib.cm import ScalarMappable
+        from matplotlib.colors import Normalize
 
         x_pos = np.arange(n_valid)
 
@@ -2139,19 +2186,24 @@ class ConfidenceSignalAnalysisTask(BaseTask):
 
         # Draw bars: unannotated first (background), then annotated on top
         for i in unann_idx:
-            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(confidence[i])),
-                   alpha=0.85, width=1.0, linewidth=0)
+            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(confidence[i])), alpha=0.85, width=1.0, linewidth=0)
         for i in ann_idx:
-            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(confidence[i])),
-                   alpha=0.85, width=1.0, edgecolor='red', linewidth=0.8)
+            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(confidence[i])), alpha=0.85, width=1.0, edgecolor="red", linewidth=0.8)
 
         # Annotation labels — same as Panel 2
         for i in range(n_valid):
             if peak_categories[i] != "unannotated" and peak_ann_display[i]:
                 ax.annotate(
-                    peak_ann_display[i], xy=(i, norm_int[i]), xytext=(0, 4),
-                    textcoords='offset points', ha='center', fontsize=7,
-                    rotation=90, alpha=0.9, fontweight='bold', color='black',
+                    peak_ann_display[i],
+                    xy=(i, norm_int[i]),
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=7,
+                    rotation=90,
+                    alpha=0.9,
+                    fontweight="bold",
+                    color="black",
                 )
 
         # Top-20 unannotated peaks labeled with m/z
@@ -2160,9 +2212,16 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             top_unann = unann_idx[np.argsort(norm_int[unann_idx])[-top_k:]]
             for i in top_unann:
                 ax.annotate(
-                    f"{mz[i]:.2f}", xy=(i, norm_int[i]), xytext=(0, 4),
-                    textcoords='offset points', ha='center', fontsize=6,
-                    rotation=90, alpha=0.7, fontstyle='italic', color='#555555',
+                    f"{mz[i]:.2f}",
+                    xy=(i, norm_int[i]),
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=6,
+                    rotation=90,
+                    alpha=0.7,
+                    fontstyle="italic",
+                    color="#555555",
                 )
 
         # Mean confidence
@@ -2173,34 +2232,34 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         sm = ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         plt.colorbar(sm, cax=ax_cbar)
-        ax_cbar.set_ylabel('Confidence', fontsize=9, rotation=270, labelpad=12)
+        ax_cbar.set_ylabel("Confidence", fontsize=9, rotation=270, labelpad=12)
 
         # Legend
         from matplotlib.patches import Patch
+
         legend_elements = [
-            Patch(facecolor=cmap(0.7), edgecolor='red', linewidth=1.2,
-                  label=f'Annotated (mean conf {mean_ann:.3f})'),
-            Patch(facecolor=cmap(0.3), alpha=0.85,
-                  label=f'Unannotated (mean conf {mean_unann:.3f})'),
+            Patch(facecolor=cmap(0.7), edgecolor="red", linewidth=1.2, label=f"Annotated (mean conf {mean_ann:.3f})"),
+            Patch(facecolor=cmap(0.3), alpha=0.85, label=f"Unannotated (mean conf {mean_unann:.3f})"),
         ]
-        ax.legend(handles=legend_elements, fontsize=9, loc='upper right')
+        ax.legend(handles=legend_elements, fontsize=9, loc="upper right")
 
         # X-tick labels at regular intervals
         tick_step = max(1, n_valid // 20)
         tick_pos = np.arange(0, n_valid, tick_step)
         ax.set_xticks(tick_pos)
-        ax.set_xticklabels([f"{mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha='right')
+        ax.set_xticklabels([f"{mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha="right")
         ax.set_xlim(-1, n_valid)
         max_int = norm_int.max() if n_valid > 0 else 1.0
         ax.set_ylim(0, max_int * 1.3)
 
         gap = mean_ann - mean_unann
         ax.set_title(
-            f'Confidence Coloring | Gap: {gap:.4f} | Annotated Mean: {mean_ann:.4f} | Unannotated Mean: {mean_unann:.4f}',
-            fontsize=12, fontweight='bold',
+            f"Confidence Coloring | Gap: {gap:.4f} | Annotated Mean: {mean_ann:.4f} | Unannotated Mean: {mean_unann:.4f}",
+            fontsize=12,
+            fontweight="bold",
         )
-        ax.set_xlabel('m/z (at peak index)', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
+        ax.set_xlabel("m/z (at peak index)", fontsize=11, fontweight="bold")
+        ax.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
         ax.grid(True, alpha=0.3)
 
     def _save_results(
@@ -2218,19 +2277,20 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         """
         output_path = Path(self.output_dir) / "confidence_signal_metrics.json"
 
-        results = {
+        results: dict[str, Any] = {
             "task": "ConfidenceSignalAnalysisTask",
             "description": "Analysis of model confidence alignment with theoretical signal peaks",
             "n_spectra_analyzed": n_analyzed,
             "n_spectra_total": n_total,
             "metrics": {
-                k: v for k, v in metrics.items()
+                k: v
+                for k, v in metrics.items()
                 if k not in ["roc_curve", "pr_curve"]  # Exclude curves from summary
             },
             "note": "Theoretical spectra are precomputed during embedding generation (see evaluation config: theoretical_spectrum)",
         }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(results, f, indent=2)
 
     def _compute_quality_correlation(
@@ -2259,9 +2319,9 @@ class ConfidenceSignalAnalysisTask(BaseTask):
         from scipy.stats import spearmanr
 
         n_spectra = len(spectrum_boundaries) - 1
-        mean_confidences = []
-        annotation_ratios = []
-        n_peaks_per_spectrum = []
+        mean_confidences: list[Any] = []
+        annotation_ratios: list[Any] = []
+        n_peaks_per_spectrum: list[Any] = []
 
         for i in range(n_spectra):
             start = spectrum_boundaries[i]
@@ -2305,10 +2365,7 @@ class ConfidenceSignalAnalysisTask(BaseTask):
             "p_value": float(p_npeaks),
         }
 
-        logger.info(
-            f"  Quality correlation: conf↔annotation_ratio ρ={rho_ann:.4f}  "
-            f"conf↔n_peaks ρ={rho_npeaks:.4f}  (n={len(mean_confidences)})"
-        )
+        logger.info(f"  Quality correlation: conf↔annotation_ratio ρ={rho_ann:.4f}  conf↔n_peaks ρ={rho_npeaks:.4f}  (n={len(mean_confidences)})")
 
         return results
 

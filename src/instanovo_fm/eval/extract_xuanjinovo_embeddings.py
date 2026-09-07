@@ -74,7 +74,7 @@ def extract(
     checkpoint_url: Optional[str] = None,
     num_workers: int = 4,
     pooling: str = "mean_peaks",
-    search_data_path: str = "src/instanovo_fm/data/search_data.csv",
+    search_data_path: str = "src/data/search_data.xlsx",
     max_mz: float = 2500.0,
     preprocessing: str = "foundation",
     min_intensity: Optional[float] = None,
@@ -92,7 +92,7 @@ def extract(
         num_workers: DataLoader worker count.
         pooling: Pooling strategy — "mean_peaks" (mean over non-padding peak tokens, default) or
             "precursor" (the contextualised precursor token at position 0).
-        search_data_path: Path to search_data.csv for USI-based search metadata lookup.
+        search_data_path: Path to the search-data table for USI-based search metadata lookup.
         max_mz: m/z normalisation divisor for the foundation preprocessing (the foundation model's
             ``max_mz``). Ignored when ``preprocessing="native"`` (native m/z range is used instead).
         preprocessing: "foundation" (shared FoundationalDataProcessor, 200 peaks, normalised m/z,
@@ -234,8 +234,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--search_data_path",
-        default="src/instanovo_fm/data/search_data.csv",
-        help="Path to search_data.csv for USI-based search metadata lookup",
+        default="src/data/search_data.xlsx",
+        help="Path to the search-data table for USI-based search metadata lookup",
     )
     parser.add_argument(
         "--max_mz",

@@ -15,12 +15,12 @@ from jaxtyping import Float
 from torch import Tensor, nn
 
 from instanovo.__init__ import console
-from instanovo.common import DataProcessor
+from instanovo_fm.common import DataProcessor
 from instanovo.constants import ANNOTATED_COLUMN, PROTON_MASS_AMU, MSColumns
 from instanovo_fm.data.masking import get_mask_function
 from instanovo_fm.data.search_data_manager import SearchDataManager
-from instanovo.utils.residues import ResidueSet
 from instanovo.utils.colorlogging import ColorLog
+from instanovo.utils.residues import ResidueSet
 
 logger = ColorLog(console, __name__).logger
 
@@ -31,22 +31,22 @@ PeakOrdering = Literal["sorted", "cyclic_shift", "complete_shuffle"]
 
 class FoundationalDataProcessor(DataProcessor):
     """Data processor for self-supervised learning on MS/MS spectra.
-    
+
     Designed for encoder-only foundation model that learns representations through
     masked m/z reconstruction. Does not require peptide annotations for training.
-    
+
     Processing Pipeline:
         1. Spectrum preprocessing (filter, normalize, scale)
         2. Fixed-length padding to n_peaks
         3. Optional peak reordering (tests positional encoding robustness)
         4. Masking strategy application (self-supervised learning objective)
-    
+
     Key Features:
         - Fixed-length padding (consistent tensor shapes)
         - Charge-aware isotope detection
         - Multiple masking strategies
         - Optional sequence processing (for evaluation/analysis only)
-    
+
     Args:
         n_peaks: Fixed number of peaks per spectrum (default: 200).
         min_mz: Minimum m/z value to retain (default: 50.0).
@@ -81,6 +81,8 @@ class FoundationalDataProcessor(DataProcessor):
             Never exceed this percentage, even with isotope co-masking.
         search_data_manager: Optional SearchDataManager for additional metadata (default: None).
     """
+
+    _keep_non_tensor_metadata: bool
 
     def __init__(
         self,
@@ -144,12 +146,12 @@ class FoundationalDataProcessor(DataProcessor):
         self.use_spectrum_utils = use_spectrum_utils
         self.normalize_mz = normalize_mz
         self.peak_ordering = peak_ordering
-        
+
         # Store sequence processing config (optional)
         self.residue_set = residue_set
         self.annotated = annotated
         self.return_str = return_str
-        
+
         # Store masking config
         self.masking_strategy = masking_strategy
         self.mask_portion = mask_portion
@@ -177,22 +179,17 @@ class FoundationalDataProcessor(DataProcessor):
 
         # Store search data manager (optional)
         self.search_data_manager = search_data_manager
-        
+
         # Store metadata building flag
         self.build_metadata = build_metadata
-        
+
         # Validate: tokenization requires residue_set
         if self.annotated and self.residue_set is None and not self.return_str:
-            raise ValueError(
-                "residue_set required for sequence tokenization. "
-                "Set return_str=True to keep sequences as strings."
-            )
+            raise ValueError("residue_set required for sequence tokenization. Set return_str=True to keep sequences as strings.")
 
         # Log initialization
         mode = "eval" if self.annotated else "train"
-        logger.debug(
-            f"DataProcessor: n_peaks={n_peaks}, mode={mode}, masking={masking_strategy}"
-        )
+        logger.debug(f"DataProcessor: n_peaks={n_peaks}, mode={mode}, masking={masking_strategy}")
 
     def _process_spectrum(
         self,
@@ -202,7 +199,7 @@ class FoundationalDataProcessor(DataProcessor):
         precursor_charge: int,
     ) -> torch.Tensor:
         """Process single spectrum: filter, normalize, scale.
-        
+
         Pipeline:
             1. Filter m/z range [min_mz, max_mz]
             2. Remove precursor peak (±tolerance)
@@ -211,13 +208,13 @@ class FoundationalDataProcessor(DataProcessor):
             5. Apply √intensity scaling
             6. L2-normalize intensities
             7. Normalize m/z to [0,1] (optional)
-        
+
         Args:
             mz_array: Peak m/z values.
             int_array: Peak intensities.
             precursor_mz: Precursor m/z value.
             precursor_charge: Precursor charge state.
-            
+
         Returns:
             Processed spectrum tensor [n_peaks, 2] with [m/z, intensity] pairs.
             Returns dummy spectrum [[0, 1]] if processing fails.
@@ -236,15 +233,15 @@ class FoundationalDataProcessor(DataProcessor):
                 spectrum.set_mz_range(self.min_mz, self.max_mz)
                 if len(spectrum.mz) == 0:
                     raise ValueError("Empty after m/z filtering")
-                
+
                 spectrum.remove_precursor_peak(self.remove_precursor_tol, "Da")
                 if len(spectrum.mz) == 0:
                     raise ValueError("Empty after precursor removal")
-                
+
                 spectrum.filter_intensity(self.min_intensity, self.n_peaks)
                 if len(spectrum.mz) == 0:
                     raise ValueError("Empty after intensity filtering")
-                
+
                 # Scale and normalize intensities
                 # Why √ transformation for proteomic MS/MS?
                 # - MS/MS produces discrete ion counts (Poisson-like noise)
@@ -265,12 +262,12 @@ class FoundationalDataProcessor(DataProcessor):
                 # - Makes spectra comparable across different acquisition conditions
                 # - Output: Unit-norm vector (individual values typically in [0, ~0.5])
                 intensities = spectrum.intensity / np.linalg.norm(spectrum.intensity)  # L2-norm
-                
+
                 # Optionally normalize m/z to [0,1]
                 mz_values = spectrum.mz / self.max_mz if self.normalize_mz else spectrum.mz
-                
+
                 return torch.tensor(np.array([mz_values, intensities])).T.float()
-                
+
             except ValueError as e:
                 logger.debug(f"Spectrum processing failed: {e}")
                 # Return dummy spectrum
@@ -325,14 +322,14 @@ class FoundationalDataProcessor(DataProcessor):
             return torch.tensor([[dummy_mz, dummy_intensity]], dtype=torch.float32)
 
     @staticmethod
-    def _pad_and_mask(x: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+    def _pad_and_mask(x: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
         """Pad variable-length tensors and create attention masks.
-        
+
         Used for peptide sequences which have dynamic lengths.
-        
+
         Args:
             x: List of tensors with different lengths.
-            
+
         Returns:
             Tuple of (padded_tensor, mask):
                 - padded_tensor: [batch_size, max_length, ...]
@@ -364,7 +361,7 @@ class FoundationalDataProcessor(DataProcessor):
         Returns:
             Reordered spectra [batch_size, n_peaks, 2].
         """
-        B, L, C = spectra.shape
+        B, L, C = spectra.shape  # noqa: N806
 
         # Extract m/z channel for sorting
         mz = spectra[:, :, 0]  # (B, L)
@@ -456,14 +453,14 @@ class FoundationalDataProcessor(DataProcessor):
         """
         if self.masking_strategy == "none":
             return torch.zeros_like(spectra_mask, dtype=torch.bool), spectra.clone()
-        
+
         # Extract m/z and intensity channels
         mz = spectra[:, :, 0]
         intensity = spectra[:, :, 1]
-        
+
         # Get masking function
         mask_fn = get_mask_function(self.masking_strategy)
-        
+
         # Call appropriate masking strategy
         if self.masking_strategy == "thompson":
             peak_mask = mask_fn(
@@ -475,7 +472,7 @@ class FoundationalDataProcessor(DataProcessor):
                 kappa=self.thompson_kappa,
                 gamma=self.thompson_gamma,
             )
-            
+
         elif self.masking_strategy == "thompson_span":
             peak_mask = mask_fn(
                 intensity=intensity,
@@ -506,7 +503,7 @@ class FoundationalDataProcessor(DataProcessor):
                 spectra_mask=spectra_mask,
                 mask_portion=self.mask_portion,
             )
-            
+
         elif self.masking_strategy == "signal_aware_span":
             peak_mask = mask_fn(
                 intensity=intensity,
@@ -568,10 +565,10 @@ class FoundationalDataProcessor(DataProcessor):
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Process single sample from dataset.
-        
+
         Always processes spectrum data. Optionally processes sequence if
         annotated=True (for evaluation/analysis only).
-        
+
         Args:
             row: Raw data with keys:
                 - mz_array: Peak m/z values
@@ -579,7 +576,7 @@ class FoundationalDataProcessor(DataProcessor):
                 - precursor_mz: Precursor m/z
                 - precursor_charge: Precursor charge
                 - sequence: Peptide sequence (optional)
-                
+
         Returns:
             Processed data with keys:
                 - spectra: [n_peaks, 2] tensor
@@ -611,9 +608,7 @@ class FoundationalDataProcessor(DataProcessor):
                 if self.residue_set is None:
                     raise RuntimeError("residue_set is None but return_str=False")
                 tokens = self.residue_set.tokenize(peptide)
-                processed["peptide"] = self.residue_set.encode(
-                    tokens, add_eos=False, return_tensor="pt"
-                )
+                processed["peptide"] = self.residue_set.encode(tokens, add_eos=False, return_tensor="pt")
 
         # Add metadata from original row
         # Only copy columns that are actually used (performance optimization)
@@ -625,15 +620,12 @@ class FoundationalDataProcessor(DataProcessor):
                     processed[col] = row[col]
                 elif col not in self._warned_missing_columns:
                     self._warned_missing_columns.add(col)
-                    logger.warning(
-                        f"Metadata column '{col}' listed in config but absent from data. "
-                        f"Will be silently skipped for all rows."
-                    )
+                    logger.warning(f"Metadata column '{col}' listed in config but absent from data. Will be silently skipped for all rows.")
         return processed
 
     def _get_expected_columns(self) -> list[str]:
         """Get expected output columns after processing.
-        
+
         Returns columns that should be included in dataset format specification.
         Only includes columns that are present in the processed output from
         process_row(). Dynamic columns added in collate_fn are not included.
@@ -643,19 +635,15 @@ class FoundationalDataProcessor(DataProcessor):
             columns.append("peptide")
         return columns
 
-    def _collate_batch(
-        self, 
-        batch: list[dict[str, Any]], 
-        apply_masking: bool = True
-    ) -> dict[str, torch.Tensor | Any]:
+    def _collate_batch(self, batch: list[dict[str, Any]], apply_masking: bool = True) -> dict[str, torch.Tensor | Any]:
         """Collate batch with fixed-length padding and optional masking.
-        
+
         Key Design: Uses FIXED-LENGTH padding to n_peaks (not dynamic).
         Optimal when most spectra have ~200 peaks, providing:
             - Consistent tensor shapes across batches
             - Better GPU optimization (torch.compile friendly)
             - Lower memory usage than dynamic padding
-        
+
         Pipeline:
             1. Extract data from batch
             2. Pad all spectra to fixed length n_peaks
@@ -664,48 +652,45 @@ class FoundationalDataProcessor(DataProcessor):
             5. Apply peak ordering (optional reordering)
             6. Apply masking strategy (for self-supervised learning)
             7. Collate sequences (for evaluation if annotated=True)
-        
+
         Args:
             batch: List of processed samples from process_row.
             apply_masking: Whether to apply masking (default: True).
-            
+
         Returns:
             Dictionary with keys:
                 - spectra: [B, n_peaks, 2]
                 - spectra_mask: [B, n_peaks], True for padding
                 - precursors: [B, 3], [mass, charge, mz]
-                
+
                 If apply_masking=True:
                 - masked_spectra: [B, n_peaks, 2], masked input
                 - peak_mask: [B, n_peaks], True for masked
                 - targets: [B, n_peaks, 2], ground truth
-                
+
                 If annotated=True:
                 - peptides: list of strings or tensor
                 - peptides_mask: mask if tokenized
-                
+
                 Plus any metadata columns as lists.
         """
         # Extract spectra and precursor info
-        data_batch = [
-            (row["spectra"], row["precursor_mz"], row["precursor_charge"])
-            for row in batch
-        ]
+        data_batch = [(row["spectra"], row["precursor_mz"], row["precursor_charge"]) for row in batch]
         spectra, precursor_mzs, precursor_charges = zip(*data_batch, strict=True)
 
         # Fixed-length padding to n_peaks (consistent shapes)
-        B = len(spectra)
-        L_static = self.n_peaks
-        
+        B = len(spectra)  # noqa: N806
+        L_static = self.n_peaks  # noqa: N806
+
         # Track true lengths before padding
         true_lengths = torch.tensor([x.shape[0] for x in spectra], dtype=torch.long)
-        
+
         # Allocate fixed-size tensor (padding value: 0.0)
         spectra_padded = torch.zeros((B, L_static, 2), dtype=torch.float32)
         for i, spectrum in enumerate(spectra):
             length = min(spectrum.shape[0], L_static)  # Handle truncation
             spectra_padded[i, :length] = spectrum[:length]
-        
+
         # Create padding mask (True for padded positions)
         spectra_mask = torch.arange(L_static, dtype=torch.long)[None, :] >= true_lengths[:, None]
 
@@ -734,7 +719,7 @@ class FoundationalDataProcessor(DataProcessor):
             "precursor_charge": precursor_charges,
             "precursor_mass": precursor_masses,  # Add precursor mass for metadata analysis
         }
-        
+
         # Enrich batch rows with search data BEFORE building metadata dict.
         # This ensures search-derived fields (instrument, acquisition, detector,
         # enzyme, quant) are available to build_metadata_dict for meta token encoding.
@@ -742,27 +727,24 @@ class FoundationalDataProcessor(DataProcessor):
             # Only request columns needed for metadata token (performance optimization)
             # These columns map to the metadata token features in metadata_builder.py
             required_columns = [
-                "project",         # -> search_project
-                "instrument",      # -> search_instrument
-                "acquisition",     # -> search_acquisition
-                "detector",        # -> search_detector
-                "fragmentation",   # -> search_fragmentation
-                "enzyme",          # -> search_enzyme
-                "quant",           # -> search_quant
-                "organism",        # -> search_organism
-                "modifications",   # -> search_modifications
+                "project",  # -> search_project
+                "instrument",  # -> search_instrument
+                "acquisition",  # -> search_acquisition
+                "detector",  # -> search_detector
+                "fragmentation",  # -> search_fragmentation
+                "enzyme",  # -> search_enzyme
+                "quant",  # -> search_quant
+                "organism",  # -> search_organism
+                "modifications",  # -> search_modifications
             ]
 
             # Batch lookup with column filtering
             spectrum_key = self.search_data_manager.spectrum_filepath_key
             filepaths = [row.get(spectrum_key) or "" for row in batch]  # Convert None to empty string
-            search_metadata_list = self.search_data_manager.get_metadata_batch(
-                filepaths,
-                columns=required_columns
-            )
+            search_metadata_list = self.search_data_manager.get_metadata_batch(filepaths, columns=required_columns)
 
             # Enrich each batch row with search data so build_metadata_dict can see them
-            for row, search_meta in zip(batch, search_metadata_list):
+            for row, search_meta in zip(batch, search_metadata_list, strict=False):
                 for col in required_columns:
                     val = search_meta.get(col)
                     if val is not None:
@@ -783,13 +765,14 @@ class FoundationalDataProcessor(DataProcessor):
         # Must happen AFTER search data enrichment so all metadata fields are available
         if self.build_metadata:
             from instanovo_fm.data.metadata_builder import build_metadata_dict
+
             meta = build_metadata_dict(batch, device=spectra_ordered.device)
             return_batch["meta"] = meta if meta else None
 
         # Extract peptides and frag_types for signal-aware masking (if available and needed)
         peptides_for_masking = None
         frag_types_for_masking = None
-        if self.masking_strategy == "signal_aware_fragment":
+        if self.masking_strategy == "signal_aware_fragment":  # type: ignore[comparison-overlap]
             if self.annotated:
                 # Extract peptides from batch if they exist
                 peptides_batch = [row.get("peptide", None) for row in batch]
@@ -851,7 +834,7 @@ class FoundationalDataProcessor(DataProcessor):
         # before creating a dataloader when string/list metadata must flow
         # through to embedding_io (e.g., standalone evaluation tasks that need
         # frag_type, sequence, search_instrument, collision_energy, etc.).
-        if not getattr(self, '_keep_non_tensor_metadata', False):
+        if not getattr(self, "_keep_non_tensor_metadata", False):
             return_batch = {k: v for k, v in return_batch.items() if isinstance(v, torch.Tensor)}
 
         return return_batch

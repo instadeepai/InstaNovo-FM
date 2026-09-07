@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Masking Gap Analysis for Foundation Model Training.
+"""Masking Gap Analysis for Foundation Model Training.
 
 Analyzes the m/z distance from each masked peak to its nearest unmasked
 neighbors. This reveals how much local context the model has when predicting
@@ -28,8 +27,7 @@ logger = ColorLog(console, __name__).logger
 
 
 class MaskingGapAnalyser:
-    """
-    Analyzes m/z distances from masked peaks to nearest unmasked neighbors.
+    """Analyzes m/z distances from masked peaks to nearest unmasked neighbors.
 
     For each masked peak, computes:
     - Distance to nearest unmasked peak on left (lower m/z)
@@ -41,7 +39,8 @@ class MaskingGapAnalyser:
     Results are stratified by m/z region and related to the binning strategy.
     """
 
-    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None):
+    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None) -> None:
+        """Initialise the input."""
         self.config = config
 
         if output_dir is None:
@@ -69,10 +68,7 @@ class MaskingGapAnalyser:
                 "high_mass_fragment": (1500, float("inf")),
             }
         else:
-            self.mz_range_boundaries = {
-                name: tuple(bounds) if isinstance(bounds, list) else bounds
-                for name, bounds in mz_range_boundaries.items()
-            }
+            self.mz_range_boundaries = {name: tuple(bounds) if isinstance(bounds, list) else bounds for name, bounds in mz_range_boundaries.items()}
 
         self.mz_range_order = [
             "immonium_internal",
@@ -103,8 +99,7 @@ class MaskingGapAnalyser:
         mlm_mask_valid: np.ndarray,
         metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Analyze masking gaps for a single spectrum.
+        """Analyze masking gaps for a single spectrum.
 
         Args:
             valid_mz: Sorted m/z values of valid (non-padded) peaks.
@@ -164,15 +159,9 @@ class MaskingGapAnalyser:
                     "right_distance_da": float(right_distance[i]),
                     "nearest_distance_da": float(nearest_da),
                     "total_gap_da": float(total_da),
-                    "nearest_in_bins": float(nearest_da / bin_size)
-                    if not np.isnan(nearest_da)
-                    else np.nan,
-                    "nearest_in_groups": float(nearest_da / group_width)
-                    if not np.isnan(nearest_da)
-                    else np.nan,
-                    "total_gap_in_groups": float(total_da / group_width)
-                    if not np.isnan(total_da)
-                    else np.nan,
+                    "nearest_in_bins": float(nearest_da / bin_size) if not np.isnan(nearest_da) else np.nan,
+                    "nearest_in_groups": float(nearest_da / group_width) if not np.isnan(nearest_da) else np.nan,
+                    "total_gap_in_groups": float(total_da / group_width) if not np.isnan(total_da) else np.nan,
                     "mz_range": self._classify_mz_range(float(masked_mz[i])),
                     "has_left": bool(has_left[i]),
                     "has_right": bool(has_right[i]),
@@ -189,8 +178,7 @@ class MaskingGapAnalyser:
         }
 
     def aggregate_results(self, per_spectrum_results: List[Dict]) -> Dict[str, Any]:
-        """
-        Aggregate gap records from all spectra into summary statistics.
+        """Aggregate gap records from all spectra into summary statistics.
 
         Args:
             per_spectrum_results: List of per-spectrum results from analyze_spectrum().
@@ -291,11 +279,8 @@ class MaskingGapAnalyser:
         }
         return self.results
 
-    def _compute_group_size_sweep(
-        self, nearest_da: np.ndarray, n_bins: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Evaluate group coverage at different bin_group_size values.
+    def _compute_group_size_sweep(self, nearest_da: np.ndarray, n_bins: int) -> List[Dict[str, Any]]:
+        """Evaluate group coverage at different bin_group_size values.
 
         For each candidate group_size, computes:
         - group_width_da: how wide each group is in Daltons
@@ -386,7 +371,7 @@ class MaskingGapAnalyser:
                 xytext=(current_width + max(group_widths) * 0.05, frac_1[current_idx] + 5),
                 fontsize=9,
                 color="red",
-                arrowprops=dict(arrowstyle="->", color="red", lw=1.2),
+                arrowprops={"arrowstyle": "->", "color": "red", "lw": 1.2},
             )
 
         # Annotate each point with group_size
@@ -431,7 +416,7 @@ class MaskingGapAnalyser:
 
         ax.set_title("Classification Complexity: Group vs Offset Classes")
         lines = l1 + l2
-        labels = [l.get_label() for l in lines]
+        labels = [l.get_label() for l in lines]  # noqa: E741
         ax.legend(lines, labels, fontsize=9, loc="center right")
         ax.grid(True, alpha=0.3)
         ax.set_xscale("log")
@@ -458,10 +443,7 @@ class MaskingGapAnalyser:
 
         n_total = self.results.get("n_total_masked_peaks", 0)
         logger.info(f"Total masked peaks analyzed: {n_total:,d}")
-        logger.info(
-            f"Binning: bin_size={self.bin_size} Da, group_size={self.bin_group_size}, "
-            f"group_width={self.group_width_da:.1f} Da"
-        )
+        logger.info(f"Binning: bin_size={self.bin_size} Da, group_size={self.bin_group_size}, group_width={self.group_width_da:.1f} Da")
 
         overall = self.results.get("summary", {})
 
@@ -475,10 +457,7 @@ class MaskingGapAnalyser:
 
         if "total_gap_da" in overall:
             s = overall["total_gap_da"]
-            logger.info(
-                f"\nTotal Gap (Left + Right):"
-                f"\n  Mean: {s['mean']:.4f} Da | Median: {s['median']:.4f} Da | Std: {s['std']:.4f} Da"
-            )
+            logger.info(f"\nTotal Gap (Left + Right):\n  Mean: {s['mean']:.4f} Da | Median: {s['median']:.4f} Da | Std: {s['std']:.4f} Da")
 
         if "nearest_in_groups" in overall:
             s = overall["nearest_in_groups"]
@@ -500,10 +479,7 @@ class MaskingGapAnalyser:
             for region in self.mz_range_order:
                 if region in stratified and "nearest_distance_da" in stratified[region]:
                     s = stratified[region]["nearest_distance_da"]
-                    logger.info(
-                        f"  {region}: mean={s['mean']:.4f} Da, "
-                        f"std={s['std']:.4f} Da, median={s['median']:.4f} Da (n={s['n']:,d})"
-                    )
+                    logger.info(f"  {region}: mean={s['mean']:.4f} Da, std={s['std']:.4f} Da, median={s['median']:.4f} Da (n={s['n']:,d})")
 
         boundary = self.results.get("boundary_stats", {})
         if boundary:
@@ -517,11 +493,8 @@ class MaskingGapAnalyser:
         sweep = self.results.get("group_size_sweep", [])
         if sweep:
             logger.info("\nGroup Size Sweep (trade-off analysis):")
-            logger.info(
-                f"  {'group_size':>10} {'width(Da)':>10} {'n_groups':>10} "
-                f"{'<=1 grp':>10} {'<=2 grp':>10} {'<=3 grp':>10}"
-            )
-            logger.info("  " + "-" * 62)
+            logger.info(f"  {'group_size':>10} {'width(Da)':>10} {'n_groups':>10} {'<=1 grp':>10} {'<=2 grp':>10} {'<=3 grp':>10}")
+            logger.info("  %s", "-" * 62)
             for s in sweep:
                 marker = " <-- current" if s["bin_group_size"] == self.bin_group_size else ""
                 logger.info(

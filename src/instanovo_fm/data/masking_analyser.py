@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Masking Strategy Comparison Analyser for Foundation Model Training.
+"""Masking Strategy Comparison Analyser for Foundation Model Training.
 
 Runs all configured masking strategies on the same preprocessed spectra,
 producing cross-strategy comparison metrics and visualizations.
@@ -28,8 +27,8 @@ from instanovo.__init__ import console
 from instanovo_fm.data.masking import get_mask_function
 from instanovo_fm.data.masking_gap_analyser import MaskingGapAnalyser
 from instanovo_fm.data.theoretical_analyser import TheoreticalAnalyser
-from instanovo_fm.utils.naming import sanitize_filename
 from instanovo.utils.colorlogging import ColorLog
+from instanovo_fm.utils.naming import sanitize_filename
 
 logger = ColorLog(console, __name__).logger
 
@@ -51,7 +50,8 @@ class MaskingAnalyser:
     # Annotation labels to exclude from analysis (not informative for masking study)
     _EXCLUDED_LABELS = {"precursor", "precursor-isotope"}
 
-    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None):
+    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None) -> None:
+        """Initialise the input."""
         self.config = config
 
         if output_dir is None:
@@ -77,17 +77,9 @@ class MaskingAnalyser:
         # aligned without duplicating the values.
         task_configs = analysis_config.get("task_configs", {})
         theo_task = task_configs.get("theoretical", {})
-        self.apply_quality_gate_filter: bool = bool(
-            theo_task.get("theoretical_analysis", {}).get(
-                "apply_quality_gate_filter", True
-            )
-        )
-        self.min_backbone_coverage: float = float(
-            theo_task.get("min_backbone_coverage", 0.33)
-        )
-        self.min_fragment_groups: int = int(
-            theo_task.get("min_fragment_groups", 7)
-        )
+        self.apply_quality_gate_filter: bool = bool(theo_task.get("theoretical_analysis", {}).get("apply_quality_gate_filter", True))
+        self.min_backbone_coverage: float = float(theo_task.get("min_backbone_coverage", 0.33))
+        self.min_fragment_groups: int = int(theo_task.get("min_fragment_groups", 7))
 
         # Strategy configs
         self.strategies: Dict[str, Dict[str, Any]] = self._get_masking_strategies_from_config()
@@ -141,10 +133,10 @@ class MaskingAnalyser:
         min_backbone_coverage: float,
         min_fragment_groups: int,
     ) -> bool:
-        """Backbone-coverage + fragment-group gate, shared with
-        :class:`SpectrumAnalyser`. Duplicated here (rather than
-        imported) so MaskingAnalyser has no runtime dependency on the
-        orchestrator and can be invoked standalone in tests.
+        """Backbone-coverage + fragment-group gate, shared with :class:`SpectrumAnalyser`.
+
+        Duplicated here (rather than imported) so MaskingAnalyser has no runtime dependency on the orchestrator and can be invoked standalone in
+        tests.
         """
         n_terminal_ions = {"b", "a", "c"}
         c_terminal_ions = {"y", "x", "z"}
@@ -155,7 +147,7 @@ class MaskingAnalyser:
         seq = theoretical_analysis.get("clean_sequence", "") or ""
         seq_len = len(seq)
         groups: set = set()
-        for ft, ann in zip(feature_types, annotations):
+        for ft, ann in zip(feature_types, annotations, strict=False):
             if ft != "base" or not ann:
                 continue
             ion_type = TheoreticalAnalyser._extract_ion_type(ann)
@@ -167,7 +159,7 @@ class MaskingAnalyser:
         if seq_len > 1:
             max_sites = seq_len - 1
             cleavage_sites: set = set()
-            for (ion_type, position) in groups:
+            for ion_type, position in groups:
                 if ion_type in n_terminal_ions:
                     cleavage_sites.add(position)
                 elif ion_type in c_terminal_ions:
@@ -245,9 +237,7 @@ class MaskingAnalyser:
                 "min_fragment_groups": masking_config.get("signal_min_fragment_groups", 3),
                 "annotation_ppm": masking_config.get("signal_ppm", 20.0),
                 "annotation_cid_da_tol": masking_config.get("signal_cid_da_tol", 0.2),
-                "annotation_ion_types": tuple(
-                    masking_config.get("signal_ion_types", ["b", "y"])
-                ),
+                "annotation_ion_types": tuple(masking_config.get("signal_ion_types", ["b", "y"])),
                 "max_total_mask_ratio": masking_config.get("max_total_mask_ratio", 0.35),
             },
         }
@@ -351,9 +341,7 @@ class MaskingAnalyser:
                 min_fragment_groups=strategy_config.get("min_fragment_groups", 3),
                 annotation_ppm=strategy_config.get("annotation_ppm", 20.0),
                 annotation_cid_da_tol=strategy_config.get("annotation_cid_da_tol", 0.2),
-                annotation_ion_types=tuple(
-                    strategy_config.get("annotation_ion_types", ("b", "y"))
-                ),
+                annotation_ion_types=tuple(strategy_config.get("annotation_ion_types", ("b", "y"))),
                 frag_types=frag_types,
                 max_mz=self.max_mz,
                 normalize_mz=self.normalize_mz,
@@ -412,11 +400,7 @@ class MaskingAnalyser:
         # spectra (no sequence / no theoretical) always pass through
         # since the gate is undefined for them — they never contribute
         # to masking_effect or leakage stats anyway.
-        if (
-            self.apply_quality_gate_filter
-            and theoretical_analysis is not None
-            and theoretical_analysis.get("sequence_available", False)
-        ):
+        if self.apply_quality_gate_filter and theoretical_analysis is not None and theoretical_analysis.get("sequence_available", False):
             if not self._passes_quality_gate(
                 theoretical_analysis,
                 self.min_backbone_coverage,
@@ -492,10 +476,10 @@ class MaskingAnalyser:
                         mlm_mask_valid=mlm_mask_valid,
                         feature_types=feature_types,
                         parent_annotations=parent_annotations,
-                        matched_annotations=matched_annotations,
+                        matched_annotations=matched_annotations,  # type: ignore[arg-type]
                     )
 
-                repeat_result = {
+                repeat_result: dict[str, Any] = {
                     "mask_ratio": mask_ratio,
                     "gap_result": gap_result,
                     "masking_effect": masking_effect,
@@ -512,9 +496,7 @@ class MaskingAnalyser:
                 strategy_results["repeats"].append(repeat_result)
 
             # Average across repeats
-            strategy_results["mask_ratio"] = float(
-                np.mean([r["mask_ratio"] for r in strategy_results["repeats"]])
-            )
+            strategy_results["mask_ratio"] = float(np.mean([r["mask_ratio"] for r in strategy_results["repeats"]]))
             results[name] = strategy_results
 
         # Store visualization data (once per spectrum, shared across strategies)
@@ -525,14 +507,8 @@ class MaskingAnalyser:
             "n_valid": n_valid,
             "metadata": metadata,
         }
-        if (
-            theoretical_analysis is not None
-            and theoretical_analysis.get("sequence_available", False)
-            and matched_annotations is not None
-        ):
-            viz_data["annotated_mask"] = np.array(
-                theoretical_analysis.get("annotated_mask", [])
-            )
+        if theoretical_analysis is not None and theoretical_analysis.get("sequence_available", False) and matched_annotations is not None:
+            viz_data["annotated_mask"] = np.array(theoretical_analysis.get("annotated_mask", []))
             viz_data["theo_annotations"] = matched_annotations
             viz_data["feature_types"] = feature_types
             viz_data["parent_annotations"] = parent_annotations
@@ -545,9 +521,7 @@ class MaskingAnalyser:
     # Aggregation
     # ------------------------------------------------------------------
 
-    def aggregate_results(
-        self, per_spectrum_results: List[Dict[str, Dict[str, Any]]]
-    ) -> Dict[str, Any]:
+    def aggregate_results(self, per_spectrum_results: List[Dict[str, Dict[str, Any]]]) -> Dict[str, Any]:
         """Aggregate per-spectrum results across all strategies.
 
         Produces two parallel per-strategy views:
@@ -584,9 +558,7 @@ class MaskingAnalyser:
         max_mz = self.max_mz
         n_spatial_bins = 25
         spatial_bin_edges = np.linspace(min_mz, max_mz, n_spatial_bins + 1)
-        spatial_bin_centers = (
-            (spatial_bin_edges[:-1] + spatial_bin_edges[1:]) / 2
-        ).tolist()
+        spatial_bin_centers = ((spatial_bin_edges[:-1] + spatial_bin_edges[1:]) / 2).tolist()
 
         per_strategy = self._aggregate_per_strategy(
             per_spectrum_results,
@@ -600,9 +572,7 @@ class MaskingAnalyser:
         comparison = self._build_comparison_tables(per_strategy, strategy_names)
 
         # Build stratified masking summary (by frag_type, precursor_charge, instrument)
-        stratified = self._build_stratified_masking_summary(
-            per_spectrum_results, strategy_names
-        )
+        stratified = self._build_stratified_masking_summary(per_spectrum_results, strategy_names)
 
         self.results = {
             "per_strategy": per_strategy,
@@ -636,19 +606,11 @@ class MaskingAnalyser:
         # comparison stays apples-to-apples — all strategies run on the
         # same spectrum list.
         ref = next(
-            (
-                name
-                for name, cfg in self.strategies.items()
-                if cfg.get("type") == "signal_aware_fragment"
-            ),
+            (name for name, cfg in self.strategies.items() if cfg.get("type") == "signal_aware_fragment"),
             None,
         )
         if ref is not None:
-            subset = [
-                sr
-                for sr in per_spectrum_results
-                if self._repeat_fallback_used(sr.get(ref, {})) is False
-            ]
+            subset = [sr for sr in per_spectrum_results if self._repeat_fallback_used(sr.get(ref, {})) is False]
             n_excluded = len(per_spectrum_results) - len(subset)
             if subset:
                 per_strategy_ad = self._aggregate_per_strategy(
@@ -664,21 +626,11 @@ class MaskingAnalyser:
                     "n_fallback_excluded": n_excluded,
                     "reference_strategy": ref,
                 }
-                logger.info(
-                    f"Annotation-driven subset: {len(subset)} spectra "
-                    f"(excluded {n_excluded} where {ref} used fallback)"
-                )
+                logger.info(f"Annotation-driven subset: {len(subset)} spectra (excluded {n_excluded} where {ref} used fallback)")
             else:
-                logger.warning(
-                    f"Annotation-driven subset is empty — "
-                    f"{ref} fell back on every spectrum. "
-                    "Skipping gold-standard view."
-                )
+                logger.warning(f"Annotation-driven subset is empty — {ref} fell back on every spectrum. Skipping gold-standard view.")
         else:
-            logger.info(
-                "No signal_aware_fragment strategy configured; skipping "
-                "annotation-driven (gold-standard) subset view."
-            )
+            logger.info("No signal_aware_fragment strategy configured; skipping annotation-driven (gold-standard) subset view.")
 
         return self.results
 
@@ -694,7 +646,7 @@ class MaskingAnalyser:
         repeats = strategy_data.get("repeats", [])
         if not repeats:
             return None
-        return repeats[0].get("fallback_used")
+        return bool(repeats[0].get("fallback_used")) if repeats[0].get("fallback_used") is not None else None
 
     def _aggregate_per_strategy(
         self,
@@ -758,22 +710,12 @@ class MaskingAnalyser:
                         runs = self._compute_run_lengths(mlm_mask)
                         if len(runs) > 0:
                             all_run_lengths.extend(runs.tolist())
-                        if (
-                            valid_intensity is not None
-                            and len(valid_intensity) == len(mlm_mask)
-                        ):
-                            curve = self._compute_intensity_mask_curve(
-                                valid_intensity, mlm_mask
-                            )
+                        if valid_intensity is not None and len(valid_intensity) == len(mlm_mask):
+                            curve = self._compute_intensity_mask_curve(valid_intensity, mlm_mask)
                             if curve is not None:
                                 intensity_mask_curves.append(curve)
-                        if (
-                            valid_mz is not None
-                            and len(valid_mz) == len(mlm_mask)
-                        ):
-                            curve = self._compute_spatial_mask_curve(
-                                valid_mz, mlm_mask, spatial_bin_edges
-                            )
+                        if valid_mz is not None and len(valid_mz) == len(mlm_mask):
+                            curve = self._compute_spatial_mask_curve(valid_mz, mlm_mask, spatial_bin_edges)
                             if curve is not None:
                                 spatial_mask_curves.append(curve)
 
@@ -790,7 +732,7 @@ class MaskingAnalyser:
             masking_effect_agg = self._aggregate_masking_effects(all_masking_effects)
 
             mask_ratio_arr = np.array(all_mask_ratios) if all_mask_ratios else np.array([0.0])
-            mask_ratio_stats = {
+            mask_ratio_stats: dict[str, Any] = {
                 "mean": float(mask_ratio_arr.mean()),
                 "std": float(mask_ratio_arr.std()),
                 "median": float(np.median(mask_ratio_arr)),
@@ -810,11 +752,11 @@ class MaskingAnalyser:
             #   stacked bar chart.
             leakage_agg: Dict[str, Any] = {}
             if all_leakage:
-                leakage_ratios = np.array([l["leakage_ratio"] for l in all_leakage])
-                total_masked_base = sum(l["n_masked_base"] for l in all_leakage)
-                total_with_leakage = sum(l["n_masked_base_with_leakage"] for l in all_leakage)
-                total_loss_leak = sum(l["leakage_by_type"]["loss"] for l in all_leakage)
-                total_isotope_leak = sum(l["leakage_by_type"]["isotope"] for l in all_leakage)
+                leakage_ratios = np.array([l["leakage_ratio"] for l in all_leakage])  # noqa: E741
+                total_masked_base = sum(l["n_masked_base"] for l in all_leakage)  # noqa: E741
+                total_with_leakage = sum(l["n_masked_base_with_leakage"] for l in all_leakage)  # noqa: E741
+                total_loss_leak = sum(l["leakage_by_type"]["loss"] for l in all_leakage)  # noqa: E741
+                total_isotope_leak = sum(l["leakage_by_type"]["isotope"] for l in all_leakage)  # noqa: E741
                 leakage_agg = {
                     "avg_leakage_ratio": float(leakage_ratios.mean()),
                     "std_leakage_ratio": float(leakage_ratios.std()),
@@ -825,12 +767,8 @@ class MaskingAnalyser:
                         "loss": int(total_loss_leak),
                         "isotope": int(total_isotope_leak),
                     },
-                    "pooled_loss_fraction": (
-                        float(total_loss_leak) / max(total_masked_base, 1)
-                    ),
-                    "pooled_isotope_fraction": (
-                        float(total_isotope_leak) / max(total_masked_base, 1)
-                    ),
+                    "pooled_loss_fraction": (float(total_loss_leak) / max(total_masked_base, 1)),
+                    "pooled_isotope_fraction": (float(total_isotope_leak) / max(total_masked_base, 1)),
                     "n_spectra_leakage_defined": int(len(all_leakage)),
                 }
 
@@ -862,12 +800,8 @@ class MaskingAnalyser:
                     "n_annotation_driven": n_annotation_driven,
                     "n_fallback": n_fallback,
                     "fallback_rate": n_fallback / total_split,
-                    "mask_ratio_annotation_driven": (
-                        float(np.mean(mask_ratios_ann)) if mask_ratios_ann else 0.0
-                    ),
-                    "mask_ratio_fallback": (
-                        float(np.mean(mask_ratios_fb)) if mask_ratios_fb else 0.0
-                    ),
+                    "mask_ratio_annotation_driven": (float(np.mean(mask_ratios_ann)) if mask_ratios_ann else 0.0),
+                    "mask_ratio_fallback": (float(np.mean(mask_ratios_fb)) if mask_ratios_fb else 0.0),
                 }
 
             per_strategy[name] = {
@@ -877,20 +811,13 @@ class MaskingAnalyser:
                 "mask_ratio_stats": mask_ratio_stats,
                 "behavior": behavior,
                 "fallback": fallback_summary,
-                "n_spectra": len([
-                    sr for sr in per_spectrum_subset if name in sr
-                ]),
+                "n_spectra": len([sr for sr in per_spectrum_subset if name in sr]),
                 "n_gap_records": len(all_gap_results),
                 "n_masking_effects": len(all_masking_effects),
             }
-            if (
-                log_fallback
-                and fallback_summary
-                and fallback_summary["n_fallback"] > 0
-            ):
+            if log_fallback and fallback_summary and fallback_summary["n_fallback"] > 0:
                 logger.info(
-                    f"  [{name}] fallback used: {fallback_summary['n_fallback']}/"
-                    f"{total_split} ({fallback_summary['fallback_rate']*100:.1f}%)"
+                    f"  [{name}] fallback used: {fallback_summary['n_fallback']}/{total_split} ({fallback_summary['fallback_rate'] * 100:.1f}%)"
                 )
 
         return per_strategy
@@ -1076,10 +1003,7 @@ class MaskingAnalyser:
                 series_partially_agg[series] = series_partially_agg.get(series, 0) + count
             for series, count in e.get("series_group_unmasked", {}).items():
                 series_unmasked_agg[series] = series_unmasked_agg.get(series, 0) + count
-        series_group_full_mask_ratio = {
-            series: series_fully_agg.get(series, 0) / max(total, 1)
-            for series, total in series_total_agg.items()
-        }
+        series_group_full_mask_ratio = {series: series_fully_agg.get(series, 0) / max(total, 1) for series, total in series_total_agg.items()}
         agg["series_group_total"] = series_total_agg
         agg["series_group_fully_masked"] = series_fully_agg
         agg["series_group_partially_masked"] = series_partially_agg
@@ -1088,15 +1012,9 @@ class MaskingAnalyser:
 
         # Distributional data for fragment group masking status
         # Per-spectrum fully-masked group counts (for box/violin plots)
-        per_spectrum_fully_masked = [
-            e.get("n_fragment_groups_fully_masked", 0) for e in effects
-        ]
-        per_spectrum_partially_masked = [
-            e.get("n_fragment_groups_partially_masked", 0) for e in effects
-        ]
-        per_spectrum_unmasked = [
-            e.get("n_fragment_groups_unmasked", 0) for e in effects
-        ]
+        per_spectrum_fully_masked = [e.get("n_fragment_groups_fully_masked", 0) for e in effects]
+        per_spectrum_partially_masked = [e.get("n_fragment_groups_partially_masked", 0) for e in effects]
+        per_spectrum_unmasked = [e.get("n_fragment_groups_unmasked", 0) for e in effects]
         agg["dist_n_fully_masked"] = per_spectrum_fully_masked
         agg["dist_n_partially_masked"] = per_spectrum_partially_masked
         agg["dist_n_unmasked"] = per_spectrum_unmasked
@@ -1122,10 +1040,7 @@ class MaskingAnalyser:
                     continue
                 type_masked[label] = type_masked.get(label, 0) + count
 
-        type_mask_ratio = {
-            label: masked / max(type_total.get(label, 0), 1)
-            for label, masked in type_masked.items()
-        }
+        type_mask_ratio = {label: masked / max(type_total.get(label, 0), 1) for label, masked in type_masked.items()}
         agg["annotated_type_total"] = type_total
         agg["annotated_type_masked"] = type_masked
         agg["annotated_type_mask_ratio"] = type_mask_ratio
@@ -1143,8 +1058,7 @@ class MaskingAnalyser:
                     continue
                 type_intensity_masked[label] = type_intensity_masked.get(label, 0.0) + intensity
         type_intensity_mask_ratio = {
-            label: type_intensity_masked.get(label, 0.0) / max(total, 1e-12)
-            for label, total in type_intensity_total.items()
+            label: type_intensity_masked.get(label, 0.0) / max(total, 1e-12) for label, total in type_intensity_total.items()
         }
         agg["annotated_type_intensity_total"] = type_intensity_total
         agg["annotated_type_intensity_masked"] = type_intensity_masked
@@ -1165,9 +1079,7 @@ class MaskingAnalyser:
         return ends - starts
 
     @staticmethod
-    def _compute_intensity_mask_curve(
-        intensity: np.ndarray, mask: np.ndarray, n_bins: int = 10
-    ) -> Optional[np.ndarray]:
+    def _compute_intensity_mask_curve(intensity: np.ndarray, mask: np.ndarray, n_bins: int = 10) -> Optional[np.ndarray]:
         """Compute mask rate by intensity percentile bin.
 
         Sorts peaks by intensity and splits into ``n_bins`` equal-count
@@ -1182,9 +1094,7 @@ class MaskingAnalyser:
         return np.array([b.mean() for b in bins])
 
     @staticmethod
-    def _compute_spatial_mask_curve(
-        mz: np.ndarray, mask: np.ndarray, bin_edges: np.ndarray
-    ) -> Optional[np.ndarray]:
+    def _compute_spatial_mask_curve(mz: np.ndarray, mask: np.ndarray, bin_edges: np.ndarray) -> Optional[np.ndarray]:
         """Compute mask rate by m/z bin.
 
         Returns an array of length ``len(bin_edges) - 1``, one mask rate
@@ -1222,31 +1132,35 @@ class MaskingAnalyser:
             nearest = summary.get("nearest_distance_da", {})
             total = summary.get("total_gap_da", {})
             coverage = gap.get("group_coverage", {})
-            gap_rows.append({
-                "strategy": name,
-                "nearest_da_mean": nearest.get("mean", np.nan),
-                "nearest_da_median": nearest.get("median", np.nan),
-                "total_gap_da_mean": total.get("mean", np.nan),
-                "gap_within_3_groups": coverage.get("within_3_groups", np.nan),
-                "gap_within_10_groups": coverage.get("within_10_groups", np.nan),
-            })
+            gap_rows.append(
+                {
+                    "strategy": name,
+                    "nearest_da_mean": nearest.get("mean", np.nan),
+                    "nearest_da_median": nearest.get("median", np.nan),
+                    "total_gap_da_mean": total.get("mean", np.nan),
+                    "gap_within_3_groups": coverage.get("within_3_groups", np.nan),
+                    "gap_within_10_groups": coverage.get("within_10_groups", np.nan),
+                }
+            )
         gap_df = pd.DataFrame(gap_rows).set_index("strategy") if gap_rows else pd.DataFrame()
 
         # Annotated interaction comparison
         ann_rows = []
         for name in strategy_names:
             eff = per_strategy.get(name, {}).get("masking_effect", {})
-            ann_rows.append({
-                "strategy": name,
-                "annotated_mask_ratio": eff.get("avg_annotated_mask_ratio", np.nan),
-                "unannotated_mask_ratio": eff.get("avg_unannotated_mask_ratio", np.nan),
-                "annotated_preservation": eff.get("avg_annotated_preservation_ratio", np.nan),
-                "frag_group_full_mask": eff.get("avg_fragment_group_full_mask_ratio", np.nan),
-                "avg_frag_groups": eff.get("avg_n_fragment_groups_total", np.nan),
-                "frag_groups_fully_masked": eff.get("avg_n_fragment_groups_fully_masked", np.nan),
-                "frag_groups_partially_masked": eff.get("avg_n_fragment_groups_partially_masked", np.nan),
-                "frag_groups_unmasked": eff.get("avg_n_fragment_groups_unmasked", np.nan),
-            })
+            ann_rows.append(
+                {
+                    "strategy": name,
+                    "annotated_mask_ratio": eff.get("avg_annotated_mask_ratio", np.nan),
+                    "unannotated_mask_ratio": eff.get("avg_unannotated_mask_ratio", np.nan),
+                    "annotated_preservation": eff.get("avg_annotated_preservation_ratio", np.nan),
+                    "frag_group_full_mask": eff.get("avg_fragment_group_full_mask_ratio", np.nan),
+                    "avg_frag_groups": eff.get("avg_n_fragment_groups_total", np.nan),
+                    "frag_groups_fully_masked": eff.get("avg_n_fragment_groups_fully_masked", np.nan),
+                    "frag_groups_partially_masked": eff.get("avg_n_fragment_groups_partially_masked", np.nan),
+                    "frag_groups_unmasked": eff.get("avg_n_fragment_groups_unmasked", np.nan),
+                }
+            )
         ann_df = pd.DataFrame(ann_rows).set_index("strategy") if ann_rows else pd.DataFrame()
 
         # Training signal comparison (key metrics for strategy selection)
@@ -1255,38 +1169,28 @@ class MaskingAnalyser:
             eff = per_strategy.get(name, {}).get("masking_effect", {})
             leak = per_strategy.get(name, {}).get("leakage", {})
             mr = per_strategy.get(name, {}).get("mask_ratio_stats", {})
-            signal_rows.append({
-                "strategy": name,
-                "mask_ratio": mr.get("mean", np.nan),
-                "annotated_fraction_of_masked": eff.get(
-                    "avg_annotated_fraction_of_masked_peaks", np.nan
-                ),
-                "annotated_preservation": eff.get(
-                    "avg_annotated_preservation_ratio", np.nan
-                ),
-                # Per-spectrum mean (sensitive to dispersion). For the
-                # pooled total_leaks/total_masked_base ratio see
-                # ``leakage_ratio_pooled``.
-                "leakage_ratio_per_spectrum_mean": leak.get(
-                    "avg_leakage_ratio", np.nan
-                ),
-                "leakage_ratio_pooled": leak.get(
-                    "overall_leakage_ratio", np.nan
-                ),
-                "precursor_mask_freq": eff.get("freq_precursor_base_masked", np.nan),
-                "precursor_budget_frac": eff.get("avg_precursor_mask_budget_fraction", np.nan),
-                "precursor_int_budget_frac": eff.get("avg_precursor_intensity_budget_fraction", np.nan),
-                "precursor_frac_of_ann_masked": eff.get("avg_precursor_fraction_of_annotated_masked", np.nan),
-                "precursor_int_frac_of_ann_masked": eff.get("avg_precursor_intensity_fraction_of_annotated_masked", np.nan),
-                "custom_budget_frac": eff.get("avg_custom_mask_budget_fraction", np.nan),
-                "custom_int_budget_frac": eff.get("avg_custom_intensity_budget_fraction", np.nan),
-                "precursor_leakage_freq": eff.get("freq_precursor_has_leakage", np.nan),
-            })
-        signal_df = (
-            pd.DataFrame(signal_rows).set_index("strategy")
-            if signal_rows
-            else pd.DataFrame()
-        )
+            signal_rows.append(
+                {
+                    "strategy": name,
+                    "mask_ratio": mr.get("mean", np.nan),
+                    "annotated_fraction_of_masked": eff.get("avg_annotated_fraction_of_masked_peaks", np.nan),
+                    "annotated_preservation": eff.get("avg_annotated_preservation_ratio", np.nan),
+                    # Per-spectrum mean (sensitive to dispersion). For the
+                    # pooled total_leaks/total_masked_base ratio see
+                    # ``leakage_ratio_pooled``.
+                    "leakage_ratio_per_spectrum_mean": leak.get("avg_leakage_ratio", np.nan),
+                    "leakage_ratio_pooled": leak.get("overall_leakage_ratio", np.nan),
+                    "precursor_mask_freq": eff.get("freq_precursor_base_masked", np.nan),
+                    "precursor_budget_frac": eff.get("avg_precursor_mask_budget_fraction", np.nan),
+                    "precursor_int_budget_frac": eff.get("avg_precursor_intensity_budget_fraction", np.nan),
+                    "precursor_frac_of_ann_masked": eff.get("avg_precursor_fraction_of_annotated_masked", np.nan),
+                    "precursor_int_frac_of_ann_masked": eff.get("avg_precursor_intensity_fraction_of_annotated_masked", np.nan),
+                    "custom_budget_frac": eff.get("avg_custom_mask_budget_fraction", np.nan),
+                    "custom_int_budget_frac": eff.get("avg_custom_intensity_budget_fraction", np.nan),
+                    "precursor_leakage_freq": eff.get("freq_precursor_has_leakage", np.nan),
+                }
+            )
+        signal_df = pd.DataFrame(signal_rows).set_index("strategy") if signal_rows else pd.DataFrame()
 
         return {
             "mask_ratio": mask_ratio_df,
@@ -1309,7 +1213,7 @@ class MaskingAnalyser:
         within a stratum (e.g. "does thompson_span behave differently
         from signal_aware on ETD?").
 
-        Returns
+        Returns:
         -------
         ``{metadata_key: {group_value: {
                 "n_total": int,                # spectra in this stratum
@@ -1331,9 +1235,7 @@ class MaskingAnalyser:
             return {}
 
         # grouped[metadata_key][group_value][strategy_name] = [effect dicts]
-        grouped: Dict[str, Dict[str, Dict[str, List[Dict]]]] = {
-            k: {} for k in strat_keys
-        }
+        grouped: Dict[str, Dict[str, Dict[str, List[Dict]]]] = {k: {} for k in strat_keys}
         total_counts: Dict[str, Dict[str, int]] = {k: {} for k in strat_keys}
 
         for spectrum_result in per_spectrum_results:
@@ -1342,9 +1244,7 @@ class MaskingAnalyser:
 
             # Only count the spectrum once per stratum key, regardless
             # of how many strategies it ran through.
-            any_strategy_ran = any(
-                spectrum_result.get(n, {}).get("repeats") for n in strategy_names
-            )
+            any_strategy_ran = any(spectrum_result.get(n, {}).get("repeats") for n in strategy_names)
             if not any_strategy_ran:
                 continue
             for key in strat_keys:
@@ -1361,18 +1261,13 @@ class MaskingAnalyser:
                     continue
                 for key in strat_keys:
                     val = str(metadata.get(key, "unknown") or "unknown")
-                    grouped[key].setdefault(val, {}).setdefault(strategy, []).append(
-                        effect
-                    )
+                    grouped[key].setdefault(val, {}).setdefault(strategy, []).append(effect)
 
         # Log coverage per stratum (total vs annotated, summed across strategies
         # for the headline number — individual strategy n appears in the JSON).
         for key in strat_keys:
             all_vals = sorted(total_counts[key].items(), key=lambda kv: kv[1], reverse=True)
-            logger.info(
-                f"Stratified '{key}': total spectra by group: "
-                f"{', '.join(f'{v}={c}' for v, c in all_vals)}"
-            )
+            logger.info(f"Stratified '{key}': total spectra by group: {', '.join(f'{v}={c}' for v, c in all_vals)}")
 
         result: Dict[str, Dict[str, Dict[str, Any]]] = {}
         for key in strat_keys:
@@ -1387,10 +1282,7 @@ class MaskingAnalyser:
                         continue
                     ann_mr = [e.get("annotated_mask_ratio", 0) for e in effects]
                     unann_mr = [e.get("unannotated_mask_ratio", 0) for e in effects]
-                    ann_int_frac = [
-                        e.get("annotated_intensity_masked_fraction_of_annotated", 0)
-                        for e in effects
-                    ]
+                    ann_int_frac = [e.get("annotated_intensity_masked_fraction_of_annotated", 0) for e in effects]
                     by_strategy[strategy] = {
                         "n": len(effects),
                         "avg_annotated_mask_ratio": float(np.mean(ann_mr)),
@@ -1432,7 +1324,7 @@ class MaskingAnalyser:
 
         # Per-strategy detail figures
         self._generate_per_strategy_behavior()
-        for name, analyser in self.gap_analysers.items():
+        for _name, analyser in self.gap_analysers.items():
             if analyser.results:
                 analyser.generate_group_size_sweep()
 
@@ -1441,11 +1333,11 @@ class MaskingAnalyser:
     # ------------------------------------------------------------------
 
     # 4-color scheme for masking × annotation
-    _VIZ_COLORS = {
-        "unmasked_annotated": "#2980b9",   # Blue — learnable context
-        "unmasked_unannotated": "#95a5a6", # Gray — unannotated context
-        "masked_annotated": "#c0392b",     # Red — learnable target
-        "masked_unannotated": "#e67e22",   # Orange — unannotated target
+    _VIZ_COLORS: dict[str, Any] = {
+        "unmasked_annotated": "#2980b9",  # Blue — learnable context
+        "unmasked_unannotated": "#95a5a6",  # Gray — unannotated context
+        "masked_annotated": "#c0392b",  # Red — learnable target
+        "masked_unannotated": "#e67e22",  # Orange — unannotated target
     }
 
     def generate_individual_spectrum_visualizations(
@@ -1464,10 +1356,7 @@ class MaskingAnalyser:
             max_viz: Maximum number of spectra to visualise.
         """
         # Select spectra with annotation data
-        candidates = [
-            r for r in per_spectrum_results
-            if "_viz_data" in r and "annotated_mask" in r.get("_viz_data", {})
-        ]
+        candidates = [r for r in per_spectrum_results if "_viz_data" in r and "annotated_mask" in r.get("_viz_data", {})]
         if not candidates:
             logger.info("No annotated spectra available for individual masking visualisation")
             return
@@ -1492,29 +1381,27 @@ class MaskingAnalyser:
             seq_slug = sanitize_filename(seq)[:30]
 
             try:
-                self._create_comparison_figure(
-                    idx, seq_slug, spectrum_result, strategy_names, comparison_dir
-                )
+                self._create_comparison_figure(idx, seq_slug, spectrum_result, strategy_names, comparison_dir)
             except Exception as e:
                 logger.warning(f"Comparison figure failed for spectrum {idx}: {e}")
 
             for name in strategy_names:
                 try:
                     self._create_per_strategy_figure(
-                        idx, seq_slug, name, spectrum_result,
+                        idx,
+                        seq_slug,
+                        name,
+                        spectrum_result,
                         self.output_dir / name / "individual_spectra",
                     )
                 except Exception as e:
                     logger.warning(f"Per-strategy figure failed ({name}, spectrum {idx}): {e}")
 
-        logger.info(
-            f"Individual masking visualisations saved: {n_viz} comparison + "
-            f"{n_viz * len(strategy_names)} per-strategy figures"
-        )
+        logger.info(f"Individual masking visualisations saved: {n_viz} comparison + {n_viz * len(strategy_names)} per-strategy figures")
 
     # Ion-type colour scheme — matches spectrum_analyser.py category_colors exactly.
     # Format: category → (hex_colour, alpha)
-    _CATEGORY_COLORS = {
+    _CATEGORY_COLORS: dict[str, Any] = {
         "unannotated": ("#BDBDBD", 0.5),
         "B-ion": ("#1f77b4", 1.0),
         "Y-ion": ("#d62728", 1.0),
@@ -1548,19 +1435,37 @@ class MaskingAnalyser:
     }
 
     # Darkened text colours for annotation labels — matches spectrum_analyser.py text_colors.
-    _TEXT_COLORS = {
+    _TEXT_COLORS: dict[str, Any] = {
         "unannotated": "olive",
-        "B-ion": "darkblue", "B-ion (Loss)": "darkblue", "B-ion (Isotope)": "darkblue",
-        "Y-ion": "darkred", "Y-ion (Loss)": "darkred", "Y-ion (Isotope)": "darkred",
-        "A-ion": "darkgreen", "A-ion (Loss)": "darkgreen", "A-ion (Isotope)": "darkgreen",
-        "C-ion": "darkviolet", "C-ion (Loss)": "darkviolet", "C-ion (Isotope)": "darkviolet",
-        "X-ion": "saddlebrown", "X-ion (Loss)": "saddlebrown", "X-ion (Isotope)": "saddlebrown",
-        "Z-ion": "deeppink", "Z-ion (Loss)": "deeppink", "Z-ion (Isotope)": "deeppink",
-        "Precursor": "black", "Precursor (Isotope)": "#4a4a4a",
-        "Loss": "darkgreen", "Isotope": "dimgray",
-        "Immonium": "saddlebrown", "Glycan": "deeppink",
-        "Phospho": "darkorange", "Sulfate": "darkorange",
-        "Reporter": "darkcyan", "Custom": "darkviolet", "Other": "olive",
+        "B-ion": "darkblue",
+        "B-ion (Loss)": "darkblue",
+        "B-ion (Isotope)": "darkblue",
+        "Y-ion": "darkred",
+        "Y-ion (Loss)": "darkred",
+        "Y-ion (Isotope)": "darkred",
+        "A-ion": "darkgreen",
+        "A-ion (Loss)": "darkgreen",
+        "A-ion (Isotope)": "darkgreen",
+        "C-ion": "darkviolet",
+        "C-ion (Loss)": "darkviolet",
+        "C-ion (Isotope)": "darkviolet",
+        "X-ion": "saddlebrown",
+        "X-ion (Loss)": "saddlebrown",
+        "X-ion (Isotope)": "saddlebrown",
+        "Z-ion": "deeppink",
+        "Z-ion (Loss)": "deeppink",
+        "Z-ion (Isotope)": "deeppink",
+        "Precursor": "black",
+        "Precursor (Isotope)": "#4a4a4a",
+        "Loss": "darkgreen",
+        "Isotope": "dimgray",
+        "Immonium": "saddlebrown",
+        "Glycan": "deeppink",
+        "Phospho": "darkorange",
+        "Sulfate": "darkorange",
+        "Reporter": "darkcyan",
+        "Custom": "darkviolet",
+        "Other": "olive",
     }
 
     @staticmethod
@@ -1720,12 +1625,14 @@ class MaskingAnalyser:
         if not isinstance(annotated_mask, np.ndarray):
             annotated_mask = np.asarray(annotated_mask, dtype=bool)
         annotations = list(viz.get("theo_annotations", []))
-        feature_types = viz.get("feature_types", [])
+        viz.get("feature_types", [])
         custom_ion_data = viz.get("custom_ion_data", {})
 
         # Merge custom ion detections into annotations
         annotations = self._merge_custom_ion_annotations(
-            valid_mz, annotations, custom_ion_data,
+            valid_mz,
+            annotations,
+            custom_ion_data,
         )
 
         # Publication mode: optionally restrict to a readable subset of strategies.
@@ -1736,7 +1643,8 @@ class MaskingAnalyser:
         n_strategies = len(strategy_names)
         n_rows = 1 + n_strategies
         fig, axes = plt.subplots(
-            n_rows, 1,
+            n_rows,
+            1,
             figsize=(18, 2.5 + 2.8 * n_strategies),
             sharex=True,
         )
@@ -1764,9 +1672,7 @@ class MaskingAnalyser:
             unannotated_indices = colour_groups.pop("unannotated")
             idx_arr = np.array(unannotated_indices)
             color, alpha = self._CATEGORY_COLORS["unannotated"]
-            ax.bar(x_pos[idx_arr], valid_intensity[idx_arr],
-                   color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label="Unannotated")
+            ax.bar(x_pos[idx_arr], valid_intensity[idx_arr], color=color, alpha=alpha, width=1.0, linewidth=0, label="Unannotated")
 
         for cat in sorted(colour_groups.keys()):
             indices = colour_groups[cat]
@@ -1774,9 +1680,7 @@ class MaskingAnalyser:
                 continue
             idx_arr = np.array(indices)
             color, alpha = self._CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
-            ax.bar(x_pos[idx_arr], valid_intensity[idx_arr],
-                   color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label=cat)
+            ax.bar(x_pos[idx_arr], valid_intensity[idx_arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
         # Add annotations for all annotated peaks
         for i in range(n_valid):
@@ -1788,9 +1692,15 @@ class MaskingAnalyser:
                 continue
             display_ann = self._format_custom_ion_label(ann) if ann.startswith("custom:") else ann
             ax.annotate(
-                display_ann, xy=(i, valid_intensity[i]), xytext=(0, 3),
-                textcoords="offset points", ha="center", fontsize=5,
-                rotation=90, alpha=0.9, fontweight="bold",
+                display_ann,
+                xy=(i, valid_intensity[i]),
+                xytext=(0, 3),
+                textcoords="offset points",
+                ha="center",
+                fontsize=5,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
                 color=self._TEXT_COLORS.get(cat, "black"),
             )
 
@@ -1808,28 +1718,22 @@ class MaskingAnalyser:
             strat_data = spectrum_result.get(name, {})
             repeats = strat_data.get("repeats", [])
             if not repeats:
-                ax.text(0.5, 0.5, f"{name}: no data", ha="center", va="center",
-                        transform=ax.transAxes)
+                ax.text(0.5, 0.5, f"{name}: no data", ha="center", va="center", transform=ax.transAxes)
                 continue
 
             rep = repeats[0]
             mlm_mask = rep.get("mlm_mask_valid")
             if mlm_mask is None:
-                ax.text(0.5, 0.5, f"{name}: no mask data", ha="center", va="center",
-                        transform=ax.transAxes)
+                ax.text(0.5, 0.5, f"{name}: no mask data", ha="center", va="center", transform=ax.transAxes)
                 continue
 
             mlm_mask = np.asarray(mlm_mask, dtype=bool)
             unmasked_idx = ~mlm_mask
             masked_idx = mlm_mask
             if unmasked_idx.any():
-                ax.bar(x_pos[unmasked_idx], valid_intensity[unmasked_idx],
-                       color="#90CAF9", alpha=0.8, width=1.0, linewidth=0,
-                       label="Unmasked")
+                ax.bar(x_pos[unmasked_idx], valid_intensity[unmasked_idx], color="#90CAF9", alpha=0.8, width=1.0, linewidth=0, label="Unmasked")
             if masked_idx.any():
-                ax.bar(x_pos[masked_idx], valid_intensity[masked_idx],
-                       color="#E53935", alpha=0.8, width=1.0, linewidth=0,
-                       label="Masked")
+                ax.bar(x_pos[masked_idx], valid_intensity[masked_idx], color="#E53935", alpha=0.8, width=1.0, linewidth=0, label="Masked")
 
             if self.publication_figure:
                 ax.set_ylabel(self.publication_labels.get(name, name), fontsize=11, fontweight="bold")
@@ -1855,10 +1759,15 @@ class MaskingAnalyser:
                 f"  Near: {nearest_da:.1f} Da"
             )
             ax.text(
-                0.5, 0.98, stats_text, transform=ax.transAxes,
-                fontsize=(11.5 if self.publication_figure else 7), fontfamily="monospace", va="top", ha="center",
-                bbox=dict(boxstyle="round,pad=0.45", facecolor="white",
-                          alpha=0.9, edgecolor="gray", linewidth=0.8),
+                0.5,
+                0.98,
+                stats_text,
+                transform=ax.transAxes,
+                fontsize=(11.5 if self.publication_figure else 7),
+                fontfamily="monospace",
+                va="top",
+                ha="center",
+                bbox={"boxstyle": "round,pad=0.45", "facecolor": "white", "alpha": 0.9, "edgecolor": "gray", "linewidth": 0.8},
             )
 
         axes[-1].set_xlabel("Peak Index", fontsize=11)
@@ -1867,8 +1776,9 @@ class MaskingAnalyser:
         fig.savefig(path, dpi=200, bbox_inches="tight")
         if self.publication_figure:
             for ext in ("svg", "pdf"):
-                fig.savefig(output_dir / f"spectrum_{idx:04d}_{seq_slug}.{ext}",
-                            bbox_inches="tight", metadata={"Title": "Masking strategy comparison"})
+                fig.savefig(
+                    output_dir / f"spectrum_{idx:04d}_{seq_slug}.{ext}", bbox_inches="tight", metadata={"Title": "Masking strategy comparison"}
+                )
         plt.close(fig)
 
     def _create_per_strategy_figure(
@@ -1887,12 +1797,14 @@ class MaskingAnalyser:
         if not isinstance(annotated_mask, np.ndarray):
             annotated_mask = np.asarray(annotated_mask, dtype=bool)
         annotations = list(viz.get("theo_annotations", []))
-        feature_types = viz.get("feature_types", [])
+        viz.get("feature_types", [])
         custom_ion_data = viz.get("custom_ion_data", {})
 
         # Merge custom ion detections into annotations
         annotations = self._merge_custom_ion_annotations(
-            valid_mz, annotations, custom_ion_data,
+            valid_mz,
+            annotations,
+            custom_ion_data,
         )
 
         strat_data = spectrum_result.get(strategy_name, {})
@@ -1907,8 +1819,7 @@ class MaskingAnalyser:
 
         n_valid = len(valid_mz)
         n_rows = 4  # stats, index reference, masked/unmasked, 4-color
-        fig, axes = plt.subplots(n_rows, 1, figsize=(18, 3.0 + 3.5 * 3),
-                                 gridspec_kw={"height_ratios": [0.6, 1, 1, 1]})
+        fig, axes = plt.subplots(n_rows, 1, figsize=(18, 3.0 + 3.5 * 3), gridspec_kw={"height_ratios": [0.6, 1, 1, 1]})
 
         metadata = viz.get("metadata", {})
         seq = metadata.get("clean_sequence") or metadata.get("sequence") or "unknown"
@@ -1963,10 +1874,15 @@ class MaskingAnalyser:
             f" | Nearest: {nearest_da:.1f} Da",
         ]
         ax_stats.text(
-            0.02, 0.5, "\n".join(stats_lines), transform=ax_stats.transAxes,
-            fontsize=10, va="center", ha="left", fontfamily="monospace",
-            bbox=dict(boxstyle="round,pad=0.8", facecolor="lightgray",
-                      alpha=0.9, edgecolor="gray", linewidth=1.5),
+            0.02,
+            0.5,
+            "\n".join(stats_lines),
+            transform=ax_stats.transAxes,
+            fontsize=10,
+            va="center",
+            ha="left",
+            fontfamily="monospace",
+            bbox={"boxstyle": "round,pad=0.8", "facecolor": "lightgray", "alpha": 0.9, "edgecolor": "gray", "linewidth": 1.5},
         )
 
         # --- Row 1: Index-based annotated reference (ion-type coloring) ---
@@ -1983,9 +1899,7 @@ class MaskingAnalyser:
             unannotated_indices = colour_groups.pop("unannotated")
             idx_arr = np.array(unannotated_indices)
             color, alpha = self._CATEGORY_COLORS["unannotated"]
-            ax_ref.bar(x_pos[idx_arr], valid_intensity[idx_arr],
-                       color=color, alpha=alpha,
-                       width=1.0, linewidth=0, label="Unannotated")
+            ax_ref.bar(x_pos[idx_arr], valid_intensity[idx_arr], color=color, alpha=alpha, width=1.0, linewidth=0, label="Unannotated")
 
         for cat in sorted(colour_groups.keys()):
             cat_indices = colour_groups[cat]
@@ -1993,9 +1907,7 @@ class MaskingAnalyser:
                 continue
             idx_arr = np.array(cat_indices)
             color, alpha = self._CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
-            ax_ref.bar(x_pos[idx_arr], valid_intensity[idx_arr],
-                       color=color, alpha=alpha,
-                       width=1.0, linewidth=0, label=cat)
+            ax_ref.bar(x_pos[idx_arr], valid_intensity[idx_arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
         # Add annotations for annotated peaks
         for i in range(n_valid):
@@ -2007,10 +1919,15 @@ class MaskingAnalyser:
                 continue
             display_ann = self._format_custom_ion_label(ann) if ann.startswith("custom:") else ann
             ax_ref.annotate(
-                display_ann, xy=(i, valid_intensity[i]),
-                xytext=(0, 3), textcoords="offset points",
-                ha="center", fontsize=5, rotation=90,
-                alpha=0.9, fontweight="bold",
+                display_ann,
+                xy=(i, valid_intensity[i]),
+                xytext=(0, 3),
+                textcoords="offset points",
+                ha="center",
+                fontsize=5,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
                 color=self._TEXT_COLORS.get(cat, "black"),
             )
 
@@ -2024,13 +1941,9 @@ class MaskingAnalyser:
         unmasked_idx = ~mlm_mask
         masked_idx = mlm_mask
         if unmasked_idx.any():
-            ax_simple.bar(x_pos[unmasked_idx], valid_intensity[unmasked_idx],
-                          color="#90CAF9", alpha=0.9, width=1.0, linewidth=0,
-                          label="Unmasked")
+            ax_simple.bar(x_pos[unmasked_idx], valid_intensity[unmasked_idx], color="#90CAF9", alpha=0.9, width=1.0, linewidth=0, label="Unmasked")
         if masked_idx.any():
-            ax_simple.bar(x_pos[masked_idx], valid_intensity[masked_idx],
-                          color="#E53935", alpha=0.9, width=1.0, linewidth=0,
-                          label="Masked")
+            ax_simple.bar(x_pos[masked_idx], valid_intensity[masked_idx], color="#E53935", alpha=0.9, width=1.0, linewidth=0, label="Masked")
 
         ax_simple.set_ylabel("Intensity", fontsize=10)
         ax_simple.set_title("Masking Pattern (index-based)", fontsize=11, fontweight="bold")
@@ -2044,7 +1957,7 @@ class MaskingAnalyser:
         ma = mlm_mask & annotated_mask
         mu = mlm_mask & ~annotated_mask
 
-        C = self._VIZ_COLORS
+        C = self._VIZ_COLORS  # noqa: N806
         for mask_arr, key, label in [
             (uu, "unmasked_unannotated", "Unmasked Unannotated"),
             (ua, "unmasked_annotated", "Unmasked Annotated"),
@@ -2052,9 +1965,7 @@ class MaskingAnalyser:
             (ma, "masked_annotated", "Masked Annotated"),
         ]:
             if mask_arr.any():
-                ax_detail.bar(x_pos[mask_arr], valid_intensity[mask_arr],
-                              color=C[key], alpha=0.9, width=1.0, linewidth=0,
-                              label=label)
+                ax_detail.bar(x_pos[mask_arr], valid_intensity[mask_arr], color=C[key], alpha=0.9, width=1.0, linewidth=0, label=label)
 
         ax_detail.set_xlabel("Peak Index", fontsize=10)
         ax_detail.set_ylabel("Intensity", fontsize=10)
@@ -2080,13 +1991,13 @@ class MaskingAnalyser:
         annotated_mask: np.ndarray,
     ) -> None:
         """Plot a spectrum with the 4-color masking × annotation scheme."""
-        C = self._VIZ_COLORS
+        C = self._VIZ_COLORS  # noqa: N806
 
         # Compute 4 categories
-        ua = ~mlm_mask & annotated_mask     # Unmasked Annotated (blue)
-        uu = ~mlm_mask & ~annotated_mask    # Unmasked Unannotated (gray)
-        ma = mlm_mask & annotated_mask      # Masked Annotated (red)
-        mu = mlm_mask & ~annotated_mask     # Masked Unannotated (orange)
+        ua = ~mlm_mask & annotated_mask  # Unmasked Annotated (blue)
+        uu = ~mlm_mask & ~annotated_mask  # Unmasked Unannotated (gray)
+        ma = mlm_mask & annotated_mask  # Masked Annotated (red)
+        mu = mlm_mask & ~annotated_mask  # Masked Unannotated (orange)
 
         for mask, key, label in [
             (uu, "unmasked_unannotated", "Unmasked Unannotated"),
@@ -2096,8 +2007,12 @@ class MaskingAnalyser:
         ]:
             if mask.any():
                 markerline, stemlines, baseline = ax.stem(
-                    valid_mz[mask], valid_intensity[mask],
-                    linefmt="-", markerfmt="o", basefmt=" ", label=label,
+                    valid_mz[mask],
+                    valid_intensity[mask],
+                    linefmt="-",
+                    markerfmt="o",
+                    basefmt=" ",
+                    label=label,
                 )
                 plt.setp(markerline, color=C[key], markersize=3, alpha=0.9)
                 plt.setp(stemlines, color=C[key], alpha=0.8)
@@ -2128,8 +2043,8 @@ class MaskingAnalyser:
         if unannotated_indices:
             color, alpha = cls._CATEGORY_COLORS["unannotated"]
             ml, sl, bl = ax.stem(
-                valid_mz[unannotated_indices], valid_intensity[unannotated_indices],
-                linefmt="-", markerfmt="o", basefmt=" ", label="Unannotated")
+                valid_mz[unannotated_indices], valid_intensity[unannotated_indices], linefmt="-", markerfmt="o", basefmt=" ", label="Unannotated"
+            )
             plt.setp(ml, color=color, markersize=2, alpha=alpha)
             plt.setp(sl, color=color, alpha=alpha)
 
@@ -2138,9 +2053,7 @@ class MaskingAnalyser:
             cat_indices = [i for i, cat in peak_categories.items() if cat == category]
             if cat_indices:
                 color, alpha = cls._CATEGORY_COLORS.get(category, ("#9467bd", 0.8))
-                ml, sl, bl = ax.stem(
-                    valid_mz[cat_indices], valid_intensity[cat_indices],
-                    linefmt="-", markerfmt="o", basefmt=" ", label=category)
+                ml, sl, bl = ax.stem(valid_mz[cat_indices], valid_intensity[cat_indices], linefmt="-", markerfmt="o", basefmt=" ", label=category)
                 plt.setp(ml, color=color, markersize=3, alpha=alpha)
                 plt.setp(sl, color=color, alpha=alpha)
 
@@ -2156,9 +2069,15 @@ class MaskingAnalyser:
                 continue
             display_ann = cls._format_custom_ion_label(ann) if ann.startswith("custom:") else ann
             ax.annotate(
-                display_ann, xy=(valid_mz[i], valid_intensity[i]), xytext=(0, 4),
-                textcoords="offset points", ha="center", fontsize=6,
-                rotation=90, alpha=0.9, fontweight="bold",
+                display_ann,
+                xy=(valid_mz[i], valid_intensity[i]),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                fontsize=6,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
                 color=cls._TEXT_COLORS.get(cat, "black"),
             )
 
@@ -2226,34 +2145,14 @@ class MaskingAnalyser:
 
         # ── [0,0] Masked Peak Composition (Count-Based) ──────────────
         ax = axes[0, 0]
-        ann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
-        prec_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_mask_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        custom_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_custom_mask_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        unann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
+        ann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_fraction_of_masked_peaks", 0.0) for n in names]
+        prec_budget = [per_strategy[n].get("masking_effect", {}).get("avg_precursor_mask_budget_fraction", 0.0) for n in names]
+        custom_budget = [per_strategy[n].get("masking_effect", {}).get("avg_custom_mask_budget_fraction", 0.0) for n in names]
+        unann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_fraction_of_masked_peaks", 0.0) for n in names]
         # Fragment = annotated - precursor (custom is a subset of unannotated, not annotated)
-        frag_frac = [max(a - p, 0.0) for a, p in zip(ann_frac, prec_budget)]
+        frag_frac = [max(a - p, 0.0) for a, p in zip(ann_frac, prec_budget, strict=False)]
         # Unannotated adjusted: total unannotated minus custom (custom came from unannotated)
-        unann_adj = [max(u - c, 0.0) for u, c in zip(unann_frac, custom_budget)]
+        unann_adj = [max(u - c, 0.0) for u, c in zip(unann_frac, custom_budget, strict=False)]
 
         if any(v > 0 for v in ann_frac) or any(v > 0 for v in unann_frac):
             bottom = [0.0] * len(names)
@@ -2264,17 +2163,20 @@ class MaskingAnalyser:
                 (unann_adj, "Unannotated", "#95a5a6"),
             ]
             for vals, label, color in segments:
-                ax.bar(x, vals, bottom=bottom, label=label,
-                       color=color, alpha=0.85, edgecolor="black", linewidth=0.5)
+                ax.bar(x, vals, bottom=bottom, label=label, color=color, alpha=0.85, edgecolor="black", linewidth=0.5)
                 # Labels at segment midpoints (skip if <2%)
                 for i_bar in range(len(names)):
                     if vals[i_bar] >= 0.02:
                         ax.text(
-                            i_bar, bottom[i_bar] + vals[i_bar] / 2,
+                            i_bar,
+                            bottom[i_bar] + vals[i_bar] / 2,
                             f"{vals[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold",
+                            ha="center",
+                            va="center",
+                            fontsize=8,
+                            fontweight="bold",
                         )
-                bottom = [b + v for b, v in zip(bottom, vals)]
+                bottom = [b + v for b, v in zip(bottom, vals, strict=False)]
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Masked Peaks")
@@ -2288,32 +2190,12 @@ class MaskingAnalyser:
 
         # ── [0,1] Masked Peak Composition (Intensity-Weighted) ───────
         ax = axes[0, 1]
-        ann_int_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
-        prec_int_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_intensity_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        custom_int_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_custom_intensity_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        unann_int_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
-        frag_int_frac = [max(a - p, 0.0) for a, p in zip(ann_int_frac, prec_int_budget)]
-        unann_int_adj = [max(u - c, 0.0) for u, c in zip(unann_int_frac, custom_int_budget)]
+        ann_int_frac = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_intensity_fraction_of_masked", 0.0) for n in names]
+        prec_int_budget = [per_strategy[n].get("masking_effect", {}).get("avg_precursor_intensity_budget_fraction", 0.0) for n in names]
+        custom_int_budget = [per_strategy[n].get("masking_effect", {}).get("avg_custom_intensity_budget_fraction", 0.0) for n in names]
+        unann_int_frac = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_intensity_fraction_of_masked", 0.0) for n in names]
+        frag_int_frac = [max(a - p, 0.0) for a, p in zip(ann_int_frac, prec_int_budget, strict=False)]
+        unann_int_adj = [max(u - c, 0.0) for u, c in zip(unann_int_frac, custom_int_budget, strict=False)]
 
         if any(v > 0 for v in ann_int_frac) or any(v > 0 for v in unann_int_frac):
             bottom = [0.0] * len(names)
@@ -2324,16 +2206,19 @@ class MaskingAnalyser:
                 (unann_int_adj, "Unannotated", "#95a5a6"),
             ]
             for vals, label, color in segments:
-                ax.bar(x, vals, bottom=bottom, label=label,
-                       color=color, alpha=0.85, edgecolor="black", linewidth=0.5)
+                ax.bar(x, vals, bottom=bottom, label=label, color=color, alpha=0.85, edgecolor="black", linewidth=0.5)
                 for i_bar in range(len(names)):
                     if vals[i_bar] >= 0.02:
                         ax.text(
-                            i_bar, bottom[i_bar] + vals[i_bar] / 2,
+                            i_bar,
+                            bottom[i_bar] + vals[i_bar] / 2,
                             f"{vals[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold",
+                            ha="center",
+                            va="center",
+                            fontsize=8,
+                            fontweight="bold",
                         )
-                bottom = [b + v for b, v in zip(bottom, vals)]
+                bottom = [b + v for b, v in zip(bottom, vals, strict=False)]
             # Amplification annotations for precursor and custom
             for i_bar in range(len(names)):
                 if prec_budget[i_bar] > 0.001 and prec_int_budget[i_bar] > 0.001:
@@ -2341,16 +2226,24 @@ class MaskingAnalyser:
                     ax.annotate(
                         f"prec {amp:.1f}x",
                         xy=(i_bar, frag_int_frac[i_bar] + prec_int_budget[i_bar]),
-                        xytext=(0, 8), textcoords="offset points",
-                        ha="center", fontsize=7, fontstyle="italic", color="#c0392b",
+                        xytext=(0, 8),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        fontstyle="italic",
+                        color="#c0392b",
                     )
                 if custom_budget[i_bar] > 0.001 and custom_int_budget[i_bar] > 0.001:
                     amp = custom_int_budget[i_bar] / custom_budget[i_bar]
                     ax.annotate(
                         f"cust {amp:.1f}x",
                         xy=(i_bar, frag_int_frac[i_bar] + prec_int_budget[i_bar] + custom_int_budget[i_bar]),
-                        xytext=(0, 8), textcoords="offset points",
-                        ha="center", fontsize=7, fontstyle="italic", color="#27ae60",
+                        xytext=(0, 8),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        fontstyle="italic",
+                        color="#27ae60",
                     )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
@@ -2366,19 +2259,13 @@ class MaskingAnalyser:
         # ── [1,0] Training Signal Efficiency ─────────────────────────
         ax = axes[1, 0]
         colors = plt.cm.tab10(np.linspace(0, 1, len(names)))
-        eff_vals = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
+        eff_vals = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_fraction_of_masked_peaks", 0.0) for n in names]
         if any(v > 0 for v in eff_vals):
-            bars = ax.bar(x, eff_vals,
-                          color=colors[:len(names)], alpha=0.85,
-                          edgecolor="black", linewidth=0.5)
-            for bar, val in zip(bars, eff_vals):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
-                        f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+            bars = ax.bar(x, eff_vals, color=colors[: len(names)], alpha=0.85, edgecolor="black", linewidth=0.5)
+            for bar, val in zip(bars, eff_vals, strict=False):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005, f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold"
+                )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction")
@@ -2392,29 +2279,15 @@ class MaskingAnalyser:
 
         # ── [1,1] Annotated vs Unannotated Mask Rates ───────────────
         ax = axes[1, 1]
-        ann_mr = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_mask_ratio", 0.0
-            )
-            for n in names
-        ]
-        unann_mr = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_mask_ratio", 0.0
-            )
-            for n in names
-        ]
+        ann_mr = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_mask_ratio", 0.0) for n in names]
+        unann_mr = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_mask_ratio", 0.0) for n in names]
         if any(v > 0 for v in ann_mr) or any(v > 0 for v in unann_mr):
             width = 0.35
-            ax.bar(x - width / 2, ann_mr, width, label="Annotated",
-                   color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x + width / 2, unann_mr, width, label="Unannotated",
-                   color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
-            for i_bar, (a, u) in enumerate(zip(ann_mr, unann_mr)):
-                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
-                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax.bar(x - width / 2, ann_mr, width, label="Annotated", color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x + width / 2, unann_mr, width, label="Unannotated", color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            for i_bar, (a, u) in enumerate(zip(ann_mr, unann_mr, strict=False)):
+                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Mask Rate")
@@ -2438,10 +2311,7 @@ class MaskingAnalyser:
             return
 
         # Check if any strategy has type data
-        has_data = any(
-            per_strategy[n].get("masking_effect", {}).get("annotated_type_masked")
-            for n in names
-        )
+        has_data = any(per_strategy[n].get("masking_effect", {}).get("annotated_type_masked") for n in names)
         if not has_data:
             return
 
@@ -2499,27 +2369,35 @@ class MaskingAnalyser:
                 loss_fracs.append(0.0)
                 iso_fracs.append(0.0)
 
-        if any(b > 0 or l > 0 or i > 0 for b, l, i in zip(base_fracs, loss_fracs, iso_fracs)):
-            ax.bar(x, base_fracs, label="Base ions", color="#2ca02c", alpha=0.85,
-                   edgecolor="black", linewidth=0.5)
-            ax.bar(x, loss_fracs, bottom=base_fracs, label="Loss ions", color="#e67e22",
-                   alpha=0.85, edgecolor="black", linewidth=0.5)
-            bottoms_iso = [b + l for b, l in zip(base_fracs, loss_fracs)]
-            ax.bar(x, iso_fracs, bottom=bottoms_iso, label="Isotope ions", color="#aec7e8",
-                   alpha=0.85, edgecolor="black", linewidth=0.5)
+        if any(b > 0 or l > 0 or i > 0 for b, l, i in zip(base_fracs, loss_fracs, iso_fracs, strict=False)):  # noqa: E741
+            ax.bar(x, base_fracs, label="Base ions", color="#2ca02c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x, loss_fracs, bottom=base_fracs, label="Loss ions", color="#e67e22", alpha=0.85, edgecolor="black", linewidth=0.5)
+            bottoms_iso = [b + l for b, l in zip(base_fracs, loss_fracs, strict=False)]  # noqa: E741
+            ax.bar(x, iso_fracs, bottom=bottoms_iso, label="Isotope ions", color="#aec7e8", alpha=0.85, edgecolor="black", linewidth=0.5)
             # Labels
             for i_bar in range(len(names)):
                 if base_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, base_fracs[i_bar] / 2, f"{base_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(i_bar, base_fracs[i_bar] / 2, f"{base_fracs[i_bar]:.1%}", ha="center", va="center", fontsize=8, fontweight="bold")
                 if loss_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, base_fracs[i_bar] + loss_fracs[i_bar] / 2,
-                            f"{loss_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(
+                        i_bar,
+                        base_fracs[i_bar] + loss_fracs[i_bar] / 2,
+                        f"{loss_fracs[i_bar]:.1%}",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
+                    )
                 if iso_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, bottoms_iso[i_bar] + iso_fracs[i_bar] / 2,
-                            f"{iso_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(
+                        i_bar,
+                        bottoms_iso[i_bar] + iso_fracs[i_bar] / 2,
+                        f"{iso_fracs[i_bar]:.1%}",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
+                    )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Fragment Masked")
@@ -2538,7 +2416,7 @@ class MaskingAnalyser:
         iso_int_fracs = []
         for n in names:
             eff = per_strategy[n].get("masking_effect", {})
-            classified = _classify_type_floats(eff.get("annotated_type_intensity_masked", {}))
+            classified = _classify_type_floats(eff.get("annotated_type_intensity_masked", {}))  # type: ignore[assignment]
             total = classified["base"] + classified["loss"] + classified["isotope"]
             if total > 0:
                 base_int_fracs.append(classified["base"] / total)
@@ -2549,26 +2427,34 @@ class MaskingAnalyser:
                 loss_int_fracs.append(0.0)
                 iso_int_fracs.append(0.0)
 
-        if any(b > 0 or l > 0 or i > 0 for b, l, i in zip(base_int_fracs, loss_int_fracs, iso_int_fracs)):
-            ax.bar(x, base_int_fracs, label="Base ions", color="#2ca02c", alpha=0.85,
-                   edgecolor="black", linewidth=0.5)
-            ax.bar(x, loss_int_fracs, bottom=base_int_fracs, label="Loss ions", color="#e67e22",
-                   alpha=0.85, edgecolor="black", linewidth=0.5)
-            bottoms_iso_int = [b + l for b, l in zip(base_int_fracs, loss_int_fracs)]
-            ax.bar(x, iso_int_fracs, bottom=bottoms_iso_int, label="Isotope ions", color="#aec7e8",
-                   alpha=0.85, edgecolor="black", linewidth=0.5)
+        if any(b > 0 or l > 0 or i > 0 for b, l, i in zip(base_int_fracs, loss_int_fracs, iso_int_fracs, strict=False)):  # noqa: E741
+            ax.bar(x, base_int_fracs, label="Base ions", color="#2ca02c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x, loss_int_fracs, bottom=base_int_fracs, label="Loss ions", color="#e67e22", alpha=0.85, edgecolor="black", linewidth=0.5)
+            bottoms_iso_int = [b + l for b, l in zip(base_int_fracs, loss_int_fracs, strict=False)]  # noqa: E741
+            ax.bar(x, iso_int_fracs, bottom=bottoms_iso_int, label="Isotope ions", color="#aec7e8", alpha=0.85, edgecolor="black", linewidth=0.5)
             for i_bar in range(len(names)):
                 if base_int_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, base_int_fracs[i_bar] / 2, f"{base_int_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(i_bar, base_int_fracs[i_bar] / 2, f"{base_int_fracs[i_bar]:.1%}", ha="center", va="center", fontsize=8, fontweight="bold")
                 if loss_int_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, base_int_fracs[i_bar] + loss_int_fracs[i_bar] / 2,
-                            f"{loss_int_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(
+                        i_bar,
+                        base_int_fracs[i_bar] + loss_int_fracs[i_bar] / 2,
+                        f"{loss_int_fracs[i_bar]:.1%}",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
+                    )
                 if iso_int_fracs[i_bar] >= 0.02:
-                    ax.text(i_bar, bottoms_iso_int[i_bar] + iso_int_fracs[i_bar] / 2,
-                            f"{iso_int_fracs[i_bar]:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(
+                        i_bar,
+                        bottoms_iso_int[i_bar] + iso_int_fracs[i_bar] / 2,
+                        f"{iso_int_fracs[i_bar]:.1%}",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
+                    )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Fragment Masked Intensity")
@@ -2582,7 +2468,7 @@ class MaskingAnalyser:
 
         # ── [1,0] Per-Series Group Full-Mask Ratio ──────────────────
         ax = axes[1, 0]
-        series_colors = {"b": "#1f77b4", "y": "#d62728", "a": "#2ca02c"}
+        series_colors: dict[str, Any] = {"b": "#1f77b4", "y": "#d62728", "a": "#2ca02c"}
         all_series: set = set()
         for n in names:
             eff = per_strategy[n].get("masking_effect", {})
@@ -2599,8 +2485,7 @@ class MaskingAnalyser:
                 series_ratio = eff.get("series_group_full_mask_ratio", {})
                 vals = [series_ratio.get(s, 0.0) for s in sorted_series]
                 xpos = np.arange(n_series) + i * width - (n_strat - 1) * width / 2
-                ax.bar(xpos, vals, width, label=n, alpha=0.85,
-                       edgecolor="black", linewidth=0.5)
+                ax.bar(xpos, vals, width, label=n, alpha=0.85, edgecolor="black", linewidth=0.5)
             ax.set_xticks(np.arange(n_series))
             ax.set_xticklabels([f"{s}-series" for s in sorted_series])
             ax.set_ylabel("Full Mask Ratio")
@@ -2631,8 +2516,7 @@ class MaskingAnalyser:
                 ratios = eff.get("annotated_type_mask_ratio", {})
                 vals = [ratios.get(t, 0.0) for t in available_types]
                 xpos = np.arange(n_types) + i * width - (n_strat - 1) * width / 2
-                ax.bar(xpos, vals, width, label=n, alpha=0.85,
-                       edgecolor="black", linewidth=0.5)
+                ax.bar(xpos, vals, width, label=n, alpha=0.85, edgecolor="black", linewidth=0.5)
             ax.set_xticks(np.arange(n_types))
             ax.set_xticklabels(available_types, rotation=20, ha="right")
             ax.set_ylabel("Mask Rate")
@@ -2663,20 +2547,14 @@ class MaskingAnalyser:
 
         # [0,0] Training Signal Efficiency — annotated fraction of masked peaks
         ax = axes[0, 0]
-        ann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
+        ann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_fraction_of_masked_peaks", 0.0) for n in names]
 
         if any(v > 0 for v in ann_frac):
-            bars = ax.bar(x, ann_frac,
-                          color=colors[:len(names)], alpha=0.85,
-                          edgecolor="black", linewidth=0.5)
-            for bar, val in zip(bars, ann_frac):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
-                        f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+            bars = ax.bar(x, ann_frac, color=colors[: len(names)], alpha=0.85, edgecolor="black", linewidth=0.5)
+            for bar, val in zip(bars, ann_frac, strict=False):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005, f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold"
+                )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction")
@@ -2693,17 +2571,12 @@ class MaskingAnalyser:
         all_types: set = set()
         for n in names:
             eff = per_strategy[n].get("masking_effect", {})
-            all_types.update(
-                k for k in eff.get("annotated_type_mask_ratio", {}).keys()
-                if k not in self._EXCLUDED_LABELS
-            )
+            all_types.update(k for k in eff.get("annotated_type_mask_ratio", {}).keys() if k not in self._EXCLUDED_LABELS)
         sorted_types = sorted(all_types)[:12]
         if sorted_types:
             heatmap_data = np.zeros((len(names), len(sorted_types)))
             for i, n in enumerate(names):
-                ratios = per_strategy[n].get("masking_effect", {}).get(
-                    "annotated_type_mask_ratio", {}
-                )
+                ratios = per_strategy[n].get("masking_effect", {}).get("annotated_type_mask_ratio", {})
                 for j, t in enumerate(sorted_types):
                     heatmap_data[i, j] = ratios.get(t, 0.0)
             data_max = heatmap_data.max() if heatmap_data.max() > 0 else 1.0
@@ -2723,29 +2596,15 @@ class MaskingAnalyser:
 
         # [1,0] Annotated vs Unannotated Mask Rates
         ax = axes[1, 0]
-        ann_mr = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_mask_ratio", 0.0
-            )
-            for n in names
-        ]
-        unann_mr = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_mask_ratio", 0.0
-            )
-            for n in names
-        ]
+        ann_mr = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_mask_ratio", 0.0) for n in names]
+        unann_mr = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_mask_ratio", 0.0) for n in names]
         if any(v > 0 for v in ann_mr) or any(v > 0 for v in unann_mr):
             width = 0.35
-            ax.bar(x - width / 2, ann_mr, width, label="Annotated",
-                   color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x + width / 2, unann_mr, width, label="Unannotated",
-                   color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
-            for i_bar, (a, u) in enumerate(zip(ann_mr, unann_mr)):
-                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
-                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax.bar(x - width / 2, ann_mr, width, label="Annotated", color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x + width / 2, unann_mr, width, label="Unannotated", color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            for i_bar, (a, u) in enumerate(zip(ann_mr, unann_mr, strict=False)):
+                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Mask Rate")
@@ -2758,29 +2617,15 @@ class MaskingAnalyser:
 
         # [1,1] Intensity-Weighted Signal
         ax = axes[1, 1]
-        ann_int = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
-        unann_int = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
+        ann_int = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_intensity_fraction_of_masked", 0.0) for n in names]
+        unann_int = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_intensity_fraction_of_masked", 0.0) for n in names]
         if any(v > 0 for v in ann_int) or any(v > 0 for v in unann_int):
             width = 0.35
-            ax.bar(x - width / 2, ann_int, width, label="Annotated Intensity",
-                   color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x + width / 2, unann_int, width, label="Unannotated Intensity",
-                   color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
-            for i_bar, (a, u) in enumerate(zip(ann_int, unann_int)):
-                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
-                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax.bar(x - width / 2, ann_int, width, label="Annotated Intensity", color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x + width / 2, unann_int, width, label="Unannotated Intensity", color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            for i_bar, (a, u) in enumerate(zip(ann_int, unann_int, strict=False)):
+                ax.text(i_bar - width / 2, a + 0.005, f"{a:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(i_bar + width / 2, u + 0.005, f"{u:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Masked Intensity")
@@ -2820,11 +2665,8 @@ class MaskingAnalyser:
                 if len(vals) > 0:
                     has_hist_data = True
                     # Log-spaced bins for better dynamic range
-                    log_bins = np.logspace(
-                        np.log10(max(vals.min(), 0.01)), np.log10(vals.max()), 50
-                    )
-                    ax.hist(vals, bins=log_bins, alpha=0.4, color=colors[i],
-                            label=n, edgecolor="none")
+                    log_bins = np.logspace(np.log10(max(vals.min(), 0.01)), np.log10(vals.max()), 50)
+                    ax.hist(vals, bins=log_bins, alpha=0.4, color=colors[i], label=n, edgecolor="none")
         if has_hist_data:
             ax.set_xscale("log")
         ax.set_xlabel("Total Gap Between Nearest Unmasked Neighbors (Da)")
@@ -2860,8 +2702,7 @@ class MaskingAnalyser:
                 ax.bar(xpos, means, bar_width, label=n, color=colors[i], alpha=0.8)
         if has_sweep_data:
             ax.set_xticks(np.arange(n_gs))
-            ax.set_xticklabels([f"gs={gs}\n({bin_size * gs:.1f} Da)" for gs in candidate_group_sizes],
-                               fontsize=8)
+            ax.set_xticklabels([f"gs={gs}\n({bin_size * gs:.1f} Da)" for gs in candidate_group_sizes], fontsize=8)
             ax.set_ylabel("Mean Candidate Groups in Gap")
             ax.set_title("Group-Level Prediction Difficulty\n(groups between unmasked neighbors)")
             ax.legend(fontsize=7)
@@ -2870,8 +2711,12 @@ class MaskingAnalyser:
         # [1,0] Per-region grouped bars (mean total gap)
         ax = axes[1, 0]
         region_order = ["immonium_internal", "core_fragment", "extended_fragment", "high_mass_fragment"]
-        region_short = {"immonium_internal": "<200", "core_fragment": "200-800",
-                        "extended_fragment": "800-1500", "high_mass_fragment": "1500+"}
+        region_short: dict[str, Any] = {
+            "immonium_internal": "<200",
+            "core_fragment": "200-800",
+            "extended_fragment": "800-1500",
+            "high_mass_fragment": "1500+",
+        }
         n_strategies = len(names)
         width = 0.8 / max(n_strategies, 1)
         for i, n in enumerate(names):
@@ -2915,9 +2760,7 @@ class MaskingAnalyser:
         if has_cdf_data:
             ax.set_xlabel("Candidate Groups in Gap")
             ax.set_ylabel("Cumulative % of Masked Peaks")
-            ax.set_title(
-                f"Difficulty CDF (group_size={cfg_group_size}, {cfg_group_width:.1f} Da)"
-            )
+            ax.set_title(f"Difficulty CDF (group_size={cfg_group_size}, {cfg_group_width:.1f} Da)")
             # Limit x-axis to 99th percentile across all strategies
             ax.set_xlim(left=0)
             if all_n_groups:
@@ -2948,12 +2791,7 @@ class MaskingAnalyser:
             return
 
         # Check if any strategy has group data
-        has_data = any(
-            per_strategy[n].get("masking_effect", {}).get(
-                "total_n_fragment_groups_total", 0
-            ) > 0
-            for n in names
-        )
+        has_data = any(per_strategy[n].get("masking_effect", {}).get("total_n_fragment_groups_total", 0) > 0 for n in names)
         if not has_data:
             return
 
@@ -2964,9 +2802,9 @@ class MaskingAnalyser:
         # ion the matcher saw. The all-types numbers remain accessible via
         # the ``avg_*_all`` keys in the JSON / comparison CSV.
         fig.suptitle(
-            "Fragment Group Masking Status\n"
-            "(primary view: b/y for HCD·HCID·CID, c/z for ETD·ECD)",
-            fontsize=15, fontweight="bold",
+            "Fragment Group Masking Status\n(primary view: b/y for HCD·HCID·CID, c/z for ETD·ECD)",
+            fontsize=15,
+            fontweight="bold",
         )
         x = np.arange(len(names))
 
@@ -2979,63 +2817,79 @@ class MaskingAnalyser:
             eff = per_strategy[n].get("masking_effect", {})
             total = eff.get("total_n_fragment_groups_total", 0)
             if total > 0:
-                full_fracs.append(
-                    eff.get("total_n_fragment_groups_fully_masked", 0) / total
-                )
-                partial_fracs.append(
-                    eff.get("total_n_fragment_groups_partially_masked", 0) / total
-                )
-                unmask_fracs.append(
-                    eff.get("total_n_fragment_groups_unmasked", 0) / total
-                )
+                full_fracs.append(eff.get("total_n_fragment_groups_fully_masked", 0) / total)
+                partial_fracs.append(eff.get("total_n_fragment_groups_partially_masked", 0) / total)
+                unmask_fracs.append(eff.get("total_n_fragment_groups_unmasked", 0) / total)
             else:
                 full_fracs.append(0.0)
                 partial_fracs.append(0.0)
                 unmask_fracs.append(0.0)
 
         ax.bar(
-            x, full_fracs, label="Fully masked",
-            color="#9b59b6", alpha=0.85, edgecolor="black", linewidth=0.5,
+            x,
+            full_fracs,
+            label="Fully masked",
+            color="#9b59b6",
+            alpha=0.85,
+            edgecolor="black",
+            linewidth=0.5,
         )
         ax.bar(
-            x, partial_fracs, bottom=full_fracs, label="Partially masked",
-            color="#f39c12", alpha=0.85, edgecolor="black", linewidth=0.5,
+            x,
+            partial_fracs,
+            bottom=full_fracs,
+            label="Partially masked",
+            color="#f39c12",
+            alpha=0.85,
+            edgecolor="black",
+            linewidth=0.5,
         )
-        bottoms_unm = [f + p for f, p in zip(full_fracs, partial_fracs)]
+        bottoms_unm = [f + p for f, p in zip(full_fracs, partial_fracs, strict=False)]
         ax.bar(
-            x, unmask_fracs, bottom=bottoms_unm, label="Unmasked",
-            color="#bdc3c7", alpha=0.85, edgecolor="black", linewidth=0.5,
+            x,
+            unmask_fracs,
+            bottom=bottoms_unm,
+            label="Unmasked",
+            color="#bdc3c7",
+            alpha=0.85,
+            edgecolor="black",
+            linewidth=0.5,
         )
         # Labels at segment midpoints (skip if <2%)
         for i_bar in range(len(names)):
             if full_fracs[i_bar] >= 0.02:
                 ax.text(
-                    i_bar, full_fracs[i_bar] / 2,
+                    i_bar,
+                    full_fracs[i_bar] / 2,
                     f"{full_fracs[i_bar]:.1%}",
-                    ha="center", va="center", fontsize=8, fontweight="bold",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    fontweight="bold",
                 )
             if partial_fracs[i_bar] >= 0.02:
                 ax.text(
-                    i_bar, full_fracs[i_bar] + partial_fracs[i_bar] / 2,
+                    i_bar,
+                    full_fracs[i_bar] + partial_fracs[i_bar] / 2,
                     f"{partial_fracs[i_bar]:.1%}",
-                    ha="center", va="center", fontsize=8, fontweight="bold",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    fontweight="bold",
                 )
             if unmask_fracs[i_bar] >= 0.02:
                 ax.text(
-                    i_bar, bottoms_unm[i_bar] + unmask_fracs[i_bar] / 2,
+                    i_bar,
+                    bottoms_unm[i_bar] + unmask_fracs[i_bar] / 2,
                     f"{unmask_fracs[i_bar]:.1%}",
-                    ha="center", va="center", fontsize=8, fontweight="bold",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    fontweight="bold",
                 )
         # Annotate average group count
-        avg_total = np.mean([
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_n_fragment_groups_total", 0
-            )
-            for n in names
-        ])
-        ax.set_title(
-            f"Group Masking Status\n(avg {avg_total:.0f} groups/spectrum)"
-        )
+        avg_total = np.mean([per_strategy[n].get("masking_effect", {}).get("avg_n_fragment_groups_total", 0) for n in names])
+        ax.set_title(f"Group Masking Status\n(avg {avg_total:.0f} groups/spectrum)")
         ax.set_xticks(x)
         ax.set_xticklabels(names, rotation=20, ha="right")
         ax.set_ylabel("Fraction of Fragment Groups")
@@ -3049,9 +2903,7 @@ class MaskingAnalyser:
         for n in names:
             eff = per_strategy[n].get("masking_effect", {})
             all_series.update(eff.get("series_group_total", {}).keys())
-        sorted_series = sorted(
-            s for s in all_series if s in ("b", "y", "a")
-        )
+        sorted_series = sorted(s for s in all_series if s in ("b", "y", "a"))
 
         if sorted_series:
             # One stacked bar per series; segments = fully-masked fraction per strategy
@@ -3081,28 +2933,35 @@ class MaskingAnalyser:
 
                 xpos = np.arange(n_series) + i * width - (n_strat - 1) * width / 2
                 ax.bar(
-                    xpos, full_vals, width,
-                    color=strategy_colors[i], alpha=0.85,
-                    edgecolor="black", linewidth=0.5,
+                    xpos,
+                    full_vals,
+                    width,
+                    color=strategy_colors[i],
+                    alpha=0.85,
+                    edgecolor="black",
+                    linewidth=0.5,
                     label=n,
                 )
                 # Hatch overlay for partial fraction
                 ax.bar(
-                    xpos, partial_vals, width, bottom=full_vals,
-                    color=strategy_colors[i], alpha=0.35,
-                    edgecolor="black", linewidth=0.3,
+                    xpos,
+                    partial_vals,
+                    width,
+                    bottom=full_vals,
+                    color=strategy_colors[i],
+                    alpha=0.35,
+                    edgecolor="black",
+                    linewidth=0.3,
                     hatch="//",
                 )
 
             ax.set_xticks(np.arange(n_series))
             ax.set_xticklabels(
-                [f"{s}-series" for s in sorted_series], fontsize=10,
+                [f"{s}-series" for s in sorted_series],
+                fontsize=10,
             )
             ax.set_ylabel("Fraction of Groups")
-            ax.set_title(
-                "Group Status by Ion Series\n"
-                "(solid = fully masked, hatched = partially masked)"
-            )
+            ax.set_title("Group Status by Ion Series\n(solid = fully masked, hatched = partially masked)")
             ax.legend(fontsize=8, title="Strategy", title_fontsize=8)
             ax.grid(True, axis="y", alpha=0.3)
         else:
@@ -3122,31 +2981,42 @@ class MaskingAnalyser:
 
         if box_data:
             bp = ax.boxplot(
-                box_data, tick_labels=box_labels, patch_artist=True,
-                showfliers=False, widths=0.6,
-                medianprops=dict(color="black", linewidth=1.5),
+                box_data,
+                tick_labels=box_labels,
+                patch_artist=True,
+                showfliers=False,
+                widths=0.6,
+                medianprops={"color": "black", "linewidth": 1.5},
             )
             colors = plt.cm.tab10(np.linspace(0, 1, len(box_labels)))
-            for patch, color in zip(bp["boxes"], colors):
+            for patch, color in zip(bp["boxes"], colors, strict=False):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.7)
             # Annotate mean (diamond) and value above box
-            for i, (dist_vals, label) in enumerate(zip(box_data, box_labels)):
+            for i, (dist_vals, _label) in enumerate(zip(box_data, box_labels, strict=False)):
                 arr = np.array(dist_vals)
                 mean = float(np.mean(arr))
                 q3 = float(np.percentile(arr, 75))
                 ax.scatter(
-                    [i + 1], [mean], marker="D", color="red",
-                    s=30, zorder=5, label="Mean" if i == 0 else None,
+                    [i + 1],
+                    [mean],
+                    marker="D",
+                    color="red",
+                    s=30,
+                    zorder=5,
+                    label="Mean" if i == 0 else None,
                 )
                 ax.text(
-                    i + 1, q3 + 0.5, f"μ={mean:.1f}",
-                    ha="center", va="bottom", fontsize=8, fontweight="bold",
+                    i + 1,
+                    q3 + 0.5,
+                    f"μ={mean:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    fontweight="bold",
                 )
             ax.set_ylabel("# Fully Masked Groups per Spectrum")
-            ax.set_title(
-                "Distribution of Fully Masked Groups\n(per spectrum)"
-            )
+            ax.set_title("Distribution of Fully Masked Groups\n(per spectrum)")
             ax.legend(fontsize=8, loc="upper left")
             ax.grid(True, axis="y", alpha=0.3)
             ax.set_xticklabels(box_labels, rotation=20, ha="right")
@@ -3169,17 +3039,16 @@ class MaskingAnalyser:
                 sorted_vals = np.sort(fracs)
                 cdf = np.arange(1, len(sorted_vals) + 1) / len(sorted_vals) * 100
                 ax.plot(
-                    sorted_vals, cdf, linewidth=2,
+                    sorted_vals,
+                    cdf,
+                    linewidth=2,
                     color=colors[idx_n],
                     label=f"{n} (n={len(fracs):,d})",
                 )
         if has_partial:
             ax.set_xlabel("Group Mask Fraction")
             ax.set_ylabel("Cumulative % of Partially-Masked Groups")
-            ax.set_title(
-                "Partial Masking Depth (CDF)\n"
-                "(low fraction = most members visible = high leakage)"
-            )
+            ax.set_title("Partial Masking Depth (CDF)\n(low fraction = most members visible = high leakage)")
             ax.legend(fontsize=8)
             ax.grid(True, alpha=0.3)
             ax.set_xlim(0, 1)
@@ -3200,38 +3069,30 @@ class MaskingAnalyser:
         names = list(per_strategy.keys())
 
         # Check if any strategy has masking effect data
-        has_data = any(
-            per_strategy[n].get("masking_effect", {}).get("avg_annotated_mask_ratio", 0) > 0
-            for n in names
-        )
+        has_data = any(per_strategy[n].get("masking_effect", {}).get("avg_annotated_mask_ratio", 0) > 0 for n in names)
         if not has_data:
             return
 
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
         fig.suptitle(
-            "Fragment Group Integrity\n"
-            "(primary view: b/y for HCD·HCID·CID, c/z for ETD·ECD)",
-            fontsize=15, fontweight="bold", y=0.99,
+            "Fragment Group Integrity\n(primary view: b/y for HCD·HCID·CID, c/z for ETD·ECD)",
+            fontsize=15,
+            fontweight="bold",
+            y=0.99,
         )
         x = np.arange(len(names))
         colors = plt.cm.tab10(np.linspace(0, 1, len(names)))
 
         # [0,0] Context Quality — annotated preservation ratio
         ax = axes[0, 0]
-        pres = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_preservation_ratio", 0.0
-            )
-            for n in names
-        ]
+        pres = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_preservation_ratio", 0.0) for n in names]
 
         if any(v > 0 for v in pres):
-            bars = ax.bar(x, pres,
-                          color=colors[:len(names)], alpha=0.85,
-                          edgecolor="black", linewidth=0.5)
-            for bar, val in zip(bars, pres):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
-                        f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+            bars = ax.bar(x, pres, color=colors[: len(names)], alpha=0.85, edgecolor="black", linewidth=0.5)
+            for bar, val in zip(bars, pres, strict=False):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005, f"{val:.1%}", ha="center", va="bottom", fontsize=9, fontweight="bold"
+                )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Preservation Ratio")
@@ -3272,20 +3133,15 @@ class MaskingAnalyser:
             leak_per_spectrum_mean.append(leak.get("avg_leakage_ratio", 0.0))
             leak_per_spectrum_std.append(leak.get("std_leakage_ratio", 0.0))
         if any(v > 0 for v in leak_loss) or any(v > 0 for v in leak_isotope):
-            ax.bar(x, leak_loss, label="Loss leakage (pooled)", color="#e67e22",
-                   alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x, leak_isotope, bottom=leak_loss,
-                   label="Isotope leakage (pooled)",
-                   color="#f1c40f", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x, leak_loss, label="Loss leakage (pooled)", color="#e67e22", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x, leak_isotope, bottom=leak_loss, label="Isotope leakage (pooled)", color="#f1c40f", alpha=0.85, edgecolor="black", linewidth=0.5)
             for i_bar in range(len(names)):
                 ll = leak_loss[i_bar]
                 li = leak_isotope[i_bar]
                 if ll > 0.01:
-                    ax.text(i_bar, ll / 2, f"{ll:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(i_bar, ll / 2, f"{ll:.1%}", ha="center", va="center", fontsize=8, fontweight="bold")
                 if li > 0.01:
-                    ax.text(i_bar, ll + li / 2, f"{li:.1%}",
-                            ha="center", va="center", fontsize=8, fontweight="bold")
+                    ax.text(i_bar, ll + li / 2, f"{li:.1%}", ha="center", va="center", fontsize=8, fontweight="bold")
             # Per-spectrum mean ± std overlay (diamond + error bar). If
             # this marker disagrees with the top of the stack, spectra
             # are heterogeneous — some leak a lot, most don't.
@@ -3305,13 +3161,10 @@ class MaskingAnalyser:
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Leakage Ratio")
-            ax.set_title(
-                "Information Leakage\n"
-                "(masked base ions with unmasked losses/isotopes)"
-            )
-            pooled_max = max(l + i for l, i in zip(leak_loss, leak_isotope))
+            ax.set_title("Information Leakage\n(masked base ions with unmasked losses/isotopes)")
+            pooled_max = max(l + i for l, i in zip(leak_loss, leak_isotope, strict=False))  # noqa: E741
             marker_max = max(
-                (m + s for m, s in zip(leak_per_spectrum_mean, leak_per_spectrum_std)),
+                (m + s for m, s in zip(leak_per_spectrum_mean, leak_per_spectrum_std, strict=False)),
                 default=0.0,
             )
             max_bar = max(pooled_max, marker_max)
@@ -3324,29 +3177,15 @@ class MaskingAnalyser:
 
         # [1,0] Fragment Group Completeness
         ax = axes[1, 0]
-        full_mask = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_fragment_group_full_mask_ratio", 0.0
-            )
-            for n in names
-        ]
-        avg_mask = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_fragment_group_avg_mask_fraction", 0.0
-            )
-            for n in names
-        ]
+        full_mask = [per_strategy[n].get("masking_effect", {}).get("avg_fragment_group_full_mask_ratio", 0.0) for n in names]
+        avg_mask = [per_strategy[n].get("masking_effect", {}).get("avg_fragment_group_avg_mask_fraction", 0.0) for n in names]
         if any(v > 0 for v in full_mask) or any(v > 0 for v in avg_mask):
             width = 0.35
-            ax.bar(x - width / 2, full_mask, width, label="Fully Masked Groups",
-                   color="#9b59b6", alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x + width / 2, avg_mask, width, label="Avg Group Mask Fraction",
-                   color="#f39c12", alpha=0.85, edgecolor="black", linewidth=0.5)
-            for i_bar, (f, a) in enumerate(zip(full_mask, avg_mask)):
-                ax.text(i_bar - width / 2, f + 0.005, f"{f:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
-                ax.text(i_bar + width / 2, a + 0.005, f"{a:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax.bar(x - width / 2, full_mask, width, label="Fully Masked Groups", color="#9b59b6", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x + width / 2, avg_mask, width, label="Avg Group Mask Fraction", color="#f39c12", alpha=0.85, edgecolor="black", linewidth=0.5)
+            for i_bar, (f, a) in enumerate(zip(full_mask, avg_mask, strict=False)):
+                ax.text(i_bar - width / 2, f + 0.005, f"{f:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(i_bar + width / 2, a + 0.005, f"{a:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction")
@@ -3359,23 +3198,14 @@ class MaskingAnalyser:
 
         # [1,1] Weighted vs Unweighted Group Completeness
         ax = axes[1, 1]
-        weighted_mask = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_fragment_group_weighted_mask_fraction", 0.0
-            )
-            for n in names
-        ]
+        weighted_mask = [per_strategy[n].get("masking_effect", {}).get("avg_fragment_group_weighted_mask_fraction", 0.0) for n in names]
         if any(v > 0 for v in weighted_mask) or any(v > 0 for v in avg_mask):
             width = 0.35
-            ax.bar(x - width / 2, avg_mask, width, label="Unweighted",
-                   color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
-            ax.bar(x + width / 2, weighted_mask, width, label="Intensity-Weighted",
-                   color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
-            for i_bar, (uw, w) in enumerate(zip(avg_mask, weighted_mask)):
-                ax.text(i_bar - width / 2, uw + 0.005, f"{uw:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
-                ax.text(i_bar + width / 2, w + 0.005, f"{w:.1%}",
-                        ha="center", va="bottom", fontsize=8, fontweight="bold")
+            ax.bar(x - width / 2, avg_mask, width, label="Unweighted", color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5)
+            ax.bar(x + width / 2, weighted_mask, width, label="Intensity-Weighted", color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5)
+            for i_bar, (uw, w) in enumerate(zip(avg_mask, weighted_mask, strict=False)):
+                ax.text(i_bar - width / 2, uw + 0.005, f"{uw:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(i_bar + width / 2, w + 0.005, f"{w:.1%}", ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Group Mask Fraction")
@@ -3406,12 +3236,8 @@ class MaskingAnalyser:
 
         # Check if any strategy has precursor masking data
         has_data = any(
-            per_strategy[n].get("masking_effect", {}).get(
-                "freq_precursor_base_masked", 0
-            ) > 0
-            or per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_mask_budget_fraction", 0
-            ) > 0
+            per_strategy[n].get("masking_effect", {}).get("freq_precursor_base_masked", 0) > 0
+            or per_strategy[n].get("masking_effect", {}).get("avg_precursor_mask_budget_fraction", 0) > 0
             for n in names
         )
         if not has_data:
@@ -3420,80 +3246,93 @@ class MaskingAnalyser:
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
         fig.suptitle(
             "Precursor Ion Masking Analysis",
-            fontsize=16, fontweight="bold", y=0.98,
+            fontsize=16,
+            fontweight="bold",
+            y=0.98,
         )
         x = np.arange(len(names))
 
         # ── [0,0] Masked Peak Composition (Count-Based) ──────────────
         ax = axes[0, 0]
         # fragment = annotated_fraction - precursor_budget_fraction
-        ann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
-        prec_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_mask_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        unann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_fraction_of_masked_peaks", 0.0
-            )
-            for n in names
-        ]
-        frag_frac = [max(a - p, 0.0) for a, p in zip(ann_frac, prec_budget)]
+        ann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_fraction_of_masked_peaks", 0.0) for n in names]
+        prec_budget = [per_strategy[n].get("masking_effect", {}).get("avg_precursor_mask_budget_fraction", 0.0) for n in names]
+        unann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_fraction_of_masked_peaks", 0.0) for n in names]
+        frag_frac = [max(a - p, 0.0) for a, p in zip(ann_frac, prec_budget, strict=False)]
 
         if any(v > 0 for v in ann_frac) or any(v > 0 for v in unann_frac):
             # Stacked bar: fragment (bottom), precursor (middle), unannotated (top)
-            bars_frag = ax.bar(
-                x, frag_frac, label="Fragment ions",
-                color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5,
+            ax.bar(
+                x,
+                frag_frac,
+                label="Fragment ions",
+                color="#3498db",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
-            bars_prec = ax.bar(
-                x, prec_budget, bottom=frag_frac, label="Precursor ions",
-                color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5,
+            ax.bar(
+                x,
+                prec_budget,
+                bottom=frag_frac,
+                label="Precursor ions",
+                color="#e74c3c",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
-            bottoms_unann = [f + p for f, p in zip(frag_frac, prec_budget)]
-            bars_unann = ax.bar(
-                x, unann_frac, bottom=bottoms_unann, label="Unannotated",
-                color="#95a5a6", alpha=0.85, edgecolor="black", linewidth=0.5,
+            bottoms_unann = [f + p for f, p in zip(frag_frac, prec_budget, strict=False)]
+            ax.bar(
+                x,
+                unann_frac,
+                bottom=bottoms_unann,
+                label="Unannotated",
+                color="#95a5a6",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             # Labels at segment midpoints (skip if <2%)
             for i_bar in range(len(names)):
                 # Fragment
                 if frag_frac[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, frag_frac[i_bar] / 2,
+                        i_bar,
+                        frag_frac[i_bar] / 2,
                         f"{frag_frac[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                     )
                 # Precursor
                 if prec_budget[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, frag_frac[i_bar] + prec_budget[i_bar] / 2,
+                        i_bar,
+                        frag_frac[i_bar] + prec_budget[i_bar] / 2,
                         f"{prec_budget[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                         color="white",
                     )
                 # Unannotated
                 if unann_frac[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, bottoms_unann[i_bar] + unann_frac[i_bar] / 2,
+                        i_bar,
+                        bottoms_unann[i_bar] + unann_frac[i_bar] / 2,
                         f"{unann_frac[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                     )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Masked Peaks")
             ax.set_ylim(0, 1.05)
-            ax.set_title(
-                "Masked Peak Composition (Count-Based)\n"
-                "(what type of peaks consume the masking budget?)"
-            )
+            ax.set_title("Masked Peak Composition (Count-Based)\n(what type of peaks consume the masking budget?)")
             ax.legend(fontsize=9, loc="upper right")
             ax.grid(True, axis="y", alpha=0.3)
         else:
@@ -3502,60 +3341,74 @@ class MaskingAnalyser:
 
         # ── [0,1] Masked Peak Composition (Intensity-Weighted) ───────
         ax = axes[0, 1]
-        ann_int_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_annotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
-        prec_int_budget = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_intensity_budget_fraction", 0.0
-            )
-            for n in names
-        ]
-        unann_int_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_unannotated_intensity_fraction_of_masked", 0.0
-            )
-            for n in names
-        ]
-        frag_int_frac = [max(a - p, 0.0) for a, p in zip(ann_int_frac, prec_int_budget)]
+        ann_int_frac = [per_strategy[n].get("masking_effect", {}).get("avg_annotated_intensity_fraction_of_masked", 0.0) for n in names]
+        prec_int_budget = [per_strategy[n].get("masking_effect", {}).get("avg_precursor_intensity_budget_fraction", 0.0) for n in names]
+        unann_int_frac = [per_strategy[n].get("masking_effect", {}).get("avg_unannotated_intensity_fraction_of_masked", 0.0) for n in names]
+        frag_int_frac = [max(a - p, 0.0) for a, p in zip(ann_int_frac, prec_int_budget, strict=False)]
 
         if any(v > 0 for v in ann_int_frac) or any(v > 0 for v in unann_int_frac):
-            bars_frag = ax.bar(
-                x, frag_int_frac, label="Fragment ions",
-                color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5,
+            ax.bar(
+                x,
+                frag_int_frac,
+                label="Fragment ions",
+                color="#3498db",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
-            bars_prec = ax.bar(
-                x, prec_int_budget, bottom=frag_int_frac, label="Precursor ions",
-                color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5,
+            ax.bar(
+                x,
+                prec_int_budget,
+                bottom=frag_int_frac,
+                label="Precursor ions",
+                color="#e74c3c",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
-            bottoms_unann_int = [f + p for f, p in zip(frag_int_frac, prec_int_budget)]
-            bars_unann = ax.bar(
-                x, unann_int_frac, bottom=bottoms_unann_int, label="Unannotated",
-                color="#95a5a6", alpha=0.85, edgecolor="black", linewidth=0.5,
+            bottoms_unann_int = [f + p for f, p in zip(frag_int_frac, prec_int_budget, strict=False)]
+            ax.bar(
+                x,
+                unann_int_frac,
+                bottom=bottoms_unann_int,
+                label="Unannotated",
+                color="#95a5a6",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             # Labels at segment midpoints
             for i_bar in range(len(names)):
                 if frag_int_frac[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, frag_int_frac[i_bar] / 2,
+                        i_bar,
+                        frag_int_frac[i_bar] / 2,
                         f"{frag_int_frac[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                     )
                 if prec_int_budget[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, frag_int_frac[i_bar] + prec_int_budget[i_bar] / 2,
+                        i_bar,
+                        frag_int_frac[i_bar] + prec_int_budget[i_bar] / 2,
                         f"{prec_int_budget[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                         color="white",
                     )
                 if unann_int_frac[i_bar] >= 0.02:
                     ax.text(
-                        i_bar, bottoms_unann_int[i_bar] + unann_int_frac[i_bar] / 2,
+                        i_bar,
+                        bottoms_unann_int[i_bar] + unann_int_frac[i_bar] / 2,
                         f"{unann_int_frac[i_bar]:.1%}",
-                        ha="center", va="center", fontsize=8, fontweight="bold",
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        fontweight="bold",
                     )
             # Intensity amplification annotation
             for i_bar in range(len(names)):
@@ -3564,17 +3417,18 @@ class MaskingAnalyser:
                     ax.annotate(
                         f"{amp:.1f}x",
                         xy=(i_bar, frag_int_frac[i_bar] + prec_int_budget[i_bar]),
-                        xytext=(0, 8), textcoords="offset points",
-                        ha="center", fontsize=7, fontstyle="italic", color="#c0392b",
+                        xytext=(0, 8),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        fontstyle="italic",
+                        color="#c0392b",
                     )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Masked Intensity")
             ax.set_ylim(0, 1.05)
-            ax.set_title(
-                "Masked Peak Composition (Intensity-Weighted)\n"
-                "(precursor amplification from high intensity)"
-            )
+            ax.set_title("Masked Peak Composition (Intensity-Weighted)\n(precursor amplification from high intensity)")
             ax.legend(fontsize=9, loc="upper right")
             ax.grid(True, axis="y", alpha=0.3)
         else:
@@ -3583,40 +3437,41 @@ class MaskingAnalyser:
 
         # ── [1,0] Precursor Masking Frequency ────────────────────────
         ax = axes[1, 0]
-        prec_base_freq = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "freq_precursor_base_masked", 0.0
-            )
-            for n in names
-        ]
-        prec_full_freq = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "freq_precursor_fully_masked", 0.0
-            )
-            for n in names
-        ]
-        prec_leakage = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "freq_precursor_has_leakage", 0.0
-            )
-            for n in names
-        ]
-        has_freq = any(
-            v > 0 for lst in (prec_base_freq, prec_full_freq, prec_leakage) for v in lst
-        )
+        prec_base_freq = [per_strategy[n].get("masking_effect", {}).get("freq_precursor_base_masked", 0.0) for n in names]
+        prec_full_freq = [per_strategy[n].get("masking_effect", {}).get("freq_precursor_fully_masked", 0.0) for n in names]
+        prec_leakage = [per_strategy[n].get("masking_effect", {}).get("freq_precursor_has_leakage", 0.0) for n in names]
+        has_freq = any(v > 0 for lst in (prec_base_freq, prec_full_freq, prec_leakage) for v in lst)
         if has_freq:
             width = 0.25
             ax.bar(
-                x - width, prec_base_freq, width, label="Base masked freq",
-                color="#3498db", alpha=0.85, edgecolor="black", linewidth=0.5,
+                x - width,
+                prec_base_freq,
+                width,
+                label="Base masked freq",
+                color="#3498db",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             ax.bar(
-                x, prec_full_freq, width, label="Fully masked freq",
-                color="#9b59b6", alpha=0.85, edgecolor="black", linewidth=0.5,
+                x,
+                prec_full_freq,
+                width,
+                label="Fully masked freq",
+                color="#9b59b6",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             ax.bar(
-                x + width, prec_leakage, width, label="Leakage freq",
-                color="#e74c3c", alpha=0.85, edgecolor="black", linewidth=0.5,
+                x + width,
+                prec_leakage,
+                width,
+                label="Leakage freq",
+                color="#e74c3c",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             # Value labels
             for i_bar in range(len(names)):
@@ -3627,31 +3482,29 @@ class MaskingAnalyser:
                 ]:
                     if vals[i_bar] > 0.005:
                         ax.text(
-                            i_bar + offset, vals[i_bar] + 0.005,
+                            i_bar + offset,
+                            vals[i_bar] + 0.005,
                             f"{vals[i_bar]:.0%}",
-                            ha="center", va="bottom", fontsize=8, fontweight="bold",
+                            ha="center",
+                            va="bottom",
+                            fontsize=8,
+                            fontweight="bold",
                         )
             # Reference line at overall mask ratio
-            mask_ratios = [
-                per_strategy[n].get("masking_effect", {}).get(
-                    "avg_overall_mask_ratio", 0.0
-                )
-                for n in names
-            ]
-            avg_mask_ratio = float(np.mean([r for r in mask_ratios if r > 0])) if any(
-                r > 0 for r in mask_ratios
-            ) else 0.3
+            mask_ratios = [per_strategy[n].get("masking_effect", {}).get("avg_overall_mask_ratio", 0.0) for n in names]
+            avg_mask_ratio = float(np.mean([r for r in mask_ratios if r > 0])) if any(r > 0 for r in mask_ratios) else 0.3
             ax.axhline(
-                avg_mask_ratio, color="gray", linestyle="--", linewidth=1, alpha=0.7,
+                avg_mask_ratio,
+                color="gray",
+                linestyle="--",
+                linewidth=1,
+                alpha=0.7,
                 label=f"Avg mask ratio ({avg_mask_ratio:.0%})",
             )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Frequency")
-            ax.set_title(
-                "Precursor Masking Frequency\n"
-                "(how often masking interacts with precursor peaks)"
-            )
+            ax.set_title("Precursor Masking Frequency\n(how often masking interacts with precursor peaks)")
             max_val = max(max(prec_base_freq), max(prec_full_freq), max(prec_leakage))
             ax.set_ylim(0, min(max_val * 1.3 + 0.05, 1.05))
             ax.legend(fontsize=9)
@@ -3662,70 +3515,71 @@ class MaskingAnalyser:
 
         # ── [1,1] Precursor Share of Annotated Signal ────────────────
         ax = axes[1, 1]
-        prec_ann_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_fraction_of_annotated_masked", 0.0
-            )
-            for n in names
-        ]
-        prec_ann_frac_std = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "std_precursor_fraction_of_annotated_masked", 0.0
-            )
-            for n in names
-        ]
+        prec_ann_frac = [per_strategy[n].get("masking_effect", {}).get("avg_precursor_fraction_of_annotated_masked", 0.0) for n in names]
+        prec_ann_frac_std = [per_strategy[n].get("masking_effect", {}).get("std_precursor_fraction_of_annotated_masked", 0.0) for n in names]
         prec_ann_int_frac = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "avg_precursor_intensity_fraction_of_annotated_masked", 0.0
-            )
-            for n in names
+            per_strategy[n].get("masking_effect", {}).get("avg_precursor_intensity_fraction_of_annotated_masked", 0.0) for n in names
         ]
         prec_ann_int_frac_std = [
-            per_strategy[n].get("masking_effect", {}).get(
-                "std_precursor_intensity_fraction_of_annotated_masked", 0.0
-            )
-            for n in names
+            per_strategy[n].get("masking_effect", {}).get("std_precursor_intensity_fraction_of_annotated_masked", 0.0) for n in names
         ]
         has_share = any(v > 0 for v in prec_ann_frac) or any(v > 0 for v in prec_ann_int_frac)
         if has_share:
             width = 0.35
             ax.bar(
-                x - width / 2, prec_ann_frac, width,
-                yerr=prec_ann_frac_std, capsize=3,
-                label="Count-based", color="#3498db", alpha=0.85,
-                edgecolor="black", linewidth=0.5,
+                x - width / 2,
+                prec_ann_frac,
+                width,
+                yerr=prec_ann_frac_std,
+                capsize=3,
+                label="Count-based",
+                color="#3498db",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             ax.bar(
-                x + width / 2, prec_ann_int_frac, width,
-                yerr=prec_ann_int_frac_std, capsize=3,
-                label="Intensity-based", color="#e74c3c", alpha=0.85,
-                edgecolor="black", linewidth=0.5,
+                x + width / 2,
+                prec_ann_int_frac,
+                width,
+                yerr=prec_ann_int_frac_std,
+                capsize=3,
+                label="Intensity-based",
+                color="#e74c3c",
+                alpha=0.85,
+                edgecolor="black",
+                linewidth=0.5,
             )
             for i_bar in range(len(names)):
                 cf = prec_ann_frac[i_bar]
                 intf = prec_ann_int_frac[i_bar]
                 if cf > 0.005:
                     ax.text(
-                        i_bar - width / 2, cf + prec_ann_frac_std[i_bar] + 0.005,
-                        f"{cf:.1%}", ha="center", va="bottom",
-                        fontsize=8, fontweight="bold",
+                        i_bar - width / 2,
+                        cf + prec_ann_frac_std[i_bar] + 0.005,
+                        f"{cf:.1%}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                        fontweight="bold",
                     )
                 if intf > 0.005:
                     ax.text(
-                        i_bar + width / 2, intf + prec_ann_int_frac_std[i_bar] + 0.005,
-                        f"{intf:.1%}", ha="center", va="bottom",
-                        fontsize=8, fontweight="bold",
+                        i_bar + width / 2,
+                        intf + prec_ann_int_frac_std[i_bar] + 0.005,
+                        f"{intf:.1%}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                        fontweight="bold",
                     )
             ax.set_xticks(x)
             ax.set_xticklabels(names, rotation=20, ha="right")
             ax.set_ylabel("Fraction of Annotated Masked")
-            ax.set_title(
-                "Precursor Share of Annotated Masked Peaks\n"
-                "(precursor ions as fraction of all annotated masked peaks)"
-            )
+            ax.set_title("Precursor Share of Annotated Masked Peaks\n(precursor ions as fraction of all annotated masked peaks)")
             max_val = max(
-                max(a + s for a, s in zip(prec_ann_frac, prec_ann_frac_std)),
-                max(a + s for a, s in zip(prec_ann_int_frac, prec_ann_int_frac_std)),
+                max(a + s for a, s in zip(prec_ann_frac, prec_ann_frac_std, strict=False)),
+                max(a + s for a, s in zip(prec_ann_int_frac, prec_ann_int_frac_std, strict=False)),
             )
             ax.set_ylim(0, min(max_val * 1.4 + 0.02, 1.05))
             ax.legend(fontsize=9)
@@ -3757,9 +3611,7 @@ class MaskingAnalyser:
                 continue
 
             fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-            fig.suptitle(
-                f"Masking Behavior: {name}", fontsize=16, fontweight="bold"
-            )
+            fig.suptitle(f"Masking Behavior: {name}", fontsize=16, fontweight="bold")
 
             # [0,0] Mask Contiguity (run length distribution)
             ax = axes[0, 0]
@@ -3768,37 +3620,41 @@ class MaskingAnalyser:
                 max_rl = min(int(np.percentile(run_lengths, 99)), 30)
                 bins = np.arange(0.5, max_rl + 1.5, 1)
                 ax.hist(
-                    run_lengths, bins=bins, alpha=0.7,
-                    color="steelblue", edgecolor="black", linewidth=0.5,
+                    run_lengths,
+                    bins=bins,
+                    alpha=0.7,
+                    color="steelblue",
+                    edgecolor="black",
+                    linewidth=0.5,
                 )
                 mean_rl = float(run_lengths.mean())
                 median_rl = float(np.median(run_lengths))
                 ax.axvline(
-                    mean_rl, color="red", linestyle="--",
+                    mean_rl,
+                    color="red",
+                    linestyle="--",
                     label=f"Mean: {mean_rl:.1f}",
                 )
                 ax.axvline(
-                    median_rl, color="green", linestyle="--",
+                    median_rl,
+                    color="green",
+                    linestyle="--",
                     label=f"Median: {median_rl:.1f}",
                 )
-                frac_isolated = float((run_lengths == 1).sum()) / len(
-                    run_lengths
-                ) * 100
+                frac_isolated = float((run_lengths == 1).sum()) / len(run_lengths) * 100
                 ax.text(
-                    0.95, 0.95,
+                    0.95,
+                    0.95,
                     f"Isolated (len=1): {frac_isolated:.0f}%",
-                    transform=ax.transAxes, ha="right", va="top",
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="top",
                     fontsize=9,
-                    bbox=dict(
-                        boxstyle="round", facecolor="wheat", alpha=0.5
-                    ),
+                    bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
                 )
                 ax.set_xlabel("Consecutive Masked Run Length")
                 ax.set_ylabel("Count")
-                ax.set_title(
-                    "Mask Contiguity\n"
-                    "(distribution of consecutive masked spans)"
-                )
+                ax.set_title("Mask Contiguity\n(distribution of consecutive masked spans)")
                 ax.legend(fontsize=9)
                 ax.grid(True, alpha=0.3)
             else:
@@ -3811,33 +3667,37 @@ class MaskingAnalyser:
             mean_rates = imc.get("mean_rates")
             if mean_rates is not None:
                 n_bins = len(mean_rates)
-                pct_centers = [
-                    (i + 0.5) * (100 / n_bins) for i in range(n_bins)
-                ]
+                pct_centers = [(i + 0.5) * (100 / n_bins) for i in range(n_bins)]
                 ax.plot(
-                    pct_centers, mean_rates, "o-",
-                    color="#e74c3c", linewidth=2, markersize=6,
+                    pct_centers,
+                    mean_rates,
+                    "o-",
+                    color="#e74c3c",
+                    linewidth=2,
+                    markersize=6,
                 )
                 std_rates = imc.get("std_rates")
                 if std_rates is not None:
                     lower = np.array(mean_rates) - np.array(std_rates)
                     upper = np.array(mean_rates) + np.array(std_rates)
                     ax.fill_between(
-                        pct_centers, lower, upper,
-                        alpha=0.2, color="#e74c3c",
+                        pct_centers,
+                        lower,
+                        upper,
+                        alpha=0.2,
+                        color="#e74c3c",
                     )
                 overall_mr = data.get("mask_ratio_stats", {}).get("mean")
                 if overall_mr:
                     ax.axhline(
-                        overall_mr, color="gray", linestyle=":",
+                        overall_mr,
+                        color="gray",
+                        linestyle=":",
                         label=f"Overall: {overall_mr:.1%}",
                     )
                 ax.set_xlabel("Intensity Percentile")
                 ax.set_ylabel("Mask Rate")
-                ax.set_title(
-                    "Mask Rate vs Peak Intensity\n"
-                    "(flat = uniform, rising = intensity-biased)"
-                )
+                ax.set_title("Mask Rate vs Peak Intensity\n(flat = uniform, rising = intensity-biased)")
                 ax.legend(fontsize=9)
                 ax.grid(True, alpha=0.3)
                 ax.set_xlim(0, 100)
@@ -3857,22 +3717,25 @@ class MaskingAnalyser:
                 if valid.any():
                     bar_width = (bc_arr[1] - bc_arr[0]) * 0.9 if len(bc_arr) > 1 else 50
                     ax.bar(
-                        bc_arr[valid], smr_arr[valid], width=bar_width,
-                        alpha=0.7, color="#2ecc71",
-                        edgecolor="black", linewidth=0.5,
+                        bc_arr[valid],
+                        smr_arr[valid],
+                        width=bar_width,
+                        alpha=0.7,
+                        color="#2ecc71",
+                        edgecolor="black",
+                        linewidth=0.5,
                     )
                     overall_mr = data.get("mask_ratio_stats", {}).get("mean")
                     if overall_mr:
                         ax.axhline(
-                            overall_mr, color="red", linestyle="--",
+                            overall_mr,
+                            color="red",
+                            linestyle="--",
                             label=f"Overall: {overall_mr:.1%}",
                         )
                     ax.set_xlabel("m/z (Da)")
                     ax.set_ylabel("Mask Rate")
-                    ax.set_title(
-                        "Spatial Masking Density\n"
-                        "(mask rate by m/z region)"
-                    )
+                    ax.set_title("Spatial Masking Density\n(mask rate by m/z region)")
                     ax.legend(fontsize=9)
                     ax.grid(True, alpha=0.3)
                 else:
@@ -3886,11 +3749,7 @@ class MaskingAnalyser:
             ax = axes[1, 1]
             gap = data.get("gap_analysis", {})
             raw = gap.get("raw_data")
-            if (
-                raw is not None
-                and isinstance(raw, pd.DataFrame)
-                and "nearest_distance_da" in raw.columns
-            ):
+            if raw is not None and isinstance(raw, pd.DataFrame) and "nearest_distance_da" in raw.columns:
                 vals = raw["nearest_distance_da"].dropna()
                 pos_vals = vals[vals > 0]
                 if len(pos_vals) > 0:
@@ -3900,25 +3759,31 @@ class MaskingAnalyser:
                         50,
                     )
                     ax.hist(
-                        pos_vals, bins=log_bins, alpha=0.7,
-                        color="darkorange", edgecolor="black", linewidth=0.5,
+                        pos_vals,
+                        bins=log_bins,
+                        alpha=0.7,
+                        color="darkorange",
+                        edgecolor="black",
+                        linewidth=0.5,
                     )
                     ax.set_xscale("log")
                     mean_val = pos_vals.mean()
                     median_val = pos_vals.median()
                     ax.axvline(
-                        mean_val, color="red", linestyle="--",
+                        mean_val,
+                        color="red",
+                        linestyle="--",
                         label=f"Mean: {mean_val:.3f} Da",
                     )
                     ax.axvline(
-                        median_val, color="green", linestyle="--",
+                        median_val,
+                        color="green",
+                        linestyle="--",
                         label=f"Median: {median_val:.3f} Da",
                     )
                     ax.set_xlabel("Nearest Unmasked Distance (Da)")
                     ax.set_ylabel("Count")
-                    ax.set_title(
-                        "Nearest Unmasked Neighbor Distance"
-                    )
+                    ax.set_title("Nearest Unmasked Neighbor Distance")
                     ax.legend(fontsize=9)
                     ax.grid(True, alpha=0.3)
                 else:
@@ -3956,10 +3821,7 @@ class MaskingAnalyser:
             ("precursor_charge", "By Precursor Charge"),
             ("search_instrument", "By Instrument"),
         ]
-        active_panels = [
-            (key, title) for key, title in strat_panels
-            if stratified.get(key)
-        ]
+        active_panels = [(key, title) for key, title in strat_panels if stratified.get(key)]
         if not active_panels:
             return
 
@@ -3975,31 +3837,35 @@ class MaskingAnalyser:
 
         # Stable colour per strategy (tab10 wraps for >10 strategies).
         import matplotlib as mpl
+
         cmap = mpl.colormaps.get_cmap("tab10")
-        strategy_colors = {
-            s: cmap(i % cmap.N) for i, s in enumerate(strategy_names)
-        }
+        strategy_colors = {s: cmap(i % cmap.N) for i, s in enumerate(strategy_names)}
 
         n_rows = len(metrics)
         n_cols = len(active_panels)
         fig, axes = plt.subplots(
-            n_rows, n_cols,
+            n_rows,
+            n_cols,
             figsize=(6 * n_cols, 4.2 * n_rows),
             squeeze=False,
         )
         fig.suptitle(
             "Stratified Masking Summary (per strategy)",
-            fontsize=14, fontweight="bold", y=1.0,
+            fontsize=14,
+            fontweight="bold",
+            y=1.0,
         )
 
         for col, (key, title) in enumerate(active_panels):
             groups = stratified[key]
             if key == "precursor_charge":
+
                 def _charge_sort_key(kv: tuple) -> tuple:
                     try:
                         return (0, int(kv[0]))
                     except (ValueError, TypeError):
                         return (1, kv[0])
+
                 items = sorted(groups.items(), key=_charge_sort_key)
             else:
                 items = sorted(
@@ -4029,11 +3895,14 @@ class MaskingAnalyser:
                         any_bars = True
                     offset = (s_idx - (n_strat - 1) / 2) * bar_w
                     ax.bar(
-                        x + offset, vals, width=bar_w,
+                        x + offset,
+                        vals,
+                        width=bar_w,
                         label=strategy,
                         color=strategy_colors[strategy],
                         alpha=0.85,
-                        edgecolor="black", linewidth=0.3,
+                        edgecolor="black",
+                        linewidth=0.3,
                     )
                 ax.set_xticks(x)
                 ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
@@ -4043,26 +3912,34 @@ class MaskingAnalyser:
                 # Per-row label on the leftmost column for clarity.
                 if col == 0:
                     ax.text(
-                        -0.17, 0.5, metric_label,
+                        -0.17,
+                        0.5,
+                        metric_label,
                         transform=ax.transAxes,
-                        rotation=90, va="center", ha="center",
-                        fontsize=10, fontweight="bold",
+                        rotation=90,
+                        va="center",
+                        ha="center",
+                        fontsize=10,
+                        fontweight="bold",
                     )
                 ax.grid(True, axis="y", alpha=0.3)
                 if not any_bars:
                     ax.text(
-                        0.5, 0.5, "no data",
-                        transform=ax.transAxes, ha="center", va="center",
-                        fontsize=10, color="#888",
+                        0.5,
+                        0.5,
+                        "no data",
+                        transform=ax.transAxes,
+                        ha="center",
+                        va="center",
+                        fontsize=10,
+                        color="#888",
                     )
 
         # One legend for the whole figure (strategy → colour).
-        handles = [
-            plt.Rectangle((0, 0), 1, 1, color=strategy_colors[s], alpha=0.85)
-            for s in strategy_names
-        ]
+        handles = [plt.Rectangle((0, 0), 1, 1, color=strategy_colors[s], alpha=0.85) for s in strategy_names]
         fig.legend(
-            handles, strategy_names,
+            handles,
+            strategy_names,
             loc="lower center",
             ncol=min(len(strategy_names), 5),
             fontsize=9,
@@ -4094,7 +3971,7 @@ class MaskingAnalyser:
                 logger.info(f"Comparison CSV saved: {csv_path}")
 
         # Per-strategy results
-        for name, analyser in self.gap_analysers.items():
+        for _name, analyser in self.gap_analysers.items():
             if analyser.results:
                 analyser.save_results()
 
@@ -4103,7 +3980,9 @@ class MaskingAnalyser:
         summary_path = self.output_dir / "masking_comparison_summary.json"
         with open(summary_path, "w") as f:
             json.dump(
-                summary_data, f, indent=2,
+                summary_data,
+                f,
+                indent=2,
                 default=lambda obj: float(obj) if isinstance(obj, (np.floating, np.integer)) else str(obj),
             )
         logger.info(f"Summary JSON saved: {summary_path}")
@@ -4116,9 +3995,7 @@ class MaskingAnalyser:
         out: Dict[str, Any] = {
             "n_spectra": self.results.get("n_spectra", 0),
             "n_strategies": self.results.get("n_strategies", 0),
-            "per_strategy": self._serialise_per_strategy(
-                self.results.get("per_strategy", {})
-            ),
+            "per_strategy": self._serialise_per_strategy(self.results.get("per_strategy", {})),
             "quality_gate": self.results.get("quality_gate", {}),
             "stratified": self.results.get("stratified", {}),
         }
@@ -4130,9 +4007,7 @@ class MaskingAnalyser:
         ad = self.results.get("per_strategy_annotation_driven")
         if ad:
             out["per_strategy_annotation_driven"] = self._serialise_per_strategy(ad)
-            out["annotation_driven_meta"] = self.results.get(
-                "annotation_driven_meta", {}
-            )
+            out["annotation_driven_meta"] = self.results.get("annotation_driven_meta", {})
 
         return out
 
@@ -4155,9 +4030,7 @@ class MaskingAnalyser:
                 "n_spectra": data.get("n_spectra", 0),
             }
             gap = data.get("gap_analysis", {})
-            entry["gap_summary"] = {
-                k: v for k, v in gap.items() if k != "raw_data"
-            }
+            entry["gap_summary"] = {k: v for k, v in gap.items() if k != "raw_data"}
             behavior = data.get("behavior", {})
             if behavior:
                 behavior_out: Dict[str, Any] = {}
@@ -4171,13 +4044,9 @@ class MaskingAnalyser:
                         "n_runs": len(rl),
                     }
                 if "intensity_mask_curve" in behavior:
-                    behavior_out["intensity_mask_curve"] = (
-                        behavior["intensity_mask_curve"]
-                    )
+                    behavior_out["intensity_mask_curve"] = behavior["intensity_mask_curve"]
                 if "spatial_mask_curve" in behavior:
-                    behavior_out["spatial_mask_curve"] = (
-                        behavior["spatial_mask_curve"]
-                    )
+                    behavior_out["spatial_mask_curve"] = behavior["spatial_mask_curve"]
                 entry["behavior"] = behavior_out
             serialised[name] = entry
         return serialised
@@ -4202,11 +4071,8 @@ class MaskingAnalyser:
         per_strategy = self.results.get("per_strategy", {})
 
         # Mask ratio table
-        logger.info(
-            f"\n{'Strategy':>25} {'Mask Ratio':>12} {'Nearest(Da)':>14} "
-            f"{'Ann.Frac':>10} {'Preserv.':>10} {'Leakage':>10}"
-        )
-        logger.info("  " + "-" * 81)
+        logger.info(f"\n{'Strategy':>25} {'Mask Ratio':>12} {'Nearest(Da)':>14} {'Ann.Frac':>10} {'Preserv.':>10} {'Leakage':>10}")
+        logger.info("  %s", "-" * 81)
 
         for name, data in per_strategy.items():
             mr = data.get("mask_ratio_stats", {})
@@ -4222,17 +4088,14 @@ class MaskingAnalyser:
             )
 
         # Fragment group & precursor summary table
-        has_frag_data = any(
-            data.get("masking_effect", {}).get("avg_n_fragment_groups_total", 0) > 0
-            for data in per_strategy.values()
-        )
+        has_frag_data = any(data.get("masking_effect", {}).get("avg_n_fragment_groups_total", 0) > 0 for data in per_strategy.values())
         if has_frag_data:
             logger.info(
                 f"\n{'Strategy':>25} {'FGrp Avg':>10} {'Full%':>8} "
                 f"{'Part%':>8} {'Unmsk%':>8} {'Prec.Mask':>10} "
                 f"{'Prec.Ann%':>10} {'Prec.IntAnn%':>13}"
             )
-            logger.info("  " + "-" * 97)
+            logger.info("  %s", "-" * 97)
             for name, data in per_strategy.items():
                 eff = data.get("masking_effect", {})
                 avg_total = eff.get("avg_n_fragment_groups_total", 0)
@@ -4243,12 +4106,8 @@ class MaskingAnalyser:
                 pct_part = avg_part / max(avg_total, 1e-9) * 100
                 pct_unmsk = avg_unmsk / max(avg_total, 1e-9) * 100
                 prec_mask = eff.get("freq_precursor_base_masked", 0)
-                prec_ann = eff.get(
-                    "avg_precursor_fraction_of_annotated_masked", 0
-                )
-                prec_int_ann = eff.get(
-                    "avg_precursor_intensity_fraction_of_annotated_masked", 0
-                )
+                prec_ann = eff.get("avg_precursor_fraction_of_annotated_masked", 0)
+                prec_int_ann = eff.get("avg_precursor_intensity_fraction_of_annotated_masked", 0)
                 logger.info(
                     f"  {name:>23} {avg_total:>10.1f} {pct_full:>7.1f}%"
                     f" {pct_part:>7.1f}% {pct_unmsk:>7.1f}%"

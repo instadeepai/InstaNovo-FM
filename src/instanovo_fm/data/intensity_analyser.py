@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Comprehensive Intensity Distribution Analysis for Foundation Model Training.
+"""Comprehensive Intensity Distribution Analysis for Foundation Model Training.
 
 This module analyzes intensity distributions across spectra, providing:
 - Overall intensity statistics (percentiles, CV, dynamic range)
@@ -33,7 +32,8 @@ from instanovo.utils.colorlogging import ColorLog
 
 # Optional (for skewness/kurtosis)
 try:
-    from scipy.stats import skew, kurtosis
+    from scipy.stats import kurtosis, skew
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -42,8 +42,7 @@ logger = ColorLog(console, __name__).logger
 
 
 class IntensityAnalyser:
-    """
-    Comprehensive analyzer for intensity distributions and statistics.
+    """Comprehensive analyzer for intensity distributions and statistics.
 
     All intensity values analyzed here are in **model space**: sqrt-transformed
     and L2-normalized per spectrum.  This is the representation seen by the
@@ -58,9 +57,8 @@ class IntensityAnalyser:
     - Cross-comparison heatmaps (frag_type x mz_range, charge x mz_range)
     """
 
-    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None):
-        """
-        Initialize the intensity analyzer.
+    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None) -> None:
+        """Initialize the intensity analyzer.
 
         Args:
             config: Hydra configuration
@@ -98,19 +96,16 @@ class IntensityAnalyser:
                 "immonium_internal": (0, 200),
                 "core_fragment": (200, 800),
                 "extended_fragment": (800, 1500),
-                "high_mass_fragment": (1500, self.max_mz)
+                "high_mass_fragment": (1500, self.max_mz),
             }
         else:
             # Convert from config format [low, high] to tuple (low, high)
-            self.mz_range_boundaries = {
-                name: tuple(bounds) if isinstance(bounds, list) else bounds
-                for name, bounds in mz_range_boundaries.items()
-            }
+            self.mz_range_boundaries = {name: tuple(bounds) if isinstance(bounds, list) else bounds for name, bounds in mz_range_boundaries.items()}
 
         self.mz_range_order = ["immonium_internal", "core_fragment", "extended_fragment", "high_mass_fragment"]
 
         # Results storage structure matching existing pattern
-        self.results = {
+        self.results: dict[str, Any] = {
             "summary": {},
             "per_spectrum": [],
             "overall_intensity_stats": {},
@@ -121,8 +116,7 @@ class IntensityAnalyser:
         logger.info(f"Intensity analyzer initialized. Output directory: {self.output_dir}")
 
     def _classify_mz_range(self, mz: float) -> str:
-        """
-        Classify m/z value into bin-aligned regions (matches BinningAnalyser).
+        """Classify m/z value into bin-aligned regions (matches BinningAnalyser).
 
         Args:
             mz: m/z value
@@ -159,8 +153,7 @@ class IntensityAnalyser:
         metadata: Dict[str, Any],
         annotations: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """
-        Analyze intensity distribution for a single spectrum.
+        """Analyze intensity distribution for a single spectrum.
 
         This method is called by SpectrumAnalyser.analyze_single_spectrum() to
         collect per-spectrum intensity metrics that will be aggregated later.
@@ -183,10 +176,7 @@ class IntensityAnalyser:
         n_peaks = len(valid_intensity)
 
         if n_peaks == 0:
-            return {
-                "n_peaks": 0,
-                "error": "No valid peaks"
-            }
+            return {"n_peaks": 0, "error": "No valid peaks"}
 
         # Basic statistics
         total_intensity = float(valid_intensity.sum())
@@ -235,8 +225,7 @@ class IntensityAnalyser:
         }
 
     def _calculate_overall_intensity_stats(self, intensity_df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Calculate comprehensive overall intensity statistics.
+        """Calculate comprehensive overall intensity statistics.
 
         Values are in model space (sqrt + L2-normalized).
 
@@ -249,7 +238,7 @@ class IntensityAnalyser:
         intensities = intensity_df["intensity"].values
 
         # Basic statistics
-        stats = {
+        stats: dict[str, Any] = {
             "n_peaks": len(intensities),
             "mean": float(np.mean(intensities)),
             "median": float(np.median(intensities)),
@@ -260,10 +249,7 @@ class IntensityAnalyser:
 
         # Percentiles (5th, 25th, 50th, 75th, 95th, 99th)
         percentiles = [5, 10, 25, 50, 75, 90, 95, 99]
-        stats["percentiles"] = {
-            f"p{p}": float(np.percentile(intensities, p))
-            for p in percentiles
-        }
+        stats["percentiles"] = {f"p{p}": float(np.percentile(intensities, p)) for p in percentiles}
 
         # Derived metrics
         stats["dynamic_range"] = stats["max"] / max(stats["min"], 1e-10)
@@ -281,20 +267,15 @@ class IntensityAnalyser:
         total = cumsum[-1]
 
         stats["intensity_concentration"] = {
-            "top_1_percent_fraction": float(cumsum[max(1, len(intensities)//100)] / total) if len(intensities) >= 100 else float(cumsum[0] / total),
-            "top_5_percent_fraction": float(cumsum[max(1, len(intensities)//20)] / total) if len(intensities) >= 20 else float(cumsum[0] / total),
-            "top_10_percent_fraction": float(cumsum[max(1, len(intensities)//10)] / total) if len(intensities) >= 10 else float(cumsum[0] / total),
+            "top_1_percent_fraction": float(cumsum[max(1, len(intensities) // 100)] / total) if len(intensities) >= 100 else float(cumsum[0] / total),
+            "top_5_percent_fraction": float(cumsum[max(1, len(intensities) // 20)] / total) if len(intensities) >= 20 else float(cumsum[0] / total),
+            "top_10_percent_fraction": float(cumsum[max(1, len(intensities) // 10)] / total) if len(intensities) >= 10 else float(cumsum[0] / total),
         }
 
         return stats
 
-    def _calculate_stratified_stats(
-        self,
-        intensity_df: pd.DataFrame,
-        stratify_by: str
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Calculate intensity statistics stratified by a categorical variable.
+    def _calculate_stratified_stats(self, intensity_df: pd.DataFrame, stratify_by: str) -> Dict[str, Dict[str, Any]]:
+        """Calculate intensity statistics stratified by a categorical variable.
 
         Args:
             intensity_df: DataFrame with intensity and metadata
@@ -303,7 +284,7 @@ class IntensityAnalyser:
         Returns:
             Dictionary mapping group values to statistics
         """
-        stratified = {}
+        stratified: dict[str, Any] = {}
 
         if stratify_by not in intensity_df.columns:
             return stratified
@@ -330,17 +311,13 @@ class IntensityAnalyser:
                     "p50": float(np.percentile(intensities, 50)),
                     "p75": float(np.percentile(intensities, 75)),
                     "p95": float(np.percentile(intensities, 95)),
-                }
+                },
             }
 
         return stratified
 
-    def _calculate_cross_stratified_stats(
-        self,
-        intensity_df: pd.DataFrame
-    ) -> Dict[str, Any]:
-        """
-        Calculate cross-stratified statistics (e.g., frag_type x mz_range).
+    def _calculate_cross_stratified_stats(self, intensity_df: pd.DataFrame) -> Dict[str, Any]:
+        """Calculate cross-stratified statistics (e.g., frag_type x mz_range).
 
         Args:
             intensity_df: DataFrame with intensity and metadata
@@ -352,7 +329,7 @@ class IntensityAnalyser:
 
         # frag_type x mz_range
         if "frag_type" in intensity_df.columns and "mz_range" in intensity_df.columns:
-            frag_mz_stats = {}
+            frag_mz_stats: dict[str, Any] = {}
             for frag_type in intensity_df["frag_type"].unique():
                 if pd.isna(frag_type) or frag_type == "unknown":
                     continue
@@ -377,7 +354,7 @@ class IntensityAnalyser:
 
         # instrument x charge
         if "instrument" in intensity_df.columns and "charge" in intensity_df.columns:
-            inst_charge_stats = {}
+            inst_charge_stats: dict[str, Any] = {}
             for instrument in intensity_df["instrument"].unique():
                 if pd.isna(instrument) or instrument == "unknown":
                     continue
@@ -404,7 +381,7 @@ class IntensityAnalyser:
 
         # charge x mz_range (for heatmap visualization)
         if "charge" in intensity_df.columns and "mz_range" in intensity_df.columns:
-            charge_mz_stats = {}
+            charge_mz_stats: dict[str, Any] = {}
             for charge in sorted(intensity_df["charge"].dropna().unique()):
                 if pd.isna(charge):
                     continue
@@ -427,12 +404,8 @@ class IntensityAnalyser:
 
         return cross_stats
 
-    def aggregate_results(
-        self,
-        per_spectrum_results: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """
-        Aggregate intensity statistics across all analyzed spectra.
+    def aggregate_results(self, per_spectrum_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate intensity statistics across all analyzed spectra.
 
         Args:
             per_spectrum_results: List of results from analyze_spectrum() calls
@@ -488,9 +461,7 @@ class IntensityAnalyser:
 
         # Add annotation stratification if available
         if "is_annotated" in intensity_df.columns:
-            stratified_stats["by_annotation"] = self._calculate_stratified_stats(
-                intensity_df, "is_annotated"
-            )
+            stratified_stats["by_annotation"] = self._calculate_stratified_stats(intensity_df, "is_annotated")
 
         # 3. Cross-stratification (e.g., frag_type x mz_range)
         cross_stratified = self._calculate_cross_stratified_stats(intensity_df)
@@ -508,7 +479,7 @@ class IntensityAnalyser:
         logger.info("Intensity aggregation complete")
         return self.results
 
-    def generate_visualizations(self):
+    def generate_visualizations(self) -> None:
         """Generate all intensity-related visualizations."""
         logger.info("Generating intensity visualizations...")
 
@@ -527,9 +498,8 @@ class IntensityAnalyser:
 
         logger.info("Intensity visualizations complete")
 
-    def _generate_overall_intensity_distribution_plot(self):
-        """
-        Generate comprehensive intensity distribution visualization.
+    def _generate_overall_intensity_distribution_plot(self) -> None:
+        """Generate comprehensive intensity distribution visualization.
 
         Creates 3x3 plot grid with overall intensity characteristics.
         All values are in sqrt + L2-normalized model space.
@@ -545,16 +515,12 @@ class IntensityAnalyser:
 
         # PLOT 1: Linear histogram
         ax1 = fig.add_subplot(gs[0, 0])
-        ax1.hist(intensity_df["intensity"], bins=self.intensity_bins,
-                 alpha=0.7, color='steelblue', edgecolor='black')
-        ax1.set_xlabel("Intensity (normalized)", fontsize=12, fontweight='bold')
-        ax1.set_ylabel("Count", fontsize=12, fontweight='bold')
-        ax1.set_title("Overall Intensity Distribution\n(Linear Scale)",
-                      fontsize=14, fontweight='bold')
-        ax1.axvline(overall_stats["mean"], color='red', linestyle='--',
-                    linewidth=2, label=f'Mean: {overall_stats["mean"]:.3f}')
-        ax1.axvline(overall_stats["median"], color='green', linestyle='--',
-                    linewidth=2, label=f'Median: {overall_stats["median"]:.3f}')
+        ax1.hist(intensity_df["intensity"], bins=self.intensity_bins, alpha=0.7, color="steelblue", edgecolor="black")
+        ax1.set_xlabel("Intensity (normalized)", fontsize=12, fontweight="bold")
+        ax1.set_ylabel("Count", fontsize=12, fontweight="bold")
+        ax1.set_title("Overall Intensity Distribution\n(Linear Scale)", fontsize=14, fontweight="bold")
+        ax1.axvline(overall_stats["mean"], color="red", linestyle="--", linewidth=2, label=f"Mean: {overall_stats['mean']:.3f}")
+        ax1.axvline(overall_stats["median"], color="green", linestyle="--", linewidth=2, label=f"Median: {overall_stats['median']:.3f}")
         ax1.legend()
         ax1.grid(True, alpha=0.3)
 
@@ -563,44 +529,43 @@ class IntensityAnalyser:
         min_intensity = max(intensity_df["intensity"].min(), 1e-6)
         max_intensity = intensity_df["intensity"].max()
         if min_intensity < max_intensity:
-            ax2.hist(intensity_df["intensity"], bins=np.logspace(
-                np.log10(min_intensity),
-                np.log10(max_intensity),
-                self.intensity_bins
-            ), alpha=0.7, color='darkorange', edgecolor='black')
-            ax2.set_xscale('log')
+            ax2.hist(
+                intensity_df["intensity"],
+                bins=np.logspace(np.log10(min_intensity), np.log10(max_intensity), self.intensity_bins),
+                alpha=0.7,
+                color="darkorange",
+                edgecolor="black",
+            )
+            ax2.set_xscale("log")
         else:
-            ax2.hist(intensity_df["intensity"], bins=self.intensity_bins,
-                     alpha=0.7, color='darkorange', edgecolor='black')
-        ax2.set_xlabel("Intensity (normalized, log scale)", fontsize=12, fontweight='bold')
-        ax2.set_ylabel("Count", fontsize=12, fontweight='bold')
-        ax2.set_title("Overall Intensity Distribution\n(Log Scale)",
-                      fontsize=14, fontweight='bold')
+            ax2.hist(intensity_df["intensity"], bins=self.intensity_bins, alpha=0.7, color="darkorange", edgecolor="black")
+        ax2.set_xlabel("Intensity (normalized, log scale)", fontsize=12, fontweight="bold")
+        ax2.set_ylabel("Count", fontsize=12, fontweight="bold")
+        ax2.set_title("Overall Intensity Distribution\n(Log Scale)", fontsize=14, fontweight="bold")
         ax2.grid(True, alpha=0.3)
 
         # PLOT 3: Percentile plot
         ax3 = fig.add_subplot(gs[0, 2])
         percentiles = [5, 10, 25, 50, 75, 90, 95, 99]
         percentile_values = [overall_stats["percentiles"][f"p{p}"] for p in percentiles]
-        ax3.plot(percentiles, percentile_values, marker='o', linewidth=2,
-                 markersize=8, color='darkgreen')
-        ax3.set_xlabel("Percentile", fontsize=12, fontweight='bold')
-        ax3.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-        ax3.set_title("Intensity Percentiles", fontsize=14, fontweight='bold')
+        ax3.plot(percentiles, percentile_values, marker="o", linewidth=2, markersize=8, color="darkgreen")
+        ax3.set_xlabel("Percentile", fontsize=12, fontweight="bold")
+        ax3.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+        ax3.set_title("Intensity Percentiles", fontsize=14, fontweight="bold")
         ax3.grid(True, alpha=0.3)
 
         # Add value labels
-        for p, val in zip(percentiles, percentile_values):
-            ax3.text(p, val, f'{val:.3f}', fontsize=8, ha='right', va='bottom')
+        for p, val in zip(percentiles, percentile_values, strict=False):
+            ax3.text(p, val, f"{val:.3f}", fontsize=8, ha="right", va="bottom")
 
         # PLOT 4: Cumulative distribution
         ax4 = fig.add_subplot(gs[1, 0])
         sorted_intensities = np.sort(intensity_df["intensity"])
         cumulative = np.arange(1, len(sorted_intensities) + 1) / len(sorted_intensities)
-        ax4.plot(sorted_intensities, cumulative, linewidth=2, color='purple')
-        ax4.set_xlabel("Intensity", fontsize=12, fontweight='bold')
-        ax4.set_ylabel("Cumulative Probability", fontsize=12, fontweight='bold')
-        ax4.set_title("Cumulative Distribution Function", fontsize=14, fontweight='bold')
+        ax4.plot(sorted_intensities, cumulative, linewidth=2, color="purple")
+        ax4.set_xlabel("Intensity", fontsize=12, fontweight="bold")
+        ax4.set_ylabel("Cumulative Probability", fontsize=12, fontweight="bold")
+        ax4.set_title("Cumulative Distribution Function", fontsize=14, fontweight="bold")
         ax4.grid(True, alpha=0.3)
 
         # PLOT 5: Dynamic range per spectrum (sqrt + L2-normalized space)
@@ -608,50 +573,49 @@ class IntensityAnalyser:
         per_spectrum = self.results.get("per_spectrum", [])
         dynamic_ranges = [s["dynamic_range"] for s in per_spectrum if "dynamic_range" in s and s["dynamic_range"] > 0]
         if dynamic_ranges:
-            ax5.hist(np.log10(dynamic_ranges), bins=50, alpha=0.7,
-                    color='coral', edgecolor='black')
-            ax5.set_xlabel("log10(Dynamic Range)", fontsize=12, fontweight='bold')
-            ax5.set_ylabel("Count", fontsize=12, fontweight='bold')
-            ax5.set_title("Dynamic Range Distribution\n(per spectrum, sqrt + L2-normalized space)",
-                         fontsize=14, fontweight='bold')
-            ax5.axvline(np.log10(np.median(dynamic_ranges)), color='red',
-                       linestyle='--', linewidth=2,
-                       label=f'Median: {np.median(dynamic_ranges):.1f}')
+            ax5.hist(np.log10(dynamic_ranges), bins=50, alpha=0.7, color="coral", edgecolor="black")
+            ax5.set_xlabel("log10(Dynamic Range)", fontsize=12, fontweight="bold")
+            ax5.set_ylabel("Count", fontsize=12, fontweight="bold")
+            ax5.set_title("Dynamic Range Distribution\n(per spectrum, sqrt + L2-normalized space)", fontsize=14, fontweight="bold")
+            ax5.axvline(
+                np.log10(np.median(dynamic_ranges)), color="red", linestyle="--", linewidth=2, label=f"Median: {np.median(dynamic_ranges):.1f}"
+            )
             ax5.legend()
             ax5.grid(True, alpha=0.3)
         else:
-            ax5.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax5.transAxes)
+            ax5.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax5.transAxes)
 
         # PLOT 6: Coefficient of variation (sqrt + L2-normalized space)
         ax6 = fig.add_subplot(gs[1, 2])
         cv_values = [s["intensity_cv"] for s in per_spectrum if "intensity_cv" in s]
         if cv_values:
-            ax6.hist(cv_values, bins=50, alpha=0.7, color='teal', edgecolor='black')
-            ax6.set_xlabel("Coefficient of Variation", fontsize=12, fontweight='bold')
-            ax6.set_ylabel("Count", fontsize=12, fontweight='bold')
-            ax6.set_title("Coefficient of Variation\n(per spectrum, sqrt + L2-normalized space)",
-                         fontsize=14, fontweight='bold')
-            ax6.axvline(np.median(cv_values), color='red', linestyle='--',
-                       linewidth=2, label=f'Median: {np.median(cv_values):.2f}')
+            ax6.hist(cv_values, bins=50, alpha=0.7, color="teal", edgecolor="black")
+            ax6.set_xlabel("Coefficient of Variation", fontsize=12, fontweight="bold")
+            ax6.set_ylabel("Count", fontsize=12, fontweight="bold")
+            ax6.set_title("Coefficient of Variation\n(per spectrum, sqrt + L2-normalized space)", fontsize=14, fontweight="bold")
+            ax6.axvline(np.median(cv_values), color="red", linestyle="--", linewidth=2, label=f"Median: {np.median(cv_values):.2f}")
             ax6.legend()
             ax6.grid(True, alpha=0.3)
         else:
-            ax6.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax6.transAxes)
+            ax6.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax6.transAxes)
 
         # PLOT 7: Intensity vs m/z hexbin density
         ax7 = fig.add_subplot(gs[2, 0])
         if "mz" in intensity_df.columns and len(intensity_df) > 0:
             hb = ax7.hexbin(
-                intensity_df["mz"], intensity_df["intensity"],
-                gridsize=50, cmap='inferno', mincnt=1,
+                intensity_df["mz"],
+                intensity_df["intensity"],
+                gridsize=50,
+                cmap="inferno",
+                mincnt=1,
             )
-            ax7.set_xlabel("m/z (Da)", fontsize=12, fontweight='bold')
-            ax7.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-            ax7.set_title("Intensity vs m/z\n(hexbin density)", fontsize=14, fontweight='bold')
+            ax7.set_xlabel("m/z (Da)", fontsize=12, fontweight="bold")
+            ax7.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+            ax7.set_title("Intensity vs m/z\n(hexbin density)", fontsize=14, fontweight="bold")
             plt.colorbar(hb, ax=ax7, label="Count")
             ax7.grid(True, alpha=0.3)
         else:
-            ax7.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax7.transAxes)
+            ax7.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax7.transAxes)
 
         # PLOT 8: Cumulative intensity by peak rank
         ax8 = fig.add_subplot(gs[2, 1])
@@ -664,45 +628,42 @@ class IntensityAnalyser:
             ranks_plot, cum_plot = ranks[idx], cum_frac[idx]
         else:
             ranks_plot, cum_plot = ranks, cum_frac
-        ax8.plot(ranks_plot, cum_plot, linewidth=2, color='darkblue')
-        ax8.set_xlabel("Peak Rank (sorted by intensity)", fontsize=12, fontweight='bold')
-        ax8.set_ylabel("Cumulative Intensity Fraction", fontsize=12, fontweight='bold')
-        ax8.set_title("Cumulative Intensity by Peak Rank", fontsize=14, fontweight='bold')
+        ax8.plot(ranks_plot, cum_plot, linewidth=2, color="darkblue")
+        ax8.set_xlabel("Peak Rank (sorted by intensity)", fontsize=12, fontweight="bold")
+        ax8.set_ylabel("Cumulative Intensity Fraction", fontsize=12, fontweight="bold")
+        ax8.set_title("Cumulative Intensity by Peak Rank", fontsize=14, fontweight="bold")
         ax8.grid(True, alpha=0.3)
         # Mark 50% and 90% thresholds
         for threshold in [0.5, 0.9]:
             idx_t = np.searchsorted(cum_frac, threshold)
             if idx_t < len(ranks):
-                ax8.axhline(threshold, color='gray', linestyle=':', alpha=0.5)
-                ax8.axvline(ranks[idx_t], color='red', linestyle='--', alpha=0.5,
-                           label=f'{threshold*100:.0f}% at rank {ranks[idx_t]:,d}')
+                ax8.axhline(threshold, color="gray", linestyle=":", alpha=0.5)
+                ax8.axvline(ranks[idx_t], color="red", linestyle="--", alpha=0.5, label=f"{threshold * 100:.0f}% at rank {ranks[idx_t]:,d}")
         ax8.legend(fontsize=9)
 
         # PLOT 9: Per-spectrum peak count histogram
         ax9 = fig.add_subplot(gs[2, 2])
         peak_counts = [s["n_peaks"] for s in per_spectrum if "n_peaks" in s and s["n_peaks"] > 0]
         if peak_counts:
-            ax9.hist(peak_counts, bins=50, alpha=0.7, color='mediumpurple', edgecolor='black')
-            ax9.set_xlabel("Number of Peaks", fontsize=12, fontweight='bold')
-            ax9.set_ylabel("Number of Spectra", fontsize=12, fontweight='bold')
-            ax9.set_title("Peak Count Distribution\n(per spectrum)", fontsize=14, fontweight='bold')
-            ax9.axvline(np.median(peak_counts), color='red', linestyle='--', linewidth=2,
-                       label=f'Median: {np.median(peak_counts):.0f}')
+            ax9.hist(peak_counts, bins=50, alpha=0.7, color="mediumpurple", edgecolor="black")
+            ax9.set_xlabel("Number of Peaks", fontsize=12, fontweight="bold")
+            ax9.set_ylabel("Number of Spectra", fontsize=12, fontweight="bold")
+            ax9.set_title("Peak Count Distribution\n(per spectrum)", fontsize=14, fontweight="bold")
+            ax9.axvline(np.median(peak_counts), color="red", linestyle="--", linewidth=2, label=f"Median: {np.median(peak_counts):.0f}")
             ax9.legend()
             ax9.grid(True, alpha=0.3)
         else:
-            ax9.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax9.transAxes)
+            ax9.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax9.transAxes)
 
         # Save figure
         output_path = self.output_dir / "intensity_distribution_overall.png"
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close()
 
         logger.info(f"Saved overall intensity distribution plot: {output_path}")
 
-    def _generate_stratified_intensity_plots(self):
-        """
-        Generate stratified intensity comparison visualizations.
+    def _generate_stratified_intensity_plots(self) -> None:
+        """Generate stratified intensity comparison visualizations.
 
         Creates 3x3 plot grid with stratified comparisons.
         """
@@ -718,102 +679,91 @@ class IntensityAnalyser:
         # PLOT 1: Intensity by fragmentation type (box plot)
         ax1 = fig.add_subplot(gs[0, 0])
         if "frag_type" in intensity_df.columns and "by_frag_type" in stratified and stratified["by_frag_type"]:
-            frag_types = sorted([ft for ft in intensity_df["frag_type"].unique()
-                                if ft != "unknown" and not pd.isna(ft)])
+            frag_types = sorted([ft for ft in intensity_df["frag_type"].unique() if ft != "unknown" and not pd.isna(ft)])
             if frag_types:
-                data_by_frag = [intensity_df[intensity_df["frag_type"] == ft]["intensity"].values
-                               for ft in frag_types]
+                data_by_frag = [intensity_df[intensity_df["frag_type"] == ft]["intensity"].values for ft in frag_types]
 
-                bp = ax1.boxplot(data_by_frag, tick_labels=frag_types, patch_artist=True,
-                                showfliers=False)  # Hide outliers for clarity
-                for patch in bp['boxes']:
-                    patch.set_facecolor('lightblue')
+                bp = ax1.boxplot(data_by_frag, tick_labels=frag_types, patch_artist=True, showfliers=False)  # Hide outliers for clarity
+                for patch in bp["boxes"]:
+                    patch.set_facecolor("lightblue")
 
-                ax1.set_xlabel("Fragmentation Type", fontsize=12, fontweight='bold')
-                ax1.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-                ax1.set_title("Intensity Distribution by Fragmentation Type",
-                             fontsize=14, fontweight='bold')
-                ax1.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
+                ax1.set_xlabel("Fragmentation Type", fontsize=12, fontweight="bold")
+                ax1.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+                ax1.set_title("Intensity Distribution by Fragmentation Type", fontsize=14, fontweight="bold")
+                ax1.grid(True, alpha=0.3, axis="y")
+                plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha="right")
             else:
-                ax1.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax1.transAxes)
+                ax1.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax1.transAxes)
         else:
-            ax1.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax1.transAxes)
+            ax1.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax1.transAxes)
 
         # PLOT 2: Intensity by instrument (violin plot)
         ax2 = fig.add_subplot(gs[0, 1])
         if "instrument" in intensity_df.columns and "by_instrument" in stratified and stratified["by_instrument"]:
-            instruments = sorted([inst for inst in intensity_df["instrument"].unique()
-                                 if inst != "unknown" and not pd.isna(inst)])[:10]  # Limit to top 10
+            instruments = sorted([inst for inst in intensity_df["instrument"].unique() if inst != "unknown" and not pd.isna(inst)])[
+                :10
+            ]  # Limit to top 10
 
             if instruments:
-                data_by_inst = [intensity_df[intensity_df["instrument"] == inst]["intensity"].values
-                               for inst in instruments]
+                data_by_inst = [intensity_df[intensity_df["instrument"] == inst]["intensity"].values for inst in instruments]
 
-                parts = ax2.violinplot(data_by_inst, positions=range(len(instruments)),
-                                      showmeans=True, showmedians=True)
+                ax2.violinplot(data_by_inst, positions=range(len(instruments)), showmeans=True, showmedians=True)
 
                 ax2.set_xticks(range(len(instruments)))
-                ax2.set_xticklabels(instruments, rotation=45, ha='right')
-                ax2.set_xlabel("Instrument", fontsize=12, fontweight='bold')
-                ax2.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-                ax2.set_title("Intensity Distribution by Instrument",
-                             fontsize=14, fontweight='bold')
-                ax2.grid(True, alpha=0.3, axis='y')
+                ax2.set_xticklabels(instruments, rotation=45, ha="right")
+                ax2.set_xlabel("Instrument", fontsize=12, fontweight="bold")
+                ax2.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+                ax2.set_title("Intensity Distribution by Instrument", fontsize=14, fontweight="bold")
+                ax2.grid(True, alpha=0.3, axis="y")
             else:
-                ax2.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax2.transAxes)
+                ax2.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax2.transAxes)
         else:
-            ax2.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax2.transAxes)
+            ax2.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax2.transAxes)
 
         # PLOT 3: Intensity by charge state
         ax3 = fig.add_subplot(gs[0, 2])
         if "charge" in intensity_df.columns and "by_charge" in stratified and stratified["by_charge"]:
-            charges = sorted([ch for ch in intensity_df["charge"].unique()
-                             if not pd.isna(ch)])
+            charges = sorted([ch for ch in intensity_df["charge"].unique() if not pd.isna(ch)])
             if charges:
-                data_by_charge = [intensity_df[intensity_df["charge"] == ch]["intensity"].values
-                                 for ch in charges]
+                data_by_charge = [intensity_df[intensity_df["charge"] == ch]["intensity"].values for ch in charges]
 
-                bp = ax3.boxplot(data_by_charge, tick_labels=[f"{int(ch)}+" for ch in charges],
-                                patch_artist=True, showfliers=False)
-                for patch in bp['boxes']:
-                    patch.set_facecolor('lightgreen')
+                bp = ax3.boxplot(data_by_charge, tick_labels=[f"{int(ch)}+" for ch in charges], patch_artist=True, showfliers=False)
+                for patch in bp["boxes"]:
+                    patch.set_facecolor("lightgreen")
 
-                ax3.set_xlabel("Precursor Charge", fontsize=12, fontweight='bold')
-                ax3.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-                ax3.set_title("Intensity Distribution by Charge State",
-                             fontsize=14, fontweight='bold')
-                ax3.grid(True, alpha=0.3, axis='y')
+                ax3.set_xlabel("Precursor Charge", fontsize=12, fontweight="bold")
+                ax3.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+                ax3.set_title("Intensity Distribution by Charge State", fontsize=14, fontweight="bold")
+                ax3.grid(True, alpha=0.3, axis="y")
             else:
-                ax3.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax3.transAxes)
+                ax3.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax3.transAxes)
         else:
-            ax3.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax3.transAxes)
+            ax3.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax3.transAxes)
 
         # PLOT 4: Intensity by m/z range
         ax4 = fig.add_subplot(gs[1, 0])
         if "mz_range" in intensity_df.columns:
-            data_by_mz = [intensity_df[intensity_df["mz_range"] == mz_range]["intensity"].values
-                         for mz_range in self.mz_range_order
-                         if mz_range in intensity_df["mz_range"].values]
-            labels = [mz_range for mz_range in self.mz_range_order
-                     if mz_range in intensity_df["mz_range"].values]
+            data_by_mz = [
+                intensity_df[intensity_df["mz_range"] == mz_range]["intensity"].values
+                for mz_range in self.mz_range_order
+                if mz_range in intensity_df["mz_range"].values
+            ]
+            labels = [mz_range for mz_range in self.mz_range_order if mz_range in intensity_df["mz_range"].values]
 
             if data_by_mz:
-                bp = ax4.boxplot(data_by_mz, tick_labels=labels, patch_artist=True,
-                                showfliers=False)
-                for patch in bp['boxes']:
-                    patch.set_facecolor('lightyellow')
+                bp = ax4.boxplot(data_by_mz, tick_labels=labels, patch_artist=True, showfliers=False)
+                for patch in bp["boxes"]:
+                    patch.set_facecolor("lightyellow")
 
-                ax4.set_xlabel("m/z Range", fontsize=12, fontweight='bold')
-                ax4.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-                ax4.set_title("Intensity Distribution by m/z Range",
-                             fontsize=14, fontweight='bold')
-                ax4.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax4.xaxis.get_majorticklabels(), rotation=45, ha='right')
+                ax4.set_xlabel("m/z Range", fontsize=12, fontweight="bold")
+                ax4.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+                ax4.set_title("Intensity Distribution by m/z Range", fontsize=14, fontweight="bold")
+                ax4.grid(True, alpha=0.3, axis="y")
+                plt.setp(ax4.xaxis.get_majorticklabels(), rotation=45, ha="right")
             else:
-                ax4.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax4.transAxes)
+                ax4.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax4.transAxes)
         else:
-            ax4.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax4.transAxes)
+            ax4.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax4.transAxes)
 
         # PLOT 5: CV comparison across frag types
         ax5 = fig.add_subplot(gs[1, 1])
@@ -822,21 +772,19 @@ class IntensityAnalyser:
             frag_types = sorted(frag_type_stats.keys())
             cv_values = [frag_type_stats[ft]["cv"] for ft in frag_types]
 
-            bars = ax5.bar(range(len(frag_types)), cv_values, color='steelblue',
-                          alpha=0.7, edgecolor='black')
+            bars = ax5.bar(range(len(frag_types)), cv_values, color="steelblue", alpha=0.7, edgecolor="black")
             ax5.set_xticks(range(len(frag_types)))
-            ax5.set_xticklabels(frag_types, rotation=45, ha='right')
-            ax5.set_xlabel("Fragmentation Type", fontsize=12, fontweight='bold')
-            ax5.set_ylabel("Coefficient of Variation", fontsize=12, fontweight='bold')
-            ax5.set_title("Intensity CV by Fragmentation Type",
-                         fontsize=14, fontweight='bold')
-            ax5.grid(True, alpha=0.3, axis='y')
+            ax5.set_xticklabels(frag_types, rotation=45, ha="right")
+            ax5.set_xlabel("Fragmentation Type", fontsize=12, fontweight="bold")
+            ax5.set_ylabel("Coefficient of Variation", fontsize=12, fontweight="bold")
+            ax5.set_title("Intensity CV by Fragmentation Type", fontsize=14, fontweight="bold")
+            ax5.grid(True, alpha=0.3, axis="y")
 
             # Add value labels
-            for i, (bar, cv) in enumerate(zip(bars, cv_values)):
-                ax5.text(i, cv, f'{cv:.3f}', ha='center', va='bottom', fontsize=9)
+            for i, (_bar, cv) in enumerate(zip(bars, cv_values, strict=False)):
+                ax5.text(i, cv, f"{cv:.3f}", ha="center", va="bottom", fontsize=9)
         else:
-            ax5.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax5.transAxes)
+            ax5.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax5.transAxes)
 
         # PLOT 6: CV comparison across instruments
         ax6 = fig.add_subplot(gs[1, 2])
@@ -847,38 +795,34 @@ class IntensityAnalyser:
             instruments = [inst for inst, _ in instruments_sorted]
             cv_values = [inst_stats[inst]["cv"] for inst in instruments]
 
-            bars = ax6.bar(range(len(instruments)), cv_values, color='darkorange',
-                          alpha=0.7, edgecolor='black')
+            bars = ax6.bar(range(len(instruments)), cv_values, color="darkorange", alpha=0.7, edgecolor="black")
             ax6.set_xticks(range(len(instruments)))
-            ax6.set_xticklabels(instruments, rotation=45, ha='right')
-            ax6.set_xlabel("Instrument", fontsize=12, fontweight='bold')
-            ax6.set_ylabel("Coefficient of Variation", fontsize=12, fontweight='bold')
-            ax6.set_title("Intensity CV by Instrument", fontsize=14, fontweight='bold')
-            ax6.grid(True, alpha=0.3, axis='y')
+            ax6.set_xticklabels(instruments, rotation=45, ha="right")
+            ax6.set_xlabel("Instrument", fontsize=12, fontweight="bold")
+            ax6.set_ylabel("Coefficient of Variation", fontsize=12, fontweight="bold")
+            ax6.set_title("Intensity CV by Instrument", fontsize=14, fontweight="bold")
+            ax6.grid(True, alpha=0.3, axis="y")
         else:
-            ax6.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax6.transAxes)
+            ax6.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax6.transAxes)
 
         # PLOT 7: Annotated vs unannotated intensity boxplot
         ax7 = fig.add_subplot(gs[2, 0])
         if "is_annotated" in intensity_df.columns and "by_annotation" in stratified and stratified["by_annotation"]:
             ann_groups = sorted(intensity_df["is_annotated"].unique())
-            data_by_ann = [intensity_df[intensity_df["is_annotated"] == g]["intensity"].values
-                          for g in ann_groups]
+            data_by_ann = [intensity_df[intensity_df["is_annotated"] == g]["intensity"].values for g in ann_groups]
             labels = ["Unannotated" if not g else "Annotated" for g in ann_groups]
             if data_by_ann and all(len(d) > 0 for d in data_by_ann):
                 bp = ax7.boxplot(data_by_ann, tick_labels=labels, patch_artist=True, showfliers=False)
-                colors = ['salmon', 'lightgreen']
-                for patch, color in zip(bp['boxes'], colors[:len(bp['boxes'])]):
+                colors = ["salmon", "lightgreen"]
+                for patch, color in zip(bp["boxes"], colors[: len(bp["boxes"])], strict=False):
                     patch.set_facecolor(color)
-                ax7.set_ylabel("Intensity", fontsize=12, fontweight='bold')
-                ax7.set_title("Annotated vs Unannotated\nIntensity Distribution",
-                             fontsize=14, fontweight='bold')
-                ax7.grid(True, alpha=0.3, axis='y')
+                ax7.set_ylabel("Intensity", fontsize=12, fontweight="bold")
+                ax7.set_title("Annotated vs Unannotated\nIntensity Distribution", fontsize=14, fontweight="bold")
+                ax7.grid(True, alpha=0.3, axis="y")
             else:
-                ax7.text(0.5, 0.5, 'Insufficient annotation data', ha='center', va='center',
-                        transform=ax7.transAxes)
+                ax7.text(0.5, 0.5, "Insufficient annotation data", ha="center", va="center", transform=ax7.transAxes)
         else:
-            ax7.text(0.5, 0.5, 'No annotation data', ha='center', va='center', transform=ax7.transAxes)
+            ax7.text(0.5, 0.5, "No annotation data", ha="center", va="center", transform=ax7.transAxes)
 
         # PLOT 8: Intensity by peak rank position (bar + error)
         ax8 = fig.add_subplot(gs[2, 1])
@@ -904,15 +848,13 @@ class IntensityAnalyser:
 
         if rank_means:
             positions = np.arange(1, len(rank_means) + 1)
-            ax8.bar(positions, rank_means, yerr=rank_stds, color='teal',
-                   alpha=0.7, edgecolor='black', capsize=2)
-            ax8.set_xlabel("Peak Rank (by intensity, descending)", fontsize=12, fontweight='bold')
-            ax8.set_ylabel("Mean Intensity", fontsize=12, fontweight='bold')
-            ax8.set_title("Intensity by Peak Rank\n(mean +/- std across spectra)",
-                         fontsize=14, fontweight='bold')
-            ax8.grid(True, alpha=0.3, axis='y')
+            ax8.bar(positions, rank_means, yerr=rank_stds, color="teal", alpha=0.7, edgecolor="black", capsize=2)
+            ax8.set_xlabel("Peak Rank (by intensity, descending)", fontsize=12, fontweight="bold")
+            ax8.set_ylabel("Mean Intensity", fontsize=12, fontweight="bold")
+            ax8.set_title("Intensity by Peak Rank\n(mean +/- std across spectra)", fontsize=14, fontweight="bold")
+            ax8.grid(True, alpha=0.3, axis="y")
         else:
-            ax8.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax8.transAxes)
+            ax8.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax8.transAxes)
 
         # PLOT 9: Mean intensity by m/z range (bar + error bars)
         ax9 = fig.add_subplot(gs[2, 2])
@@ -924,29 +866,26 @@ class IntensityAnalyser:
                 stds = [mz_stats[r]["std"] for r in present_ranges]
                 positions = np.arange(len(present_ranges))
 
-                ax9.bar(positions, means, yerr=stds, color='goldenrod',
-                       alpha=0.7, edgecolor='black', capsize=3)
+                ax9.bar(positions, means, yerr=stds, color="goldenrod", alpha=0.7, edgecolor="black", capsize=3)
                 ax9.set_xticks(positions)
-                ax9.set_xticklabels(present_ranges, rotation=45, ha='right')
-                ax9.set_ylabel("Mean Intensity", fontsize=12, fontweight='bold')
-                ax9.set_title("Mean Intensity by m/z Range\n(+/- std)",
-                             fontsize=14, fontweight='bold')
-                ax9.grid(True, alpha=0.3, axis='y')
+                ax9.set_xticklabels(present_ranges, rotation=45, ha="right")
+                ax9.set_ylabel("Mean Intensity", fontsize=12, fontweight="bold")
+                ax9.set_title("Mean Intensity by m/z Range\n(+/- std)", fontsize=14, fontweight="bold")
+                ax9.grid(True, alpha=0.3, axis="y")
             else:
-                ax9.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax9.transAxes)
+                ax9.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax9.transAxes)
         else:
-            ax9.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax9.transAxes)
+            ax9.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax9.transAxes)
 
         # Save figure
         output_path = self.output_dir / "intensity_stratified_comparison.png"
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close()
 
         logger.info(f"Saved stratified intensity comparison plot: {output_path}")
 
-    def _generate_cross_comparison_plots(self):
-        """
-        Generate cross-comparison heatmaps.
+    def _generate_cross_comparison_plots(self) -> None:
+        """Generate cross-comparison heatmaps.
 
         Creates 2x2 plot grid with cross-comparisons.
         """
@@ -971,22 +910,20 @@ class IntensityAnalyser:
             frag_types = sorted(data.keys())
             matrix = []
             for ft in frag_types:
-                row = [data[ft].get(mz_range, {}).get("mean", np.nan)
-                      for mz_range in self.mz_range_order]
+                row = [data[ft].get(mz_range, {}).get("mean", np.nan) for mz_range in self.mz_range_order]
                 matrix.append(row)
 
             matrix = np.array(matrix)
 
             # Plot heatmap
-            im = ax1.imshow(matrix, aspect='auto', cmap='YlOrRd')
+            im = ax1.imshow(matrix, aspect="auto", cmap="YlOrRd")
             ax1.set_xticks(range(len(self.mz_range_order)))
-            ax1.set_xticklabels(self.mz_range_order, rotation=45, ha='right')
+            ax1.set_xticklabels(self.mz_range_order, rotation=45, ha="right")
             ax1.set_yticks(range(len(frag_types)))
             ax1.set_yticklabels(frag_types)
-            ax1.set_xlabel("m/z Range", fontsize=12, fontweight='bold')
-            ax1.set_ylabel("Fragmentation Type", fontsize=12, fontweight='bold')
-            ax1.set_title("Mean Intensity\n(Frag Type x m/z Range)",
-                         fontsize=14, fontweight='bold')
+            ax1.set_xlabel("m/z Range", fontsize=12, fontweight="bold")
+            ax1.set_ylabel("Fragmentation Type", fontsize=12, fontweight="bold")
+            ax1.set_title("Mean Intensity\n(Frag Type x m/z Range)", fontsize=14, fontweight="bold")
 
             # Add colorbar
             cbar = plt.colorbar(im, ax=ax1)
@@ -996,10 +933,9 @@ class IntensityAnalyser:
             for i in range(len(frag_types)):
                 for j in range(len(self.mz_range_order)):
                     if not np.isnan(matrix[i, j]):
-                        ax1.text(j, i, f'{matrix[i, j]:.3f}',
-                               ha='center', va='center', fontsize=8)
+                        ax1.text(j, i, f"{matrix[i, j]:.3f}", ha="center", va="center", fontsize=8)
         else:
-            ax1.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax1.transAxes)
+            ax1.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax1.transAxes)
 
         # PLOT 2: CV (frag_type x mz_range)
         ax2 = fig.add_subplot(gs[0, 1])
@@ -1010,22 +946,20 @@ class IntensityAnalyser:
             # Build matrix
             matrix = []
             for ft in frag_types:
-                row = [data[ft].get(mz_range, {}).get("cv", np.nan)
-                      for mz_range in self.mz_range_order]
+                row = [data[ft].get(mz_range, {}).get("cv", np.nan) for mz_range in self.mz_range_order]
                 matrix.append(row)
 
             matrix = np.array(matrix)
 
             # Plot heatmap
-            im = ax2.imshow(matrix, aspect='auto', cmap='RdYlGn_r')
+            im = ax2.imshow(matrix, aspect="auto", cmap="RdYlGn_r")
             ax2.set_xticks(range(len(self.mz_range_order)))
-            ax2.set_xticklabels(self.mz_range_order, rotation=45, ha='right')
+            ax2.set_xticklabels(self.mz_range_order, rotation=45, ha="right")
             ax2.set_yticks(range(len(frag_types)))
             ax2.set_yticklabels(frag_types)
-            ax2.set_xlabel("m/z Range", fontsize=12, fontweight='bold')
-            ax2.set_ylabel("Fragmentation Type", fontsize=12, fontweight='bold')
-            ax2.set_title("Coefficient of Variation\n(Frag Type x m/z Range)",
-                         fontsize=14, fontweight='bold')
+            ax2.set_xlabel("m/z Range", fontsize=12, fontweight="bold")
+            ax2.set_ylabel("Fragmentation Type", fontsize=12, fontweight="bold")
+            ax2.set_title("Coefficient of Variation\n(Frag Type x m/z Range)", fontsize=14, fontweight="bold")
 
             # Add colorbar
             cbar = plt.colorbar(im, ax=ax2)
@@ -1035,10 +969,9 @@ class IntensityAnalyser:
             for i in range(len(frag_types)):
                 for j in range(len(self.mz_range_order)):
                     if not np.isnan(matrix[i, j]):
-                        ax2.text(j, i, f'{matrix[i, j]:.2f}',
-                               ha='center', va='center', fontsize=8)
+                        ax2.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=8)
         else:
-            ax2.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax2.transAxes)
+            ax2.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax2.transAxes)
 
         # PLOT 3: Median intensity heatmap (charge x mz_range)
         ax3 = fig.add_subplot(gs[1, 0])
@@ -1048,21 +981,19 @@ class IntensityAnalyser:
 
             matrix = []
             for ch in charges:
-                row = [data[ch].get(mz_range, {}).get("median", np.nan)
-                      for mz_range in self.mz_range_order]
+                row = [data[ch].get(mz_range, {}).get("median", np.nan) for mz_range in self.mz_range_order]
                 matrix.append(row)
 
             matrix = np.array(matrix)
 
-            im = ax3.imshow(matrix, aspect='auto', cmap='YlGnBu')
+            im = ax3.imshow(matrix, aspect="auto", cmap="YlGnBu")
             ax3.set_xticks(range(len(self.mz_range_order)))
-            ax3.set_xticklabels(self.mz_range_order, rotation=45, ha='right')
+            ax3.set_xticklabels(self.mz_range_order, rotation=45, ha="right")
             ax3.set_yticks(range(len(charges)))
             ax3.set_yticklabels([f"{ch}+" for ch in charges])
-            ax3.set_xlabel("m/z Range", fontsize=12, fontweight='bold')
-            ax3.set_ylabel("Charge State", fontsize=12, fontweight='bold')
-            ax3.set_title("Median Intensity\n(Charge x m/z Range)",
-                         fontsize=14, fontweight='bold')
+            ax3.set_xlabel("m/z Range", fontsize=12, fontweight="bold")
+            ax3.set_ylabel("Charge State", fontsize=12, fontweight="bold")
+            ax3.set_title("Median Intensity\n(Charge x m/z Range)", fontsize=14, fontweight="bold")
 
             cbar = plt.colorbar(im, ax=ax3)
             cbar.set_label("Median Intensity", fontsize=10)
@@ -1070,10 +1001,9 @@ class IntensityAnalyser:
             for i in range(len(charges)):
                 for j in range(len(self.mz_range_order)):
                     if not np.isnan(matrix[i, j]):
-                        ax3.text(j, i, f'{matrix[i, j]:.3f}',
-                               ha='center', va='center', fontsize=8)
+                        ax3.text(j, i, f"{matrix[i, j]:.3f}", ha="center", va="center", fontsize=8)
         else:
-            ax3.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax3.transAxes)
+            ax3.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax3.transAxes)
 
         # PLOT 4: Peak count heatmap (frag_type x mz_range)
         ax4 = fig.add_subplot(gs[1, 1])
@@ -1083,8 +1013,7 @@ class IntensityAnalyser:
 
             matrix = []
             for ft in frag_types:
-                row = [data[ft].get(mz_range, {}).get("n_peaks", 0)
-                      for mz_range in self.mz_range_order]
+                row = [data[ft].get(mz_range, {}).get("n_peaks", 0) for mz_range in self.mz_range_order]
                 matrix.append(row)
 
             matrix = np.array(matrix, dtype=float)
@@ -1092,15 +1021,14 @@ class IntensityAnalyser:
             with np.errstate(divide="ignore"):
                 matrix_log = np.where(matrix > 0, np.log10(matrix), np.nan)
 
-            im = ax4.imshow(matrix_log, aspect='auto', cmap='viridis')
+            im = ax4.imshow(matrix_log, aspect="auto", cmap="viridis")
             ax4.set_xticks(range(len(self.mz_range_order)))
-            ax4.set_xticklabels(self.mz_range_order, rotation=45, ha='right')
+            ax4.set_xticklabels(self.mz_range_order, rotation=45, ha="right")
             ax4.set_yticks(range(len(frag_types)))
             ax4.set_yticklabels(frag_types)
-            ax4.set_xlabel("m/z Range", fontsize=12, fontweight='bold')
-            ax4.set_ylabel("Fragmentation Type", fontsize=12, fontweight='bold')
-            ax4.set_title("Peak Count (log10)\n(Frag Type x m/z Range)",
-                         fontsize=14, fontweight='bold')
+            ax4.set_xlabel("m/z Range", fontsize=12, fontweight="bold")
+            ax4.set_ylabel("Fragmentation Type", fontsize=12, fontweight="bold")
+            ax4.set_title("Peak Count (log10)\n(Frag Type x m/z Range)", fontsize=14, fontweight="bold")
 
             cbar = plt.colorbar(im, ax=ax4)
             cbar.set_label("log10(Peak Count)", fontsize=10)
@@ -1109,19 +1037,18 @@ class IntensityAnalyser:
                 for j in range(len(self.mz_range_order)):
                     val = int(matrix[i, j])
                     if val > 0:
-                        ax4.text(j, i, f'{val:,d}',
-                               ha='center', va='center', fontsize=7)
+                        ax4.text(j, i, f"{val:,d}", ha="center", va="center", fontsize=7)
         else:
-            ax4.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax4.transAxes)
+            ax4.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax4.transAxes)
 
         # Save figure
         output_path = self.output_dir / "intensity_cross_comparison.png"
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close()
 
         logger.info(f"Saved cross-comparison plot: {output_path}")
 
-    def save_results(self):
+    def save_results(self) -> None:
         """Save intensity analysis results to files."""
         logger.info("Saving intensity analysis results...")
 
@@ -1137,7 +1064,7 @@ class IntensityAnalyser:
             "cross_stratified_intensity": self.results.get("cross_stratified_intensity", {}),
         }
 
-        with open(summary_path, 'w') as f:
+        with open(summary_path, "w") as f:
             json.dump(summary_data, f, indent=2)
 
         logger.info(f"Saved intensity summary: {summary_path}")
@@ -1147,7 +1074,7 @@ class IntensityAnalyser:
             intensity_df = self.results["raw_data"]
             save_cols = [c for c in ["intensity", "mz", "is_annotated"] if c in intensity_df.columns]
             csv_path = self.output_dir / "intensity_per_peak.csv"
-            intensity_df[save_cols].to_csv(csv_path, index=False, float_format='%.6f')
+            intensity_df[save_cols].to_csv(csv_path, index=False, float_format="%.6f")
             logger.info(f"Saved per-peak intensity data: {csv_path} ({len(intensity_df):,d} peaks, columns: {save_cols})")
 
         # Save per-spectrum summary as CSV
@@ -1155,27 +1082,29 @@ class IntensityAnalyser:
             per_spectrum_records = []
             for result in self.results["per_spectrum"]:
                 if "error" not in result:
-                    per_spectrum_records.append({
-                        "n_peaks": result.get("n_peaks", 0),
-                        "total_intensity": result.get("total_intensity", 0),
-                        "mean_intensity": result.get("mean_intensity", 0),
-                        "median_intensity": result.get("median_intensity", 0),
-                        "std_intensity": result.get("std_intensity", 0),
-                        "dynamic_range": result.get("dynamic_range", 0),
-                        "intensity_cv": result.get("intensity_cv", 0),
-                        "frag_type": result.get("metadata", {}).get("frag_type", "unknown"),
-                        "instrument": result.get("metadata", {}).get("search_instrument", "unknown"),
-                    })
+                    per_spectrum_records.append(
+                        {
+                            "n_peaks": result.get("n_peaks", 0),
+                            "total_intensity": result.get("total_intensity", 0),
+                            "mean_intensity": result.get("mean_intensity", 0),
+                            "median_intensity": result.get("median_intensity", 0),
+                            "std_intensity": result.get("std_intensity", 0),
+                            "dynamic_range": result.get("dynamic_range", 0),
+                            "intensity_cv": result.get("intensity_cv", 0),
+                            "frag_type": result.get("metadata", {}).get("frag_type", "unknown"),
+                            "instrument": result.get("metadata", {}).get("search_instrument", "unknown"),
+                        }
+                    )
 
             if per_spectrum_records:
                 per_spec_df = pd.DataFrame(per_spectrum_records)
                 csv_path = self.output_dir / "intensity_per_spectrum.csv"
-                per_spec_df.to_csv(csv_path, index=False, float_format='%.6f')
+                per_spec_df.to_csv(csv_path, index=False, float_format="%.6f")
                 logger.info(f"Saved per-spectrum intensity data: {csv_path} ({len(per_spec_df):,d} spectra)")
 
         logger.info("Intensity analysis results saved")
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         """Print analysis summary to console."""
         if not self.results:
             logger.warning("No results to summarize")
@@ -1188,7 +1117,7 @@ class IntensityAnalyser:
         overall = self.results.get("overall_intensity_stats", {})
 
         if overall:
-            logger.info(f"Overall Statistics:")
+            logger.info("Overall Statistics:")
             logger.info(f"  N peaks: {overall['n_peaks']:,d}")
             logger.info(f"  Mean intensity: {overall['mean']:.4f}")
             logger.info(f"  Median intensity: {overall['median']:.4f}")
@@ -1208,11 +1137,7 @@ class IntensityAnalyser:
         if "by_instrument" in stratified and stratified["by_instrument"]:
             logger.info("")
             logger.info("By Instrument (top 5):")
-            top_instruments = sorted(
-                stratified["by_instrument"].items(),
-                key=lambda x: x[1]['n_peaks'],
-                reverse=True
-            )[:5]
+            top_instruments = sorted(stratified["by_instrument"].items(), key=lambda x: x[1]["n_peaks"], reverse=True)[:5]
             for inst, stats in top_instruments:
                 logger.info(f"  {inst}: mean={stats['mean']:.4f}, cv={stats['cv']:.3f}, n={stats['n_peaks']:,d}")
 

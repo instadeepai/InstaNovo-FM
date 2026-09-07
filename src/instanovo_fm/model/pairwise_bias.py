@@ -22,7 +22,8 @@ class PairwiseAttentionBias(nn.Module):
         hidden_dim: int = 16,
         lambda_min: float = 0.001,
         lambda_max: float = 10000.0,
-    ):
+    ) -> None:
+        """Initialise the input."""
         super().__init__()
         self.num_freqs = num_freqs
         self.hidden_dim = hidden_dim
@@ -87,27 +88,23 @@ class PairwiseAttentionBias(nn.Module):
         Returns:
             pairwise_feats: (B, L, L, hidden_dim).
         """
-        B = mz.shape[0]
+        B = mz.shape[0]  # noqa: N806
         # Wrap each chunk in gradient checkpointing during training.
         # Without it, all 8 chunks' MLP activations accumulate in GPU memory
         # for backward (~1.83 GB × 8 = 14.6 GB). With checkpointing, only one
         # chunk's activations are live at a time during the backward pass.
-        run_chunk = (
-            (lambda mz_c: checkpoint(self._forward_chunk, mz_c, use_reentrant=False))
-            if self.training
-            else self._forward_chunk
-        )
+        run_chunk = (lambda mz_c: checkpoint(self._forward_chunk, mz_c, use_reentrant=False)) if self.training else self._forward_chunk
         if B <= self._CHUNK_SIZE:
-            return run_chunk(mz)
+            return run_chunk(mz)  # type: ignore[no-untyped-call]
 
         chunks = []
         for i in range(0, B, self._CHUNK_SIZE):
-            chunks.append(run_chunk(mz[i : i + self._CHUNK_SIZE]))
+            chunks.append(run_chunk(mz[i : i + self._CHUNK_SIZE]))  # type: ignore[no-untyped-call]
         return torch.cat(chunks, dim=0)
 
     def _forward_chunk(self, mz: torch.Tensor) -> torch.Tensor:
         """Process a single batch-chunk through Fourier encode + f_pw."""
-        dmz = mz.unsqueeze(2) - mz.unsqueeze(1)   # (C, L, L, 1)
-        fourier = self._fourier_encode(dmz)         # (C, L, L, 2*num_freqs)
+        dmz = mz.unsqueeze(2) - mz.unsqueeze(1)  # (C, L, L, 1)
+        fourier = self._fourier_encode(dmz)  # (C, L, L, 2*num_freqs)
         del dmz
-        return self.f_pw(fourier)                    # (C, L, L, hidden_dim)
+        return self.f_pw(fourier)  # (C, L, L, hidden_dim)

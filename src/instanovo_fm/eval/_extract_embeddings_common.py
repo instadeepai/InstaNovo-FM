@@ -68,7 +68,7 @@ def load_spectrum_dataframe(
     Returns:
         A pandas DataFrame with one row per spectrum.
     """
-    from instanovo.utils.data_handler import SpectrumDataFrame
+    from instanovo_fm.utils.spectrum_dataframe import SpectrumDataFrame
 
     # SpectrumDataFrame reads only local files; materialise S3 parquet locally first.
     parquet_source = S3FileHandler().download_parquet(parquet_path) if parquet_path.startswith("s3://") else parquet_path

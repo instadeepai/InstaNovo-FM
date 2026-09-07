@@ -1,0 +1,11 @@
+# @package _global_
+# Casanovo de novo baseline
+defaults:
+  - denovo
+  - _self_
+
+model: casanovo
+checkpoint: checkpoints/casanovo_v5_0_0.ckpt
+num_beams: 5
+batch_size: 64
+run_name: casanovo_v5_biological

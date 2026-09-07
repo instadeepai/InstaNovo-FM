@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Spectrum Analyzer for Foundation Model Training Data.
+"""Spectrum Analyzer for Foundation Model Training Data.
 
 Performs comprehensive spectrum-level analysis including:
 1. Annotated vs unannotated analysis via theoretical matching
@@ -29,32 +28,24 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm.auto import tqdm
 
 from instanovo.__init__ import console
-from instanovo.common import DataProcessor
 from instanovo_fm.data import FoundationalDataProcessor
 from instanovo_fm.data.binning_analyser import BinningAnalyser
-from instanovo_fm.data.theoretical_analyser import TheoreticalAnalyser
 from instanovo_fm.data.search_data_manager import create_search_data_manager
-from instanovo_fm.trainer.binning import (
-    FixedDaBinning,
-    FixedPpmBinning,
-    AdaptiveBinning,
+from instanovo_fm.data.theoretical_analyser import TheoreticalAnalyser
+from instanovo_fm.utils.ion_visualization import (
+    CATEGORY_COLORS as category_colors,  # noqa: N811
+)
+from instanovo_fm.utils.ion_visualization import (
+    TEXT_COLORS as text_colors,  # noqa: N811
 )
 from instanovo_fm.utils.ion_visualization import (
     categorize_ion,
-    CATEGORY_COLORS as category_colors,
-    TEXT_COLORS as text_colors,
     format_annotation_display,
 )
-from instanovo_fm.utils.theoretical_spectra import (
-    generate_theoretical_spectrum,
-    generate_theoretical_spectrum_rustyms,
-    match_theoretical_to_experimental,
-    match_with_conditional_features,
-)
-from instanovo_fm.utils.naming import sanitize_filename
-from instanovo.utils.residues import ResidueSet
-from instanovo.utils.data_handler import SpectrumDataFrame
 from instanovo.utils.colorlogging import ColorLog
+from instanovo_fm.utils.spectrum_dataframe import SpectrumDataFrame
+from instanovo.utils.residues import ResidueSet
+from instanovo_fm.utils.naming import sanitize_filename
 
 logger = ColorLog(console, __name__).logger
 
@@ -91,9 +82,7 @@ def _worker_init(
     # the two stay in sync after pickling (they were the same dict in the
     # main process but diverge after we replace theoretical_cache above).
     if getattr(_worker_analyser, "theoretical_analyser", None) is not None:
-        _worker_analyser.theoretical_analyser.theoretical_cache = (
-            _worker_analyser.theoretical_cache
-        )
+        _worker_analyser.theoretical_analyser.theoretical_cache = _worker_analyser.theoretical_cache
     _worker_processor = FoundationalDataProcessor(**proc_cfg)
 
 
@@ -136,7 +125,9 @@ def _worker_analyze(args: Tuple[int, dict]) -> Tuple[int, dict]:
     idx, spectrum_data = args
     try:
         result = _worker_analyser.analyze_single_spectrum(  # type: ignore[union-attr]
-            spectrum_data, _worker_processor, include_visualization_data=False  # type: ignore[arg-type]
+            spectrum_data,
+            _worker_processor,  # type: ignore[arg-type]
+            include_visualization_data=False,  # type: ignore[arg-type]
         )
         return idx, _detensorize(result)
     except Exception as e:
@@ -150,8 +141,7 @@ def _worker_analyze(args: Tuple[int, dict]) -> Tuple[int, dict]:
 
 
 class SpectrumAnalyser:
-    """
-    Per-spectrum analysis engine and result aggregator.
+    """Per-spectrum analysis engine and result aggregator.
 
     Called by DataAnalyzer with an explicit set of active tasks.
     Handles:
@@ -160,14 +150,13 @@ class SpectrumAnalyser:
     - Binning analysis (batch-level, after aggregation)
     """
 
-    def __init__(
+    def __init__(  # type: ignore[misc]
         self,
         config: DictConfig,
         output_dir: Optional[str] = None,
         active_tasks: Optional[Set[str]] = None,
-    ):
-        """
-        Initialize the spectrum analyzer.
+    ) -> Any:
+        """Initialize the spectrum analyzer.
 
         Args:
             config: Hydra configuration
@@ -186,11 +175,11 @@ class SpectrumAnalyser:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Set plotting style
-        plt.style.use('default')
+        plt.style.use("default")
         sns.set_palette("husl")
 
         # Initialize results storage
-        self.analysis_results = {
+        self.analysis_results: dict[str, Any] = {
             "summary": {},
             "theoretical_matching": {},
             "annotation_analysis": {},
@@ -237,10 +226,7 @@ class SpectrumAnalyser:
         self.enable_custom_ions = "custom_ions" in self.active_tasks
         self.enable_intensity_analysis = "intensity" in self.active_tasks
         self.enable_masking_analysis = "masking" in self.active_tasks
-        self.enable_mass_error_analysis = (
-            "binning" in self.active_tasks
-            or "theoretical" in self.active_tasks
-        )
+        self.enable_mass_error_analysis = "binning" in self.active_tasks or "theoretical" in self.active_tasks
 
         # Global settings
         self.max_samples = analysis_config.get("max_samples", 100000)
@@ -270,16 +256,18 @@ class SpectrumAnalyser:
         self.custom_ions = dict(custom_ions_cfg) if custom_ions_cfg is not None else None
 
         # m/z range boundaries (shared between intensity and binning)
-        self.mz_range_boundaries = _tc("intensity", "mz_range_boundaries", {
-            "immonium_internal": (0, 200),
-            "core_fragment": (200, 800),
-            "extended_fragment": (800, 1500),
-            "high_mass_fragment": (1500, float('inf')),
-        })
+        self.mz_range_boundaries = _tc(
+            "intensity",
+            "mz_range_boundaries",
+            {
+                "immonium_internal": (0, 200),
+                "core_fragment": (200, 800),
+                "extended_fragment": (800, 1500),
+                "high_mass_fragment": (1500, float("inf")),
+            },
+        )
         self.mz_range_order = ["immonium_internal", "core_fragment", "extended_fragment", "high_mass_fragment"]
-        self.mz_range_thresholds = _tc("theoretical", "mz_range_thresholds", {
-            "low": 200, "mid": 800, "high": 1500
-        })
+        self.mz_range_thresholds = _tc("theoretical", "mz_range_thresholds", {"low": 200, "mid": 800, "high": 1500})
 
         # Binning config
         self.enable_bin_jump_analysis = "binning" in self.active_tasks
@@ -305,41 +293,41 @@ class SpectrumAnalyser:
         )
 
         # Setup search data manager (needed for metadata extraction)
-        self.search_data_manager = create_search_data_manager({
-            "use_search_data": config.dataset.get("use_search_data", False),
-            "search_data_path": config.dataset.get("search_data_path", None),
-            "search_data_filepath_column": config.dataset.get("search_data_filepath_column", "file path"),
-            "search_data_spectrum_key": config.dataset.get("search_data_spectrum_key", "filepath"),
-        })
+        self.search_data_manager = create_search_data_manager(
+            {
+                "use_search_data": config.dataset.get("use_search_data", False),
+                "search_data_path": config.dataset.get("search_data_path", None),
+                "search_data_filepath_column": config.dataset.get("search_data_filepath_column", "file path"),
+                "search_data_spectrum_key": config.dataset.get("search_data_spectrum_key", "filepath"),
+            }
+        )
 
         # Check theoretical spectra availability
         self.theoretical_available = self.enable_theoretical
         if self.enable_theoretical:
             try:
                 from instanovo_fm.utils.theoretical_spectra import (
-                    generate_theoretical_spectrum,
+                    generate_theoretical_spectrum,  # noqa: F401
                 )
+
                 # Check if rustyms is available for optimized batch processing
                 try:
-                    import rustyms
+                    import rustyms  # noqa: F401
+
                     self.rustyms_available = True
                 except ImportError:
                     self.rustyms_available = False
             except ImportError:
                 self.theoretical_available = False
                 self.rustyms_available = False
-                logger.warning(
-                    "Theoretical spectra module not available. Skipping theoretical analysis."
-                )
+                logger.warning("Theoretical spectra module not available. Skipping theoretical analysis.")
         else:
             logger.info("Theoretical analysis disabled by configuration.")
             self.rustyms_available = False
-        
+
         # Theoretical spectrum cache for optimized batch processing.
         # Key layout (seq, charge, ion_types) is defined in TheoreticalAnalyser.
-        self.theoretical_cache: Dict[
-            Tuple[str, int, Tuple[str, ...]], Tuple[np.ndarray, List[str]]
-        ] = {}
+        self.theoretical_cache: Dict[Tuple[str, int, Tuple[str, ...]], Tuple[np.ndarray, List[str]]] = {}
 
         # Per-spectrum TheoreticalAnalyser — created once and reused across
         # every call to analyze_single_spectrum. It previously was re-created
@@ -347,32 +335,27 @@ class SpectrumAnalyser:
         # in single-process, amortised per worker in parallel mode), and each
         # re-creation wiped local state. The cache dict is shared by reference
         # so that populated entries remain visible to this outer analyser.
-        self.theoretical_analyser = TheoreticalAnalyser(
-            self.config, self.output_dir / "theoretical_analysis"
-        )
+        self.theoretical_analyser = TheoreticalAnalyser(self.config, self.output_dir / "theoretical_analysis")
         self.theoretical_analyser.theoretical_cache = self.theoretical_cache
 
         # Initialize intensity analyser
         if self.enable_intensity_analysis:
             from instanovo_fm.data.intensity_analyser import IntensityAnalyser
-            self.intensity_analyser = IntensityAnalyser(
-                self.config,
-                self.output_dir / "intensity_analysis"
-            )
+
+            self.intensity_analyser = IntensityAnalyser(self.config, self.output_dir / "intensity_analysis")
         else:
-            self.intensity_analyser = None
+            self.intensity_analyser = None  # type: ignore[assignment]
 
         # Initialize masking analyser (replaces standalone MaskingGapAnalyser)
         if self.enable_masking_analysis:
             from instanovo_fm.data.masking_analyser import MaskingAnalyser
-            self.masking_analyser = MaskingAnalyser(
-                self.config, self.output_dir / "masking_analysis"
-            )
+
+            self.masking_analyser = MaskingAnalyser(self.config, self.output_dir / "masking_analysis")
         else:
-            self.masking_analyser = None
+            self.masking_analyser = None  # type: ignore[assignment]
 
     @staticmethod
-    def _derive_active_tasks_from_legacy(analysis_config) -> Set[str]:
+    def _derive_active_tasks_from_legacy(analysis_config: Any) -> Set[str]:
         """Derive active_tasks set from legacy enable_* config booleans."""
         tasks: Set[str] = set()
         # Map legacy enable_* booleans to task names
@@ -390,69 +373,70 @@ class SpectrumAnalyser:
 
     def setup_data_processor(self) -> FoundationalDataProcessor:
         """Set up the data processor for consistent preprocessing."""
-        masking_config = self.config.model.get('masking', {})
-        
-        proc_cfg = {
-            'n_peaks': self.config.model.get('n_peaks', 200),
-            'min_mz': self.config.model.get('min_mz', 50.0),
-            'max_mz': self.config.model.get('max_mz', 2500.0),
-            'min_intensity': self.config.model.get('min_intensity', 0.01),
-            'mask_portion': masking_config.get('mask_portion', 0.3),
-            'remove_precursor_tol': self.config.model.get('remove_precursor_tol', 0.0),
-            'use_spectrum_utils': self.config.model.get('use_spectrum_utils', False),
-            'normalize_mz': self.config.model.get('normalize_mz', True),
-            'peak_ordering': masking_config.get('ordering_strategy', 'sorted'),
+        masking_config = self.config.model.get("masking", {})
+
+        proc_cfg: dict[str, Any] = {
+            "n_peaks": self.config.model.get("n_peaks", 200),
+            "min_mz": self.config.model.get("min_mz", 50.0),
+            "max_mz": self.config.model.get("max_mz", 2500.0),
+            "min_intensity": self.config.model.get("min_intensity", 0.01),
+            "mask_portion": masking_config.get("mask_portion", 0.3),
+            "remove_precursor_tol": self.config.model.get("remove_precursor_tol", 0.0),
+            "use_spectrum_utils": self.config.model.get("use_spectrum_utils", False),
+            "normalize_mz": self.config.model.get("normalize_mz", True),
+            "peak_ordering": masking_config.get("ordering_strategy", "sorted"),
             # Required for metadata extraction
-            'residue_set': self.residue_set,
-            'annotated': True,
-            'return_str': True,
-            'metadata_columns': self.config.dataset.get('metadata_columns', []),
-            'search_data_manager': self.search_data_manager,
+            "residue_set": self.residue_set,
+            "annotated": True,
+            "return_str": True,
+            "metadata_columns": self.config.dataset.get("metadata_columns", []),
+            "search_data_manager": self.search_data_manager,
         }
-        
-        strategy_mapping = {
-            'thompson_span_mask': 'thompson_span',
-            'thompson': 'thompson',
-            'uniform': 'uniform',
-            'ladder': 'ladder',
-            'fast_ladder': 'fast_ladder',
-            'signal_aware_fragment': 'signal_aware_fragment',
+
+        strategy_mapping: dict[str, Any] = {
+            "thompson_span_mask": "thompson_span",
+            "thompson": "thompson",
+            "uniform": "uniform",
+            "ladder": "ladder",
+            "fast_ladder": "fast_ladder",
+            "signal_aware_fragment": "signal_aware_fragment",
         }
-        proc_cfg['masking_strategy'] = strategy_mapping.get(
-            masking_config.get('strategy', 'thompson_span'), 'thompson_span'
+        proc_cfg["masking_strategy"] = strategy_mapping.get(masking_config.get("strategy", "thompson_span"), "thompson_span")
+
+        proc_cfg.update(
+            {
+                "thompson_alpha": masking_config.get("alpha", 0.5),
+                "thompson_beta": masking_config.get("beta", 0.5),
+                "thompson_kappa": masking_config.get("kappa", 4.0),
+                "thompson_gamma": masking_config.get("gamma", 0.7),
+                "span_min": masking_config.get("span_min", 4),
+                "span_max": masking_config.get("span_max", 7),
+                "span_bidirectional": masking_config.get("bidirectional", True),
+                "include_isotopes": masking_config.get("include_isotopes", False),
+                "isotope_ppm": masking_config.get("isotope_ppm", 10.0),
+                "isotope_da_floor": masking_config.get("isotope_da_floor", 0.015),
+                "isotope_max_charge": masking_config.get("isotope_max_charge", 4),
+                "isotope_max_order": masking_config.get("isotope_max_order", 3),
+                "max_total_mask_ratio": masking_config.get("max_total_mask_ratio", 0.35),
+                # Signal-aware masking parameters
+                "signal_min_backbone_coverage": masking_config.get("signal_min_backbone_coverage", 0.15),
+                "signal_min_fragment_groups": masking_config.get("signal_min_fragment_groups", 3),
+                "signal_ppm": masking_config.get("signal_ppm", 20.0),
+                "signal_cid_da_tol": masking_config.get("signal_cid_da_tol", 0.2),
+                "signal_ion_types": tuple(masking_config.get("signal_ion_types", ["b", "y"])),
+                "signal_num_workers": masking_config.get("signal_num_workers", 4),
+            }
         )
-        
-        proc_cfg.update({
-            'thompson_alpha': masking_config.get('alpha', 0.5),
-            'thompson_beta': masking_config.get('beta', 0.5),
-            'thompson_kappa': masking_config.get('kappa', 4.0),
-            'thompson_gamma': masking_config.get('gamma', 0.7),
-            'span_min': masking_config.get('span_min', 4),
-            'span_max': masking_config.get('span_max', 7),
-            'span_bidirectional': masking_config.get('bidirectional', True),
-            'include_isotopes': masking_config.get('include_isotopes', False),
-            'isotope_ppm': masking_config.get('isotope_ppm', 10.0),
-            'isotope_da_floor': masking_config.get('isotope_da_floor', 0.015),
-            'isotope_max_charge': masking_config.get('isotope_max_charge', 4),
-            'isotope_max_order': masking_config.get('isotope_max_order', 3),
-            'max_total_mask_ratio': masking_config.get('max_total_mask_ratio', 0.35),
-            # Signal-aware masking parameters
-            'signal_min_backbone_coverage': masking_config.get('signal_min_backbone_coverage', 0.15),
-            'signal_min_fragment_groups': masking_config.get('signal_min_fragment_groups', 3),
-            'signal_ppm': masking_config.get('signal_ppm', 20.0),
-            'signal_cid_da_tol': masking_config.get('signal_cid_da_tol', 0.2),
-            'signal_ion_types': tuple(masking_config.get('signal_ion_types', ['b', 'y'])),
-            'signal_num_workers': masking_config.get('signal_num_workers', 4),
-        })
-        
-        logger.info(f"Data processor config: mask_portion={proc_cfg['mask_portion']}, "
-                   f"include_isotopes={proc_cfg['include_isotopes']}, "
-                   f"strategy={proc_cfg['masking_strategy']}, "
-                   f"metadata_columns={len(proc_cfg['metadata_columns'])}, "
-                   f"search_data={'enabled' if self.search_data_manager and self.search_data_manager.is_loaded else 'disabled'}")
-        
+
+        logger.info(
+            f"Data processor config: mask_portion={proc_cfg['mask_portion']}, "
+            f"include_isotopes={proc_cfg['include_isotopes']}, "
+            f"strategy={proc_cfg['masking_strategy']}, "
+            f"metadata_columns={len(proc_cfg['metadata_columns'])}, "
+            f"search_data={'enabled' if self.search_data_manager and self.search_data_manager.is_loaded else 'disabled'}"
+        )
+
         return FoundationalDataProcessor(**proc_cfg)
-    
 
     def analyze_single_spectrum(
         self,
@@ -502,7 +486,7 @@ class SpectrumAnalyser:
                 }
 
             # 2. Calculate spectrum statistics
-            spectrum_stats = {
+            spectrum_stats: dict[str, Any] = {
                 "n_total_peaks": len(spectra),
                 "n_valid_peaks": n_valid_peaks,
                 "mz_range": (valid_mz.min(), valid_mz.max()),
@@ -537,18 +521,24 @@ class SpectrumAnalyser:
             sequence = TheoreticalAnalyser._extract_field(spectrum_data, ["sequence", "modified_peptide", "peptide"])
             clean_sequence = theoretical_analysis.get("clean_sequence")
 
-            metadata = {
+            metadata: dict[str, Any] = {
                 "search_project": batch_result.get("search_project", [None])[0] if "search_project" in batch_result else "unknown",
                 "spectrum_key": (
-                    batch_result.get("usi", [None])[0] if "usi" in batch_result
-                    else batch_result.get("filepath", [None])[0] if "filepath" in batch_result
+                    batch_result.get("usi", [None])[0]
+                    if "usi" in batch_result
+                    else batch_result.get("filepath", [None])[0]
+                    if "filepath" in batch_result
                     else "unknown"
                 ),
                 "sequence": sequence,
                 "frag_type": batch_result.get("frag_type", [None])[0] or "unknown" if "frag_type" in batch_result else "unknown",
-                "search_acquisition": batch_result.get("search_acquisition", [None])[0] or "unknown" if "search_acquisition" in batch_result else "unknown",
+                "search_acquisition": batch_result.get("search_acquisition", [None])[0] or "unknown"
+                if "search_acquisition" in batch_result
+                else "unknown",
                 "search_detector": batch_result.get("search_detector", [None])[0] or "unknown" if "search_detector" in batch_result else "unknown",
-                "search_instrument": batch_result.get("search_instrument", [None])[0] or "unknown" if "search_instrument" in batch_result else "unknown",
+                "search_instrument": batch_result.get("search_instrument", [None])[0] or "unknown"
+                if "search_instrument" in batch_result
+                else "unknown",
                 "clean_sequence": clean_sequence,
                 "precursor_mz": float(batch_result["precursor_mz"][0]) if "precursor_mz" in batch_result else None,
                 "precursor_mass": float(batch_result["precursor_mass"][0]) if "precursor_mass" in batch_result else None,
@@ -566,12 +556,9 @@ class SpectrumAnalyser:
                     valid_mz=valid_mz,
                     valid_intensity=valid_intensity,
                     metadata={
-                        "frag_type": batch_result.get("frag_type", [None])[0]
-                                    if "frag_type" in batch_result else "unknown",
-                        "search_instrument": batch_result.get("search_instrument", [None])[0]
-                                            if "search_instrument" in batch_result else "unknown",
-                        "precursor_charge": batch_result.get("precursor_charge", [None])[0]
-                                          if "precursor_charge" in batch_result else None,
+                        "frag_type": batch_result.get("frag_type", [None])[0] if "frag_type" in batch_result else "unknown",
+                        "search_instrument": batch_result.get("search_instrument", [None])[0] if "search_instrument" in batch_result else "unknown",
+                        "precursor_charge": batch_result.get("precursor_charge", [None])[0] if "precursor_charge" in batch_result else None,
                     },
                     annotations=annotations,
                 )
@@ -581,6 +568,7 @@ class SpectrumAnalyser:
             custom_ion_peak_mask = None
             if self.enable_custom_ions:
                 from instanovo_fm.utils.theoretical_spectra import detect_custom_ions
+
                 custom_ion_result = detect_custom_ions(
                     exp_mz=valid_mz,
                     exp_intensity=valid_intensity,
@@ -619,13 +607,10 @@ class SpectrumAnalyser:
                     valid_mz=valid_mz,
                     valid_intensity=valid_intensity,
                     metadata={
-                        "frag_type": batch_result.get("frag_type", [None])[0]
-                                    if "frag_type" in batch_result else "unknown",
-                        "clean_sequence": theoretical_analysis.get("clean_sequence")
-                                          if theoretical_analysis else None,
+                        "frag_type": batch_result.get("frag_type", [None])[0] if "frag_type" in batch_result else "unknown",
+                        "clean_sequence": theoretical_analysis.get("clean_sequence") if theoretical_analysis else None,
                         "precursor_charge": str(int(raw_charges[0].item())) if raw_charges.numel() > 0 else "unknown",
-                        "search_instrument": batch_result.get("search_instrument", [None])[0]
-                                            if "search_instrument" in batch_result else "unknown",
+                        "search_instrument": batch_result.get("search_instrument", [None])[0] if "search_instrument" in batch_result else "unknown",
                     },
                     theoretical_analysis=theoretical_analysis,
                     matched_annotations=theoretical_analysis.get("theo_annotations"),
@@ -661,14 +646,16 @@ class SpectrumAnalyser:
                     metadata = {
                         "search_project": batch_result.get("search_project", [None])[0] if "search_project" in batch_result else "unknown",
                         "spectrum_key": (
-                    batch_result.get("usi", [None])[0] if "usi" in batch_result
-                    else batch_result.get("filepath", [None])[0] if "filepath" in batch_result
-                    else "unknown"
-                ),
+                            batch_result.get("usi", [None])[0]
+                            if "usi" in batch_result
+                            else batch_result.get("filepath", [None])[0]
+                            if "filepath" in batch_result
+                            else "unknown"
+                        ),
                     }
                 else:
                     metadata = {"search_project": "unknown", "spectrum_key": "unknown"}
-            except:
+            except Exception:
                 metadata = {"search_project": "unknown", "spectrum_key": "unknown"}
 
             return {
@@ -678,14 +665,13 @@ class SpectrumAnalyser:
                 "masking_analysis": {},
                 "metadata": metadata,
             }
-    
+
     def run_analysis(self, sdf: SpectrumDataFrame) -> Dict[str, Any]:
-        """
-        Run comprehensive spectrum analysis.
-        
+        """Run comprehensive spectrum analysis.
+
         Args:
             sdf: SpectrumDataFrame with spectra to analyze
-            
+
         Returns:
             Dictionary with analysis results
         """
@@ -698,34 +684,34 @@ class SpectrumAnalyser:
         # construct their own FoundationalDataProcessor without pickling the full
         # SpectrumAnalyser per spectrum.
         proc_cfg = {
-            'n_peaks': self.n_peaks,
-            'min_mz': self.min_mz,
-            'max_mz': self.max_mz,
-            'min_intensity': self.min_intensity,
-            'mask_portion': processor.mask_portion,
-            'remove_precursor_tol': processor.remove_precursor_tol,
-            'use_spectrum_utils': processor.use_spectrum_utils,
-            'normalize_mz': processor.normalize_mz,
-            'peak_ordering': processor.peak_ordering,
-            'masking_strategy': processor.masking_strategy,
-            'thompson_alpha': processor.thompson_alpha,
-            'thompson_beta': processor.thompson_beta,
-            'thompson_kappa': processor.thompson_kappa,
-            'thompson_gamma': processor.thompson_gamma,
-            'span_min': processor.span_min,
-            'span_max': processor.span_max,
-            'span_bidirectional': processor.span_bidirectional,
-            'include_isotopes': processor.include_isotopes,
-            'isotope_ppm': processor.isotope_ppm,
-            'isotope_da_floor': processor.isotope_da_floor,
-            'isotope_max_charge': processor.isotope_max_charge,
-            'isotope_max_order': processor.isotope_max_order,
-            'max_total_mask_ratio': processor.max_total_mask_ratio,
-            'residue_set': self.residue_set,
-            'annotated': True,
-            'return_str': True,
-            'metadata_columns': self.config.dataset.get('metadata_columns', []),
-            'search_data_manager': self.search_data_manager,
+            "n_peaks": self.n_peaks,
+            "min_mz": self.min_mz,
+            "max_mz": self.max_mz,
+            "min_intensity": self.min_intensity,
+            "mask_portion": processor.mask_portion,
+            "remove_precursor_tol": processor.remove_precursor_tol,
+            "use_spectrum_utils": processor.use_spectrum_utils,
+            "normalize_mz": processor.normalize_mz,
+            "peak_ordering": processor.peak_ordering,
+            "masking_strategy": processor.masking_strategy,
+            "thompson_alpha": processor.thompson_alpha,
+            "thompson_beta": processor.thompson_beta,
+            "thompson_kappa": processor.thompson_kappa,
+            "thompson_gamma": processor.thompson_gamma,
+            "span_min": processor.span_min,
+            "span_max": processor.span_max,
+            "span_bidirectional": processor.span_bidirectional,
+            "include_isotopes": processor.include_isotopes,
+            "isotope_ppm": processor.isotope_ppm,
+            "isotope_da_floor": processor.isotope_da_floor,
+            "isotope_max_charge": processor.isotope_max_charge,
+            "isotope_max_order": processor.isotope_max_order,
+            "max_total_mask_ratio": processor.max_total_mask_ratio,
+            "residue_set": self.residue_set,
+            "annotated": True,
+            "return_str": True,
+            "metadata_columns": self.config.dataset.get("metadata_columns", []),
+            "search_data_manager": self.search_data_manager,
         }
 
         # Test with first spectrum
@@ -751,19 +737,19 @@ class SpectrumAnalyser:
         # Streaming accumulators — collect only lightweight data per spectrum
         # so that we never hold 2.95M full result dicts in memory.
         # ------------------------------------------------------------------
-        acc_spectrum_stats: List[Dict] = []            # scalar dicts
-        acc_theoretical: List[Dict] = []               # scalar dicts
-        acc_masking: List[Dict] = []                   # scalar dicts
-        acc_results_for_stratified: List[Dict] = []    # metadata + theo + masking
-        acc_mass_error_data: List[Dict] = []           # per-peak error records
+        acc_spectrum_stats: List[Dict] = []  # scalar dicts
+        acc_theoretical: List[Dict] = []  # scalar dicts
+        acc_masking: List[Dict] = []  # scalar dicts
+        acc_results_for_stratified: List[Dict] = []  # metadata + theo + masking
+        acc_mass_error_data: List[Dict] = []  # per-peak error records
         acc_unmatched_theo_data: List[Dict] = []
         acc_spectrum_mz: List[np.ndarray] = []
         acc_frag_type: List[str] = []
-        acc_theoretical_enriched: List[Dict] = []      # for Phase 3.5
-        acc_intensity: List[Dict] = []                 # for Phase 4
-        acc_masking_result: List[Dict] = []            # for Phase 5
-        acc_custom_ion: List[Dict] = []                # for Phase 6
-        acc_csv_rows: List[Dict] = []                  # for _save_results CSV
+        acc_theoretical_enriched: List[Dict] = []  # for Phase 3.5
+        acc_intensity: List[Dict] = []  # for Phase 4
+        acc_masking_result: List[Dict] = []  # for Phase 5
+        acc_custom_ion: List[Dict] = []  # for Phase 6
+        acc_csv_rows: List[Dict] = []  # for _save_results CSV
         # For individual visualizations we record indices of valid spectra and
         # re-analyze a small number (~max_visualizations) later.
         acc_valid_indices: List[int] = []
@@ -783,12 +769,14 @@ class SpectrumAnalyser:
             acc_spectrum_stats.append(result["spectrum_stats"])
             acc_theoretical.append(result["theoretical_analysis"])
             acc_masking.append(result["masking_analysis"])
-            acc_results_for_stratified.append({
-                "metadata": result.get("metadata", {}),
-                "theoretical_analysis": result["theoretical_analysis"],
-                "masking_analysis": result["masking_analysis"],
-                "spectrum_stats": result["spectrum_stats"],
-            })
+            acc_results_for_stratified.append(
+                {
+                    "metadata": result.get("metadata", {}),
+                    "theoretical_analysis": result["theoretical_analysis"],
+                    "masking_analysis": result["masking_analysis"],
+                    "spectrum_stats": result["spectrum_stats"],
+                }
+            )
 
             # Phase 3.5: theoretical aggregation. Determine the spectrum's
             # index in acc_theoretical_enriched (== its index in per_spectrum
@@ -840,27 +828,29 @@ class SpectrumAnalyser:
             # CSV row for _save_results
             if theo.get("sequence_available", False):
                 metadata = result.get("metadata", {})
-                acc_csv_rows.append({
-                    "search_project": metadata.get("search_project", "unknown"),
-                    "spectrum_key": metadata.get("spectrum_key", "unknown"),
-                    "sequence": metadata.get("sequence", "unknown"),
-                    "frag_type": metadata.get("frag_type", "unknown"),
-                    "search_acquisition": metadata.get("search_acquisition", "unknown"),
-                    "search_detector": metadata.get("search_detector", "unknown"),
-                    "search_instrument": metadata.get("search_instrument", "unknown"),
-                    "n_valid_peaks": result["spectrum_stats"]["n_valid_peaks"],
-                    "precursor_charge": theo["precursor_charge"],
-                    "n_theoretical": theo["n_theoretical"],
-                    "n_matched": theo["n_matched"],
-                    "match_rate": theo["match_rate"],
-                    "frac_intensity": theo["frac_intensity"],
-                    "median_ppm": theo["median_ppm"],
-                    "mean_ppm": theo["mean_ppm"],
-                    "annotated_fraction": theo["annotated_fraction"],
-                    "unannotated_fraction": theo["unannotated_fraction"],
-                    "annotated_intensity_fraction": theo["annotated_intensity_fraction"],
-                    "unannotated_intensity_fraction": theo["unannotated_intensity_fraction"],
-                })
+                acc_csv_rows.append(
+                    {
+                        "search_project": metadata.get("search_project", "unknown"),
+                        "spectrum_key": metadata.get("spectrum_key", "unknown"),
+                        "sequence": metadata.get("sequence", "unknown"),
+                        "frag_type": metadata.get("frag_type", "unknown"),
+                        "search_acquisition": metadata.get("search_acquisition", "unknown"),
+                        "search_detector": metadata.get("search_detector", "unknown"),
+                        "search_instrument": metadata.get("search_instrument", "unknown"),
+                        "n_valid_peaks": result["spectrum_stats"]["n_valid_peaks"],
+                        "precursor_charge": theo["precursor_charge"],
+                        "n_theoretical": theo["n_theoretical"],
+                        "n_matched": theo["n_matched"],
+                        "match_rate": theo["match_rate"],
+                        "frac_intensity": theo["frac_intensity"],
+                        "median_ppm": theo["median_ppm"],
+                        "mean_ppm": theo["mean_ppm"],
+                        "annotated_fraction": theo["annotated_fraction"],
+                        "unannotated_fraction": theo["unannotated_fraction"],
+                        "annotated_intensity_fraction": theo["annotated_intensity_fraction"],
+                        "unannotated_intensity_fraction": theo["unannotated_intensity_fraction"],
+                    }
+                )
 
             # Track index for visualization sampling
             acc_valid_indices.append(idx)
@@ -883,14 +873,9 @@ class SpectrumAnalyser:
                 for chunk_start in range(0, n_samples, chunk_size):
                     chunk_end = min(chunk_start + chunk_size, n_samples)
                     # Load chunk from SDF (only this chunk in memory at a time)
-                    chunk_args = [
-                        (chunk_start + j, sdf[chunk_start + j])
-                        for j in range(chunk_end - chunk_start)
-                    ]
+                    chunk_args = [(chunk_start + j, sdf[chunk_start + j]) for j in range(chunk_end - chunk_start)]
                     mp_chunksize = max(1, len(chunk_args) // (self.n_workers * 4))
-                    for idx, result in pool.imap_unordered(
-                        _worker_analyze, chunk_args, chunksize=mp_chunksize
-                    ):
+                    for idx, result in pool.imap_unordered(_worker_analyze, chunk_args, chunksize=mp_chunksize):
                         _accumulate_result(idx, result)
                         pbar.update(1)
                 pbar.close()
@@ -899,9 +884,7 @@ class SpectrumAnalyser:
             for i in tqdm(range(n_samples), desc="Analyzing spectra (single-process)"):
                 try:
                     spectrum_data = sdf[i]
-                    result = self.analyze_single_spectrum(
-                        spectrum_data, processor, include_visualization_data=False
-                    )
+                    result = self.analyze_single_spectrum(spectrum_data, processor, include_visualization_data=False)
                     _accumulate_result(i, _detensorize(result))
                 except Exception as e:
                     errors += 1
@@ -918,10 +901,16 @@ class SpectrumAnalyser:
         # ------------------------------------------------------------------
         # Populate analysis_results from accumulators (no per_spectrum list)
         self._calculate_summary_statistics(
-            acc_spectrum_stats, acc_theoretical, acc_masking, acc_results_for_stratified,
+            acc_spectrum_stats,
+            acc_theoretical,
+            acc_masking,
+            acc_results_for_stratified,
         )
         self._calculate_mass_error_statistics(
-            acc_mass_error_data, acc_unmatched_theo_data, acc_spectrum_mz, acc_frag_type,
+            acc_mass_error_data,
+            acc_unmatched_theo_data,
+            acc_spectrum_mz,
+            acc_frag_type,
         )
 
         # Generate binning visualizations using BinningAnalyser
@@ -935,7 +924,7 @@ class SpectrumAnalyser:
         # 3.5. Theoretical Analysis (Comprehensive)
         # =====================================================================
         if self.enable_theoretical:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 3.5: COMPREHENSIVE THEORETICAL ANALYSIS")
             logger.info("=" * 80)
 
@@ -966,7 +955,7 @@ class SpectrumAnalyser:
         # 4. Intensity Analysis
         # =====================================================================
         if self.enable_intensity_analysis and self.intensity_analyser:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 4: INTENSITY DISTRIBUTION ANALYSIS")
             logger.info("=" * 80)
 
@@ -985,7 +974,7 @@ class SpectrumAnalyser:
         # 5. Masking Strategy Comparison Analysis
         # =====================================================================
         if self.enable_masking_analysis and self.masking_analyser:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 5: MASKING STRATEGY COMPARISON ANALYSIS")
             logger.info("=" * 80)
 
@@ -1008,21 +997,19 @@ class SpectrumAnalyser:
         # 6. Custom Ion Detection Aggregation
         # =====================================================================
         if self.enable_custom_ions:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 6: CUSTOM ION DETECTION")
             logger.info("=" * 80)
 
             if acc_custom_ion:
                 from instanovo_fm.utils.theoretical_spectra import DEFAULT_CUSTOM_IONS
+
                 ion_groups = list((self.custom_ions or DEFAULT_CUSTOM_IONS).keys())
                 n_spectra = len(acc_custom_ion)
 
                 agg: Dict[str, Dict] = {}
                 for group in ion_groups:
-                    n_found = sum(
-                        1 for r in acc_custom_ion
-                        if r.get(group, {}).get("found", False)
-                    )
+                    n_found = sum(1 for r in acc_custom_ion if r.get(group, {}).get("found", False))
                     agg[group] = {
                         "n_found": n_found,
                         "n_spectra": n_spectra,
@@ -1033,10 +1020,7 @@ class SpectrumAnalyser:
                 top_hits = [(g, d) for g, d in sorted_groups if d["hit_rate"] > 0]
                 logger.info(f"Custom ion hit rates across {n_spectra:,d} spectra:")
                 for group, data in top_hits[:20]:
-                    logger.info(
-                        f"  {group:<35s} {data['hit_rate']*100:5.1f}%"
-                        f"  ({data['n_found']:,d}/{n_spectra:,d})"
-                    )
+                    logger.info(f"  {group:<35s} {data['hit_rate'] * 100:5.1f}%  ({data['n_found']:,d}/{n_spectra:,d})")
                 if len(top_hits) > 20:
                     logger.info(f"  ... and {len(top_hits) - 20} more groups with hits")
 
@@ -1044,7 +1028,8 @@ class SpectrumAnalyser:
                 with open(output_path, "w") as f:
                     json.dump(
                         {"n_spectra": n_spectra, "ion_hit_rates": dict(sorted_groups)},
-                        f, indent=2,
+                        f,
+                        indent=2,
                     )
                 logger.info(f"Custom ion analysis saved: {output_path}")
 
@@ -1061,9 +1046,9 @@ class SpectrumAnalyser:
 
         # Save per-spectrum CSV from accumulated rows
         self._save_results(acc_csv_rows)
-        
+
         logger.info(f"Spectrum analysis complete. Processed {n_samples:,d} spectra with {errors} errors.")
-        
+
         # Log match distribution summary
         match_dist = self.analysis_results.get("match_distribution", {})
         if match_dist:
@@ -1072,10 +1057,10 @@ class SpectrumAnalyser:
                 f"median={match_dist.get('median_matches', 0):.1f} "
                 f"(quality gate details in theoretical_analysis/ output)"
             )
-        
+
         return self.analysis_results
 
-    def _generate_binning_recommendation_report(self):
+    def _generate_binning_recommendation_report(self) -> None:
         """Generate a human-readable comprehensive binning recommendation report."""
         mass_error_analysis = self.analysis_results.get("mass_error_analysis", {})
 
@@ -1102,13 +1087,13 @@ class SpectrumAnalyser:
             summary = bin_jump_analysis["summary"]
             report_lines.append("## Bin-Jump Rate Analysis (Label Noise)")
             report_lines.append(f"Best Strategy: {summary.get('best_strategy', 'N/A')}")
-            report_lines.append(f"Best Mean Jump Rate: {summary.get('best_mean_jump_rate', 0)*100:.2f}%")
+            report_lines.append(f"Best Mean Jump Rate: {summary.get('best_mean_jump_rate', 0) * 100:.2f}%")
             report_lines.append(f"Multi-Observation Ions: {summary.get('n_multi_obs_ions', 0):,d}")
             report_lines.append("")
 
             report_lines.append("Strategy Rankings (by mean jump rate):")
             for i, (strat, rate) in enumerate(summary.get("strategy_rankings", []), 1):
-                report_lines.append(f"  {i}. {strat}: {rate*100:.2f}%")
+                report_lines.append(f"  {i}. {strat}: {rate * 100:.2f}%")
             report_lines.append("")
 
         # Hybrid parameter derivation
@@ -1132,7 +1117,7 @@ class SpectrumAnalyser:
                 if "error" not in collision:
                     report_lines.append("## Bin Collision Analysis (Information Loss)")
                     report_lines.append(f"Best Strategy: {collision.get('best_strategy', 'N/A')}")
-                    report_lines.append(f"Best Collision Rate: {collision.get('best_collision_rate', 0)*100:.2f}%")
+                    report_lines.append(f"Best Collision Rate: {collision.get('best_collision_rate', 0) * 100:.2f}%")
                     report_lines.append(f"Unique Ions Analyzed: {collision.get('n_unique_ions', 0):,d}")
                     report_lines.append("")
 
@@ -1159,7 +1144,7 @@ class SpectrumAnalyser:
                     report_lines.append("## Soft Label Recommendation")
                     report_lines.append(f"Recommend Soft Labels: {rec.get('recommend_soft_labels', False)}")
                     report_lines.append(f"Reasoning: {rec.get('reasoning', 'N/A')}")
-                    report_lines.append(f"Max Expected Benefit: {rec.get('max_expected_benefit', 0)*100:.2f}%")
+                    report_lines.append(f"Max Expected Benefit: {rec.get('max_expected_benefit', 0) * 100:.2f}%")
                     report_lines.append("")
 
         report_lines.append("=" * 80)
@@ -1168,8 +1153,8 @@ class SpectrumAnalyser:
 
         # Save report
         report_path = self.output_dir / "binning_recommendation_report.txt"
-        with open(report_path, 'w') as f:
-            f.write('\n'.join(report_lines))
+        with open(report_path, "w") as f:
+            f.write("\n".join(report_lines))
         logger.info(f"Binning recommendation report saved to: {report_path}")
 
     def _calculate_summary_statistics(
@@ -1191,7 +1176,7 @@ class SpectrumAnalyser:
         if not spectrum_stats:
             logger.warning("No valid results to summarize")
             return
-        
+
         # Get all theoretical results (with sequence)
         theo_results = [t for t in theoretical_analyses if t.get("sequence_available", False)]
 
@@ -1213,7 +1198,7 @@ class SpectrumAnalyser:
             seq_len = len(seq) if seq else 0
             # Collect base fragment groups: {(ion_type, position)}
             groups: set = set()
-            for ft, ann in zip(feature_types, annotations):
+            for ft, ann in zip(feature_types, annotations, strict=False):
                 if ft != "base" or not ann:
                     continue
                 ion_type = TheoreticalAnalyser._extract_ion_type(ann)
@@ -1226,7 +1211,7 @@ class SpectrumAnalyser:
             if seq_len > 1:
                 max_sites = seq_len - 1
                 cleavage_sites: set = set()
-                for (ion_type, position) in groups:
+                for ion_type, position in groups:
                     if ion_type in n_terminal_ions:
                         cleavage_sites.add(position)
                     elif ion_type in c_terminal_ions:
@@ -1234,10 +1219,7 @@ class SpectrumAnalyser:
                 coverage = len(cleavage_sites) / max_sites
             else:
                 coverage = 0.0
-            return (
-                coverage >= self.min_backbone_coverage
-                and n_groups >= self.min_fragment_groups
-            )
+            return bool(coverage >= self.min_backbone_coverage and n_groups >= self.min_fragment_groups)
 
         hq_results = [t for t in theo_results if _passes_quality_gate(t)]
 
@@ -1285,7 +1267,7 @@ class SpectrumAnalyser:
             if self.use_conditional_annotation:
                 results_with_breakdown = [t for t in hq_results if "n_base" in t]
                 if results_with_breakdown:
-                    stats_update = {
+                    stats_update: dict[str, Any] = {
                         "avg_n_base": np.mean([t["n_base"] for t in results_with_breakdown]),
                         "avg_n_losses": np.mean([t["n_losses"] for t in results_with_breakdown]),
                         "avg_n_isotopes": np.mean([t["n_isotopes"] for t in results_with_breakdown]),
@@ -1305,11 +1287,7 @@ class SpectrumAnalyser:
                 "frac_intensities": [t["frac_intensity"] for t in hq_results],
             }
 
-            label_counts_list = [
-                t.get("annotation_label_counts", {})
-                for t in hq_results
-                if t.get("annotation_label_counts") is not None
-            ]
+            label_counts_list = [t.get("annotation_label_counts", {}) for t in hq_results if t.get("annotation_label_counts") is not None]
             label_stats = {}
             if label_counts_list:
                 all_labels = sorted({label for counts in label_counts_list for label in counts.keys()})
@@ -1348,26 +1326,36 @@ class SpectrumAnalyser:
                     "avg_unannotated_mask_ratio": float(np.mean([m.get("unannotated_mask_ratio", 0) for m in masking_results])),
                     "avg_overall_mask_ratio": float(np.mean([m.get("overall_mask_ratio", 0) for m in masking_results])),
                     "avg_annotated_preservation_ratio": float(np.mean([m.get("annotated_preservation_ratio", 0) for m in masking_results])),
-                    "avg_annotated_fraction_of_masked_peaks": float(np.mean([m.get("annotated_fraction_of_masked_peaks", 0) for m in masking_results])),
-                    "avg_unannotated_fraction_of_masked_peaks": float(np.mean([m.get("unannotated_fraction_of_masked_peaks", 0) for m in masking_results])),
-                    "avg_annotated_intensity_fraction_of_masked": float(np.mean([m.get("annotated_intensity_fraction_of_masked", 0) for m in masking_results])),
-                    "avg_unannotated_intensity_fraction_of_masked": float(np.mean([m.get("unannotated_intensity_fraction_of_masked", 0) for m in masking_results])),
-                    "avg_annotated_intensity_masked_fraction_of_annotated": float(np.mean([
-                        m.get("annotated_intensity_masked_fraction_of_annotated", 0) for m in masking_results
-                    ])),
-                    "avg_annotated_intensity_unmasked_fraction_of_annotated": float(np.mean([
-                        m.get("annotated_intensity_unmasked_fraction_of_annotated", 0) for m in masking_results
-                    ])),
-                    "avg_unannotated_intensity_masked_fraction_of_unannotated": float(np.mean([
-                        m.get("unannotated_intensity_masked_fraction_of_unannotated", 0) for m in masking_results
-                    ])),
-                    "avg_unannotated_intensity_unmasked_fraction_of_unannotated": float(np.mean([
-                        m.get("unannotated_intensity_unmasked_fraction_of_unannotated", 0) for m in masking_results
-                    ])),
+                    "avg_annotated_fraction_of_masked_peaks": float(
+                        np.mean([m.get("annotated_fraction_of_masked_peaks", 0) for m in masking_results])
+                    ),
+                    "avg_unannotated_fraction_of_masked_peaks": float(
+                        np.mean([m.get("unannotated_fraction_of_masked_peaks", 0) for m in masking_results])
+                    ),
+                    "avg_annotated_intensity_fraction_of_masked": float(
+                        np.mean([m.get("annotated_intensity_fraction_of_masked", 0) for m in masking_results])
+                    ),
+                    "avg_unannotated_intensity_fraction_of_masked": float(
+                        np.mean([m.get("unannotated_intensity_fraction_of_masked", 0) for m in masking_results])
+                    ),
+                    "avg_annotated_intensity_masked_fraction_of_annotated": float(
+                        np.mean([m.get("annotated_intensity_masked_fraction_of_annotated", 0) for m in masking_results])
+                    ),
+                    "avg_annotated_intensity_unmasked_fraction_of_annotated": float(
+                        np.mean([m.get("annotated_intensity_unmasked_fraction_of_annotated", 0) for m in masking_results])
+                    ),
+                    "avg_unannotated_intensity_masked_fraction_of_unannotated": float(
+                        np.mean([m.get("unannotated_intensity_masked_fraction_of_unannotated", 0) for m in masking_results])
+                    ),
+                    "avg_unannotated_intensity_unmasked_fraction_of_unannotated": float(
+                        np.mean([m.get("unannotated_intensity_unmasked_fraction_of_unannotated", 0) for m in masking_results])
+                    ),
                     "avg_fragment_group_count": float(np.mean([m.get("fragment_group_count", 0) for m in masking_results])),
                     "avg_fragment_group_full_mask_ratio": float(np.mean([m.get("fragment_group_full_mask_ratio", 0) for m in masking_results])),
                     "avg_fragment_group_avg_mask_fraction": float(np.mean([m.get("fragment_group_avg_mask_fraction", 0) for m in masking_results])),
-                    "avg_fragment_group_weighted_mask_fraction": float(np.mean([m.get("fragment_group_weighted_mask_fraction", 0) for m in masking_results])),
+                    "avg_fragment_group_weighted_mask_fraction": float(
+                        np.mean([m.get("fragment_group_weighted_mask_fraction", 0) for m in masking_results])
+                    ),
                 }
 
             return {
@@ -1409,14 +1397,11 @@ class SpectrumAnalyser:
                     summary["OTHER"] = _aggregate_group_metrics(other_group)
 
             return summary
-        
+
         # Masking analysis now handled by MaskingAnalyser in Phase 5
 
         # Stratified analysis (all spectra with sequence)
-        seq_indices = [
-            i for i, t in enumerate(theoretical_analyses)
-            if t.get("sequence_available", False)
-        ]
+        seq_indices = [i for i, t in enumerate(theoretical_analyses) if t.get("sequence_available", False)]
         if seq_indices:
             stratified_results = [valid_results_for_stratified[i] for i in seq_indices]
             self.analysis_results["stratified_summary"] = {
@@ -1454,7 +1439,7 @@ class SpectrumAnalyser:
         total_matched = len(df)
         total_unmatched = len(all_unmatched_theo_data)
         total_theoretical = total_matched + total_unmatched
-        coverage_stats = {
+        coverage_stats: dict[str, Any] = {
             "overall_coverage_rate": float(total_matched / max(total_theoretical, 1)),
             "total_theoretical_ions": total_theoretical,
             "total_matched": total_matched,
@@ -1463,7 +1448,9 @@ class SpectrumAnalyser:
 
         binning_analyser = BinningAnalyser(self.config, self.output_dir / "binning_analysis")
         binning_results = binning_analyser.analyze(
-            df, coverage_stats, all_unmatched_theo_data,
+            df,
+            coverage_stats,
+            all_unmatched_theo_data,
             per_spectrum_mz=all_spectrum_mz,
             per_spectrum_frag_type=per_spectrum_frag_type,
         )
@@ -1505,9 +1492,7 @@ class SpectrumAnalyser:
         for viz_idx, sdf_idx in enumerate(tqdm(selected_sdf_indices, desc="Creating individual visualizations")):
             try:
                 spectrum_data = sdf[sdf_idx]
-                result = self.analyze_single_spectrum(
-                    spectrum_data, processor, include_visualization_data=True
-                )
+                result = self.analyze_single_spectrum(spectrum_data, processor, include_visualization_data=True)
                 if result.get("error"):
                     continue
 
@@ -1522,7 +1507,7 @@ class SpectrumAnalyser:
 
                 filename = f"spectrum_{viz_idx:04d}_{seq_for_filename}.png"
                 filepath = viz_dir / filename
-                fig.savefig(filepath, format='png', dpi=150, bbox_inches='tight')
+                fig.savefig(filepath, format="png", dpi=150, bbox_inches="tight")
                 plt.close(fig)
             except Exception as e:
                 logger.warning(f"Failed to create visualization for spectrum {viz_idx}: {e}")
@@ -1539,7 +1524,7 @@ class SpectrumAnalyser:
         match_dist = self.analysis_results.get("match_distribution", {})
         match_dist_summary = {k: v for k, v in match_dist.items() if k != "n_matched_peaks"}
 
-        summary_only = {
+        summary_only: dict[str, Any] = {
             "summary": self.analysis_results.get("summary", {}),
             "match_distribution": match_dist_summary,
             "theoretical_analysis": "see theoretical_analysis/ directory",
@@ -1547,7 +1532,7 @@ class SpectrumAnalyser:
         }
 
         summary_path = self.output_dir / "spectrum_analysis_summary.json"
-        with open(summary_path, 'w') as f:
+        with open(summary_path, "w") as f:
             json.dump(summary_only, f, indent=2, default=lambda x: float(x) if isinstance(x, (np.floating, np.integer)) else x)
         logger.info(f"Analysis summary saved to: {summary_path}")
 
@@ -1558,10 +1543,9 @@ class SpectrumAnalyser:
             csv_path = theo_dir / "per_spectrum_results.csv"
             df.to_csv(csv_path, index=False)
             logger.info(f"Per-spectrum results saved to: {csv_path} ({len(csv_rows):,d} spectra)")
-    
+
     def _create_individual_spectrum_plot(self, result: Dict[str, Any]) -> Figure:
-        """
-        Create a detailed plot for a single spectrum with theoretical annotation.
+        """Create a detailed plot for a single spectrum with theoretical annotation.
 
         3-Row Layout:
         -------------
@@ -1581,53 +1565,53 @@ class SpectrumAnalyser:
         """
         fig = plt.figure(figsize=(20, 18))
         gs = fig.add_gridspec(3, 2, height_ratios=[2, 5, 5], width_ratios=[3, 2], hspace=0.28, wspace=0.4, top=0.97)
-        
+
         # Build informative title with key metadata
         metadata = result.get("metadata", {})
         spec_stats = result.get("spectrum_stats", {})
         theo_analysis = result.get("theoretical_analysis", {})
-        
+
         # Core identification
-        clean_sequence = metadata.get("clean_sequence", result.get('spectrum_id', 'unknown'))
-        
+        clean_sequence = metadata.get("clean_sequence", result.get("spectrum_id", "unknown"))
+
         # Key proteomics metadata
         precursor_charge = theo_analysis.get("precursor_charge") or spec_stats.get("precursor_charge")
         frag_type = metadata.get("frag_type", "unknown")
-        
+
         # Build title components
         title_parts = [f"{clean_sequence}"]
-        
+
         # Add charge state (critical for interpretation)
         if precursor_charge:
             title_parts.append(f"z={precursor_charge}")
-        
+
         # Add fragmentation type (affects ion types)
         if frag_type and frag_type != "unknown":
             title_parts.append(f"{frag_type}")
-        
+
         # Combine into header (removed - no longer displayed as suptitle)
-        title = " | ".join(title_parts)
+        " | ".join(title_parts)
         # fig.suptitle(f"Spectrum Analysis: {title}", fontsize=16, fontweight='bold', y=0.995)
-        
+
         spec_stats = result["spectrum_stats"]
         theo_analysis = result["theoretical_analysis"]
         viz_data = result.get("visualization_data", {})
-        
+
         # 1. Statistics Box (row 0, col 0)
         ax_stats = fig.add_subplot(gs[0, 0])
-        ax_stats.axis('off')
+        ax_stats.axis("off")
 
         # Build statistics text
-        clean_seq = theo_analysis.get('clean_sequence', '')
+        clean_seq = theo_analysis.get("clean_sequence", "")
         seq_len = len(clean_seq) if clean_seq else 0
-        prec_mz = metadata.get('precursor_mz')
-        prec_mass = metadata.get('precursor_mass')
-        prec_charge = theo_analysis.get('precursor_charge')
+        prec_mz = metadata.get("precursor_mz")
+        prec_mass = metadata.get("precursor_mass")
+        prec_charge = theo_analysis.get("precursor_charge")
 
         # Peak density (peaks per 100 Da)
-        mz_lo, mz_hi = spec_stats['mz_range']
+        mz_lo, mz_hi = spec_stats["mz_range"]
         mz_span = mz_hi - mz_lo
-        peak_density = spec_stats['n_valid_peaks'] / max(mz_span, 1.0) * 100
+        peak_density = spec_stats["n_valid_peaks"] / max(mz_span, 1.0) * 100
 
         stats_lines = [
             "Spectrum Statistics:",
@@ -1649,7 +1633,7 @@ class SpectrumAnalyser:
         stats_lines.extend(["", "Theoretical Matching:"])
 
         # Sequence with length
-        seq_display = clean_seq[:50] if clean_seq else 'N/A'
+        seq_display = clean_seq[:50] if clean_seq else "N/A"
         if seq_len > 0:
             stats_lines.append(f"  • Sequence: {seq_display} ({seq_len} residues)")
         else:
@@ -1660,62 +1644,66 @@ class SpectrumAnalyser:
         )
 
         # Matching stats with PPM bias
-        n_theo = theo_analysis.get('n_theoretical', 0)
-        n_matched = theo_analysis.get('n_matched', 0)
-        match_rate = theo_analysis.get('match_rate', 0) * 100
-        median_ppm = theo_analysis.get('median_ppm', np.nan)
-        mean_ppm = theo_analysis.get('mean_ppm', np.nan)
+        n_theo = theo_analysis.get("n_theoretical", 0)
+        n_matched = theo_analysis.get("n_matched", 0)
+        match_rate = theo_analysis.get("match_rate", 0) * 100
+        median_ppm = theo_analysis.get("median_ppm", np.nan)
+        mean_ppm = theo_analysis.get("mean_ppm", np.nan)
         ppm_str = f"Median PPM: {median_ppm:.2f}"
         if not np.isnan(mean_ppm):
             ppm_str += f" (bias: {mean_ppm:+.2f})"
         stats_lines.append(f"  • Matched: {n_matched}/{n_theo} theoretical ({match_rate:.1f}%)  |  {ppm_str}")
 
         # Ion series coverage (b/y base ions vs possible cleavage sites)
-        label_counts = theo_analysis.get('annotation_label_counts', {})
+        label_counts = theo_analysis.get("annotation_label_counts", {})
         if label_counts and seq_len > 1:
             n_possible = seq_len - 1
-            n_b = label_counts.get('b-ion', 0)
-            n_y = label_counts.get('y-ion', 0)
+            n_b = label_counts.get("b-ion", 0)
+            n_y = label_counts.get("y-ion", 0)
             stats_lines.append(
-                f"  • Ion coverage: B={n_b}/{n_possible} ({n_b/n_possible*100:.0f}%)  |  Y={n_y}/{n_possible} ({n_y/n_possible*100:.0f}%)"
+                f"  • Ion coverage: B={n_b}/{n_possible} ({n_b / n_possible * 100:.0f}%)  |  Y={n_y}/{n_possible} ({n_y / n_possible * 100:.0f}%)"
             )
 
         # Conditional annotation breakdown
-        if 'n_base' in theo_analysis:
+        if "n_base" in theo_analysis:
             breakdown_parts = [f"Base={theo_analysis.get('n_base', 0)}"]
-            if theo_analysis.get('n_precursor', 0) > 0:
+            if theo_analysis.get("n_precursor", 0) > 0:
                 breakdown_parts.append(f"Precursor={theo_analysis.get('n_precursor', 0)}")
-            breakdown_parts.extend([
-                f"Losses={theo_analysis.get('n_losses', 0)}",
-                f"Isotopes={theo_analysis.get('n_isotopes', 0)}"
-            ])
+            breakdown_parts.extend([f"Losses={theo_analysis.get('n_losses', 0)}", f"Isotopes={theo_analysis.get('n_isotopes', 0)}"])
             stats_lines.append(f"  • Breakdown: {' | '.join(breakdown_parts)}")
 
         stats_lines.append(
-            f"  • Annotated: {theo_analysis.get('annotated_fraction', 0)*100:.1f}% peaks  |  {theo_analysis.get('frac_intensity', 0)*100:.1f}% intensity"
+            f"  • Annotated: {theo_analysis.get('annotated_fraction', 0) * 100:.1f}% peaks  |  "
+            f"{theo_analysis.get('frac_intensity', 0) * 100:.1f}% intensity"
         )
 
         # Custom ion detection summary
-        custom_ion_data = theo_analysis.get('custom_ion_data', {})
-        custom_detection = custom_ion_data.get('detection', {})
+        custom_ion_data = theo_analysis.get("custom_ion_data", {})
+        custom_detection = custom_ion_data.get("detection", {})
         if custom_detection:
-            found_ions = [name for name, d in custom_detection.items() if d.get('found')]
-            n_custom_lift = custom_ion_data.get('n_custom_explaining_unannotated', 0)
+            found_ions = [name for name, d in custom_detection.items() if d.get("found")]
+            n_custom_lift = custom_ion_data.get("n_custom_explaining_unannotated", 0)
             if found_ions:
-                stats_lines.append(
-                    f"  • Custom ions: {len(found_ions)} detected  |  {n_custom_lift} unannotated peaks explained"
-                )
+                stats_lines.append(f"  • Custom ions: {len(found_ions)} detected  |  {n_custom_lift} unannotated peaks explained")
 
         stats_text = "\n".join(stats_lines)
 
-        ax_stats.text(0.02, 0.5, stats_text, transform=ax_stats.transAxes, fontsize=10,
-                     verticalalignment='center', horizontalalignment='left', fontfamily='monospace',
-                     bbox=dict(boxstyle="round,pad=0.8", facecolor="lightgray", alpha=0.9, edgecolor='gray', linewidth=1.5))
+        ax_stats.text(
+            0.02,
+            0.5,
+            stats_text,
+            transform=ax_stats.transAxes,
+            fontsize=10,
+            verticalalignment="center",
+            horizontalalignment="left",
+            fontfamily="monospace",
+            bbox={"boxstyle": "round,pad=0.8", "facecolor": "lightgray", "alpha": 0.9, "edgecolor": "gray", "linewidth": 1.5},
+        )
 
         # 1b. Annotation Distribution (row 0, col 1) — percentages so both groups share a common scale
         ax_dist = fig.add_subplot(gs[0, 1])
-        if theo_analysis.get('sequence_available', False) and 'annotated_mask' in theo_analysis:
-            _ann_mask = np.array(theo_analysis['annotated_mask'])
+        if theo_analysis.get("sequence_available", False) and "annotated_mask" in theo_analysis:
+            _ann_mask = np.array(theo_analysis["annotated_mask"])
             _n_ann = int(_ann_mask.sum())
             _n_unann = int((~_ann_mask).sum())
             _total_peaks = _n_ann + _n_unann
@@ -1723,8 +1711,8 @@ class SpectrumAnalyser:
             _ann_int = 0.0
             _unann_int = 0.0
             if viz_data:
-                _valid_peaks = viz_data['valid_peaks']
-                _int_values = viz_data['intensity_values']
+                _valid_peaks = viz_data["valid_peaks"]
+                _int_values = viz_data["intensity_values"]
                 _valid_int = _int_values[_valid_peaks] if _valid_peaks.any() else np.array([])
                 if len(_valid_int) == len(_ann_mask):
                     _ann_int = float(_valid_int[_ann_mask].sum())
@@ -1739,49 +1727,45 @@ class SpectrumAnalyser:
 
             _x = np.arange(2)
             _w = 0.35
-            ax_dist.bar(_x - _w / 2, [_peak_ann_pct, _int_ann_pct],
-                        _w, label='Annotated', alpha=0.85, color='#3498db')
-            ax_dist.bar(_x + _w / 2, [_peak_unann_pct, _int_unann_pct],
-                        _w, label='Unannotated', alpha=0.85, color='#e74c3c')
+            ax_dist.bar(_x - _w / 2, [_peak_ann_pct, _int_ann_pct], _w, label="Annotated", alpha=0.85, color="#3498db")
+            ax_dist.bar(_x + _w / 2, [_peak_unann_pct, _int_unann_pct], _w, label="Unannotated", alpha=0.85, color="#e74c3c")
 
             # Percentage labels above each bar
-            for _xi, (_ann_pct, _unann_pct) in zip(_x, [(_peak_ann_pct, _peak_unann_pct),
-                                                         (_int_ann_pct, _int_unann_pct)]):
-                ax_dist.text(_xi - _w / 2, _ann_pct + 1.5, f"{_ann_pct:.0f}%", ha='center', fontsize=9)
-                ax_dist.text(_xi + _w / 2, _unann_pct + 1.5, f"{_unann_pct:.0f}%", ha='center', fontsize=9)
+            for _xi, (_ann_pct, _unann_pct) in zip(_x, [(_peak_ann_pct, _peak_unann_pct), (_int_ann_pct, _int_unann_pct)], strict=False):
+                ax_dist.text(_xi - _w / 2, _ann_pct + 1.5, f"{_ann_pct:.0f}%", ha="center", fontsize=9)
+                ax_dist.text(_xi + _w / 2, _unann_pct + 1.5, f"{_unann_pct:.0f}%", ha="center", fontsize=9)
 
             ax_dist.set_xticks(_x)
-            ax_dist.set_xticklabels(['Peak Count', 'Total Intensity'])
-            ax_dist.set_ylabel('%', fontsize=10)
+            ax_dist.set_xticklabels(["Peak Count", "Total Intensity"])
+            ax_dist.set_ylabel("%", fontsize=10)
             ax_dist.set_ylim(0, 115)
-            ax_dist.set_title('Annotation Distribution', fontsize=11, fontweight='bold')
+            ax_dist.set_title("Annotation Distribution", fontsize=11, fontweight="bold")
             ax_dist.legend(fontsize=9)
-            ax_dist.grid(True, alpha=0.3, axis='y')
+            ax_dist.grid(True, alpha=0.3, axis="y")
         else:
-            ax_dist.text(0.5, 0.5, "No annotation data available", ha='center', va='center',
-                        transform=ax_dist.transAxes, fontsize=12)
-            ax_dist.set_title('Annotation Distribution')
+            ax_dist.text(0.5, 0.5, "No annotation data available", ha="center", va="center", transform=ax_dist.transAxes, fontsize=12)
+            ax_dist.set_title("Annotation Distribution")
 
         # 2. Spectrum with Theoretical Matching (row 1, spans full width)
         ax_theo = fig.add_subplot(gs[1, :])
-        
-        if viz_data and theo_analysis.get('sequence_available', False):
-            mz_values = viz_data['mz_values']
-            intensity_values = viz_data['intensity_values']
-            valid_peaks = viz_data['valid_peaks']
-            
+
+        if viz_data and theo_analysis.get("sequence_available", False):
+            mz_values = viz_data["mz_values"]
+            intensity_values = viz_data["intensity_values"]
+            valid_peaks = viz_data["valid_peaks"]
+
             # Get annotated mask from theoretical analysis
             annotated_mask_full = np.zeros(len(mz_values), dtype=bool)
-            if 'annotated_mask' in theo_analysis:
-                annotated_mask = np.array(theo_analysis['annotated_mask'])
+            if "annotated_mask" in theo_analysis:
+                annotated_mask = np.array(theo_analysis["annotated_mask"])
                 annotated_mask_full[valid_peaks] = annotated_mask
-            
+
             # Get annotations and categorize peaks
-            all_annotations = list(theo_analysis.get('theo_annotations', []))
+            all_annotations = list(theo_analysis.get("theo_annotations", []))
 
             # Merge custom ion detections into annotations for unannotated peaks
-            custom_ion_data = theo_analysis.get('custom_ion_data', {})
-            custom_detection = custom_ion_data.get('detection', {})
+            custom_ion_data = theo_analysis.get("custom_ion_data", {})
+            custom_detection = custom_ion_data.get("detection", {})
             if custom_detection:
                 valid_mz_arr = mz_values[valid_peaks] if valid_peaks.any() else np.array([])
 
@@ -1794,19 +1778,19 @@ class SpectrumAnalyser:
                         if idx < len(all_annotations) and all_annotations[idx]:
                             return  # already has a fragment annotation
                         if len(all_annotations) <= idx:
-                            all_annotations.extend([''] * (idx + 1 - len(all_annotations)))
+                            all_annotations.extend([""] * (idx + 1 - len(all_annotations)))
                         all_annotations[idx] = label
 
                 for group_name, group_data in custom_detection.items():
-                    if not group_data.get('found'):
+                    if not group_data.get("found"):
                         continue
                     # Monoisotopic matches
-                    for matched_mz_val in group_data.get('matched_mz', []):
+                    for matched_mz_val in group_data.get("matched_mz", []):
                         _annotate_custom_peak(matched_mz_val, f"custom:{group_name}@{matched_mz_val:.4f}")
                     # Isotope matches (from conditional Pass 2)
-                    for iso_match in group_data.get('isotope_matches', []):
-                        iso_mz = iso_match['matched_mz']
-                        iso_num = iso_match['isotope_num']
+                    for iso_match in group_data.get("isotope_matches", []):
+                        iso_mz = iso_match["matched_mz"]
+                        iso_num = iso_match["isotope_num"]
                         _annotate_custom_peak(iso_mz, f"custom:{group_name}[+{iso_num}]@{iso_mz:.4f}")
 
             # Categorize peaks by ion type
@@ -1828,8 +1812,13 @@ class SpectrumAnalyser:
             if unannotated_indices:
                 un_color, un_alpha = category_colors["unannotated"]
                 markerline, stemlines, baseline = ax_theo.stem(
-                    mz_values[unannotated_indices], intensity_values[unannotated_indices],
-                    linefmt='-', markerfmt='o', basefmt=' ', label='Unannotated')
+                    mz_values[unannotated_indices],
+                    intensity_values[unannotated_indices],
+                    linefmt="-",
+                    markerfmt="o",
+                    basefmt=" ",
+                    label="Unannotated",
+                )
                 plt.setp(markerline, color=un_color, alpha=un_alpha, markersize=3)
                 plt.setp(stemlines, color=un_color, alpha=un_alpha)
                 plotted_categories.add("unannotated")
@@ -1840,9 +1829,8 @@ class SpectrumAnalyser:
                 if cat_indices:
                     color, alpha = category_colors.get(category, ("#9467bd", 0.8))
                     markerline, stemlines, baseline = ax_theo.stem(
-                        mz_values[cat_indices], intensity_values[cat_indices],
-                        linefmt='-', markerfmt='o', basefmt=' ',
-                        label=category)
+                        mz_values[cat_indices], intensity_values[cat_indices], linefmt="-", markerfmt="o", basefmt=" ", label=category
+                    )
                     plt.setp(markerline, color=color, alpha=alpha, markersize=3)
                     plt.setp(stemlines, color=color, alpha=alpha)
                     plotted_categories.add(category)
@@ -1883,38 +1871,45 @@ class SpectrumAnalyser:
                     ax_theo.annotate(
                         display_ann,
                         xy=(mz, intensity),
-                        xytext=(0, 5), textcoords='offset points',
-                        ha='center', fontsize=7, color=text_color,
+                        xytext=(0, 5),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        color=text_color,
                         rotation=90,  # Vertical text
-                        alpha=0.9, fontweight='bold'
+                        alpha=0.9,
+                        fontweight="bold",
                     )
-            
-            ax_theo.set_xlabel('m/z', fontsize=11, fontweight='bold')
-            ax_theo.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
-            
+
+            ax_theo.set_xlabel("m/z", fontsize=11, fontweight="bold")
+            ax_theo.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
+
             # Add annotation mode to title
             annotation_mode = "Conditional" if self.use_conditional_annotation else "Traditional"
-            ax_theo.set_title(f'Spectrum with Theoretical Matching (by Ion Type) - {annotation_mode} Mode', 
-                             fontsize=12, fontweight='bold')
-            
+            ax_theo.set_title(f"Spectrum with Theoretical Matching (by Ion Type) - {annotation_mode} Mode", fontsize=12, fontweight="bold")
+
             # Create legend with note about conditional annotation
-            legend = ax_theo.legend(loc='upper right', fontsize=9, ncol=2,
-                                    markerscale=0.7, borderpad=0.4, labelspacing=0.3,
-                                    handlelength=1.2, handletextpad=0.4)
-            if self.use_conditional_annotation and ('n_base' in theo_analysis):
+            ax_theo.legend(
+                loc="upper right", fontsize=9, ncol=2, markerscale=0.7, borderpad=0.4, labelspacing=0.3, handlelength=1.2, handletextpad=0.4
+            )
+            if self.use_conditional_annotation and ("n_base" in theo_analysis):
                 # Add note about conditional annotation
                 note_parts = [f"{theo_analysis.get('n_base', 0)} base"]
-                if theo_analysis.get('n_precursor', 0) > 0:
+                if theo_analysis.get("n_precursor", 0) > 0:
                     note_parts.append(f"{theo_analysis.get('n_precursor', 0)} precursor")
-                note_parts.extend([
-                    f"{theo_analysis.get('n_losses', 0)} losses",
-                    f"{theo_analysis.get('n_isotopes', 0)} isotopes"
-                ])
+                note_parts.extend([f"{theo_analysis.get('n_losses', 0)} losses", f"{theo_analysis.get('n_isotopes', 0)} isotopes"])
                 note_text = f"Conditional: {' + '.join(note_parts)}"
-                ax_theo.text(0.98, 0.02, note_text, transform=ax_theo.transAxes, 
-                           fontsize=8, ha='right', va='bottom',
-                           bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8, edgecolor='gray'))
-            
+                ax_theo.text(
+                    0.98,
+                    0.02,
+                    note_text,
+                    transform=ax_theo.transAxes,
+                    fontsize=8,
+                    ha="right",
+                    va="bottom",
+                    bbox={"boxstyle": "round,pad=0.3", "facecolor": "lightyellow", "alpha": 0.8, "edgecolor": "gray"},
+                )
+
             ax_theo.grid(True, alpha=0.3)
             ax_theo.set_xlim((self.min_mz, self.max_mz))
 
@@ -1927,57 +1922,62 @@ class SpectrumAnalyser:
             if prec_mz is not None:
                 prec_charge_lbl = f" (z={prec_charge})" if prec_charge else ""
                 ax_theo.axvline(
-                    x=prec_mz, color='#ff7f0e', linestyle='--', linewidth=1.5,
-                    alpha=0.85, zorder=5,
+                    x=prec_mz,
+                    color="#ff7f0e",
+                    linestyle="--",
+                    linewidth=1.5,
+                    alpha=0.85,
+                    zorder=5,
                     label=f"Precursor m/z={prec_mz:.2f}{prec_charge_lbl}",
                 )
                 ax_theo.text(
-                    prec_mz, max_intensity * 1.30,
+                    prec_mz,
+                    max_intensity * 1.30,
                     f"prec\n{prec_mz:.2f}{prec_charge_lbl}",
-                    ha='center', va='top', fontsize=7, color='#ff7f0e',
-                    fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
-                              alpha=0.7, edgecolor='#ff7f0e'),
+                    ha="center",
+                    va="top",
+                    fontsize=7,
+                    color="#ff7f0e",
+                    fontweight="bold",
+                    bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "alpha": 0.7, "edgecolor": "#ff7f0e"},
                 )
 
             ax_theo.set_ylim((0, max_intensity * 1.35))
         else:
-            ax_theo.text(0.5, 0.5, "No theoretical data available", ha='center', va='center',
-                        transform=ax_theo.transAxes, fontsize=12)
-            ax_theo.set_title('Spectrum with Theoretical Matching')
+            ax_theo.text(0.5, 0.5, "No theoretical data available", ha="center", va="center", transform=ax_theo.transAxes, fontsize=12)
+            ax_theo.set_title("Spectrum with Theoretical Matching")
 
         # 3. Index-based spectrum (row 2, spans full width)
         # Peaks are evenly spaced by index so every annotation can be shown without
         # the m/z crowding that affects the m/z panel above.
         ax_idx = fig.add_subplot(gs[2, :])
-        if viz_data and theo_analysis.get('sequence_available', False):
-            _idx_mz  = viz_data['mz_values']
-            _idx_int = viz_data['intensity_values']
-            _idx_vp  = viz_data['valid_peaks']
+        if viz_data and theo_analysis.get("sequence_available", False):
+            _idx_mz = viz_data["mz_values"]
+            _idx_int = viz_data["intensity_values"]
+            _idx_vp = viz_data["valid_peaks"]
 
-            _valid_mz  = _idx_mz[_idx_vp]
+            _valid_mz = _idx_mz[_idx_vp]
             _valid_int = _idx_int[_idx_vp]
-            n_valid    = int(_idx_vp.sum())
-            x_pos      = np.arange(n_valid)
+            n_valid = int(_idx_vp.sum())
+            x_pos = np.arange(n_valid)
 
-            _ann_mask_idx = np.array(theo_analysis.get('annotated_mask',
-                                                        np.zeros(n_valid, dtype=bool)))
-            _anns_idx     = list(theo_analysis.get('theo_annotations', []))
+            _ann_mask_idx = np.array(theo_analysis.get("annotated_mask", np.zeros(n_valid, dtype=bool)))
+            _anns_idx = list(theo_analysis.get("theo_annotations", []))
 
             # Merge custom ion detections into index annotations (same as m/z panel)
             _idx_all_annotations = list(_anns_idx)  # copy to extend
-            custom_ion_data = theo_analysis.get('custom_ion_data', {})
-            custom_detection = custom_ion_data.get('detection', {})
+            custom_ion_data = theo_analysis.get("custom_ion_data", {})
+            custom_detection = custom_ion_data.get("detection", {})
             if custom_detection:
                 for group_name, det in custom_detection.items():
-                    if not det.get('found'):
+                    if not det.get("found"):
                         continue
-                    for matched_mz_val in det.get('matched_mz', []):
+                    for matched_mz_val in det.get("matched_mz", []):
                         idx_match = int(np.argmin(np.abs(_valid_mz - matched_mz_val)))
                         if abs(_valid_mz[idx_match] - matched_mz_val) / max(matched_mz_val, 1e-12) * 1e6 < self.ppm_tol * 2:
                             if idx_match < len(_idx_all_annotations) and _idx_all_annotations[idx_match]:
                                 continue  # already has a fragment annotation
-                            _idx_all_annotations.extend([''] * (idx_match + 1 - len(_idx_all_annotations)))
+                            _idx_all_annotations.extend([""] * (idx_match + 1 - len(_idx_all_annotations)))
                             _idx_all_annotations[idx_match] = f"custom:{group_name}@{matched_mz_val:.4f}"
 
             # Classify using same categorize_ion() and category_colors as the m/z panel
@@ -1995,9 +1995,7 @@ class SpectrumAnalyser:
             if "unannotated" in _idx_groups:
                 un_color, un_alpha = category_colors["unannotated"]
                 arr = np.array(_idx_groups["unannotated"])
-                ax_idx.bar(x_pos[arr], _valid_int[arr],
-                           color=un_color, alpha=un_alpha,
-                           width=1.0, linewidth=0, label="Unannotated")
+                ax_idx.bar(x_pos[arr], _valid_int[arr], color=un_color, alpha=un_alpha, width=1.0, linewidth=0, label="Unannotated")
 
             # Plot annotated categories — same colour + alpha as the m/z panel
             for cat in sorted(set(_idx_categories.values()) - {"unannotated"}):
@@ -2006,9 +2004,7 @@ class SpectrumAnalyser:
                     continue
                 color, alpha = category_colors.get(cat, ("#9467bd", 0.8))
                 arr = np.array(idxs)
-                ax_idx.bar(x_pos[arr], _valid_int[arr],
-                           color=color, alpha=alpha,
-                           width=1.0, linewidth=0, label=cat)
+                ax_idx.bar(x_pos[arr], _valid_int[arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
             # Label every annotated peak — uniform spacing means no m/z crowding
             for i in range(n_valid):
@@ -2016,10 +2012,16 @@ class SpectrumAnalyser:
                 if ann and _idx_categories.get(i, "unannotated") != "unannotated":
                     display_ann = format_annotation_display(ann)
                     ax_idx.annotate(
-                        display_ann, xy=(i, _valid_int[i]), xytext=(0, 4),
-                        textcoords='offset points', ha='center', fontsize=7,
-                        rotation=90, alpha=0.9, fontweight='bold',
-                        color='black',
+                        display_ann,
+                        xy=(i, _valid_int[i]),
+                        xytext=(0, 4),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        rotation=90,
+                        alpha=0.9,
+                        fontweight="bold",
+                        color="black",
                     )
 
             # Label top-20 unannotated peaks with their m/z values so that
@@ -2028,44 +2030,43 @@ class SpectrumAnalyser:
             if unannotated_idxs:
                 unannotated_arr = np.array(unannotated_idxs)
                 top_k = min(20, len(unannotated_arr))
-                top_unannotated = unannotated_arr[
-                    np.argsort(_valid_int[unannotated_arr])[-top_k:]
-                ]
+                top_unannotated = unannotated_arr[np.argsort(_valid_int[unannotated_arr])[-top_k:]]
                 for i in top_unannotated:
                     ax_idx.annotate(
                         f"{_valid_mz[i]:.2f}",
-                        xy=(i, _valid_int[i]), xytext=(0, 4),
-                        textcoords='offset points', ha='center', fontsize=6,
-                        rotation=90, alpha=0.7, fontstyle='italic',
-                        color='#555555',
+                        xy=(i, _valid_int[i]),
+                        xytext=(0, 4),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=6,
+                        rotation=90,
+                        alpha=0.7,
+                        fontstyle="italic",
+                        color="#555555",
                     )
 
             # X-tick labels: show m/z values at regular intervals for context
             tick_step = max(1, n_valid // 20)
-            tick_pos  = np.arange(0, n_valid, tick_step)
+            tick_pos = np.arange(0, n_valid, tick_step)
             ax_idx.set_xticks(tick_pos)
-            ax_idx.set_xticklabels(
-                [f"{_valid_mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha='right'
-            )
+            ax_idx.set_xticklabels([f"{_valid_mz[i]:.0f}" for i in tick_pos], fontsize=8, rotation=45, ha="right")
             ax_idx.set_xlim(-1, n_valid)
             _max_idx_int = _valid_int.max() if len(_valid_int) > 0 else 1.0
             ax_idx.set_ylim(0, _max_idx_int * 1.6)  # extra headroom for labels
-            ax_idx.set_xlabel('m/z (at peak index)', fontsize=11, fontweight='bold')
-            ax_idx.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
-            ax_idx.set_title('All Annotations — Index-Based View',
-                             fontsize=11, fontweight='bold')
-            ax_idx.legend(fontsize=9, loc='upper right', ncol=2,
-                          markerscale=0.7, borderpad=0.4, labelspacing=0.3,
-                          handlelength=1.2, handletextpad=0.4)
-            ax_idx.grid(True, alpha=0.3, axis='y')
+            ax_idx.set_xlabel("m/z (at peak index)", fontsize=11, fontweight="bold")
+            ax_idx.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
+            ax_idx.set_title("All Annotations — Index-Based View", fontsize=11, fontweight="bold")
+            ax_idx.legend(
+                fontsize=9, loc="upper right", ncol=2, markerscale=0.7, borderpad=0.4, labelspacing=0.3, handlelength=1.2, handletextpad=0.4
+            )
+            ax_idx.grid(True, alpha=0.3, axis="y")
         else:
-            ax_idx.text(0.5, 0.5, "No theoretical data available", ha='center', va='center',
-                        transform=ax_idx.transAxes, fontsize=12)
-            ax_idx.set_title('Index-Based Spectrum')
+            ax_idx.text(0.5, 0.5, "No theoretical data available", ha="center", va="center", transform=ax_idx.transAxes, fontsize=12)
+            ax_idx.set_title("Index-Based Spectrum")
 
         return fig
-    
-    def print_summary(self):
+
+    def print_summary(self) -> None:
         """Print spectrum-level summary to console.
 
         Note: Theoretical matching stats, annotation labels, and fragmentation
@@ -2074,34 +2075,32 @@ class SpectrumAnalyser:
         summary = self.analysis_results["summary"]
         match_dist = self.analysis_results.get("match_distribution", {})
 
-        print("\n" + "=" * 80)
-        print("SPECTRUM ANALYSIS SUMMARY")
-        print("=" * 80)
-        print(f"Total spectra analyzed: {summary.get('total_spectra_analyzed', 0):,d}")
-        print(f"Spectra with sequence: {summary.get('total_spectra_with_sequence', 0):,d}")
-        print(f"Average peaks per spectrum: {summary.get('avg_peaks_per_spectrum', 0):.1f}")
+        print("\n" + "=" * 80)  # noqa: T201
+        print("SPECTRUM ANALYSIS SUMMARY")  # noqa: T201
+        print("=" * 80)  # noqa: T201
+        print(f"Total spectra analyzed: {summary.get('total_spectra_analyzed', 0):,d}")  # noqa: T201
+        print(f"Spectra with sequence: {summary.get('total_spectra_with_sequence', 0):,d}")  # noqa: T201
+        print(f"Average peaks per spectrum: {summary.get('avg_peaks_per_spectrum', 0):.1f}")  # noqa: T201
 
         if match_dist:
-            print(f"\nMatch Distribution (informational):")
-            print(f"  Mean matched peaks: {match_dist.get('mean_matches', 0):.1f}")
-            print(f"  Median matched peaks: {match_dist.get('median_matches', 0):.1f}")
-            print(f"  Min/Max: {match_dist.get('min_matches', 0)}/{match_dist.get('max_matches', 0)}")
-            print(f"  (Quality gate details in theoretical_analysis/ output)")
+            print("\nMatch Distribution (informational):")  # noqa: T201
+            print(f"  Mean matched peaks: {match_dist.get('mean_matches', 0):.1f}")  # noqa: T201
+            print(f"  Median matched peaks: {match_dist.get('median_matches', 0):.1f}")  # noqa: T201
+            print(f"  Min/Max: {match_dist.get('min_matches', 0)}/{match_dist.get('max_matches', 0)}")  # noqa: T201
+            print("  (Quality gate details in theoretical_analysis/ output)")  # noqa: T201
 
         custom_ion = self.analysis_results.get("custom_ion_analysis")
         if custom_ion:
             ion_rates = custom_ion.get("ion_hit_rates", {})
             top = [(g, d["hit_rate"]) for g, d in ion_rates.items() if d["hit_rate"] > 0]
             top.sort(key=lambda x: x[1], reverse=True)
-            print(f"\nCustom Ion Detection (top hits):")
+            print("\nCustom Ion Detection (top hits):")  # noqa: T201
             for group, rate in top[:5]:
-                print(f"  {group:<35s} {rate*100:5.1f}%")
+                print(f"  {group:<35s} {rate * 100:5.1f}%")  # noqa: T201
             if len(top) > 5:
-                print(f"  ... {len(top)} total groups detected  (see custom_ion_analysis.json)")
+                print(f"  ... {len(top)} total groups detected  (see custom_ion_analysis.json)")  # noqa: T201
 
-        print(f"\n(Theoretical analysis: see theoretical_analysis/ directory)")
-        print(f"(Masking analysis: see masking_analysis/ directory)")
-        print(f"\nResults saved to: {self.output_dir}")
-        print("=" * 80)
-
-
+        print("\n(Theoretical analysis: see theoretical_analysis/ directory)")  # noqa: T201
+        print("(Masking analysis: see masking_analysis/ directory)")  # noqa: T201
+        print(f"\nResults saved to: {self.output_dir}")  # noqa: T201
+        print("=" * 80)  # noqa: T201

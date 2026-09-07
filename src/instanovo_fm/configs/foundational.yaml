@@ -13,7 +13,7 @@ tags:
   training: self-supervised
 
 # Overwritten when using Aichor
-tb_summarywriter: "./logs/instanovo/foundational"
+tb_summarywriter: "./logs/instanovo_fm"
 
 # Training parameters
 seed: 101

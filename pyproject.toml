@@ -158,6 +158,9 @@ select = ["E", "F", "W", "I", "UP", "B", "C4"]
 "tests/unit_test/foundational/**" = ["UP", "I001", "E501", "E402", "E7", "W2", "W3",
                                     "F401", "F541", "F722", "F841", "B", "C4", "E4"]
 "tests/scripts_test/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
+# tests/unit_test/downstream_denovo_test/ is the ported de novo suite; same
+# reasoning as the two above. Only E501 fires, so only E501 is ignored.
+"tests/unit_test/downstream_denovo_test/**" = ["E501"]
 # B904/B905 are inherited from the internal repo and are *potential* defects,
 # not confirmed ones. B905 in particular asks whether a zip() is meant to
 # truncate: silencing it with strict=False would assert an intent nobody has

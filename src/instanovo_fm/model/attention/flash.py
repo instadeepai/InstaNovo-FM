@@ -1,11 +1,16 @@
+import math
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 
 class FlashMHA(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.0, rotary_emb: nn.Module | None = None):
+    """Flash m h a."""
+
+    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.0, rotary_emb: nn.Module | None = None) -> None:
+        """Initialise the input."""
         super().__init__()
         assert embed_dim % num_heads == 0
         self.h = num_heads
@@ -22,17 +27,18 @@ class FlashMHA(nn.Module):
         self.num_heads = num_heads
         self.embed_dim = embed_dim
 
-    def forward(
+    def forward(  # type: ignore[no-untyped-def]
         self,
         x: torch.Tensor,
         attn_mask: torch.Tensor | None = None,
-        attn_bias=None,                  # Additive attention bias (PA, ALiBi, etc.)
-        key_padding_mask=None,
+        attn_bias: Any = None,  # Additive attention bias (PA, ALiBi, etc.)
+        key_padding_mask: Any = None,
         is_causal: bool = False,
         return_attn_weights: bool = False,
-        **_
+        **_,
     ) -> tuple[torch.Tensor, None | torch.Tensor]:
-        B, L, _ = x.shape
+        """Run the forward pass."""
+        B, L, _ = x.shape  # noqa: N806
         qkv = self.qkv(x).view(B, L, 3, self.h, self.d).transpose(1, 3)  # B,H,L,d
         q, k, v = qkv.unbind(dim=2)
 
@@ -51,14 +57,14 @@ class FlashMHA(nn.Module):
                 dots = dots + attn_bias
             if attn_mask is not None:
                 if attn_mask.dtype == torch.bool:
-                    dots.masked_fill_(attn_mask, float('-inf'))
+                    dots.masked_fill_(attn_mask, float("-inf"))
                 else:
                     dots = dots + attn_mask
             if key_padding_mask is not None:
-                dots.masked_fill_(key_padding_mask[:, None, None, :], float('-inf'))
+                dots.masked_fill_(key_padding_mask[:, None, None, :], float("-inf"))
             if is_causal:
                 causal_mask = torch.triu(torch.ones(L, L, device=dots.device, dtype=torch.bool), diagonal=1)
-                dots.masked_fill_(causal_mask, float('-inf'))
+                dots.masked_fill_(causal_mask, float("-inf"))
             att = torch.softmax(dots, -1)
             att = torch.dropout(att, dropout_p, self.training)
             y = torch.matmul(att, v).transpose(1, 2).reshape(B, L, -1)
@@ -91,18 +97,20 @@ class FlashMHA(nn.Module):
         if attn_mask is not None:
             if attn_mask.dtype == torch.bool:
                 float_mask = torch.zeros_like(q[:, :, :1, :1].expand(-1, -1, L, L), dtype=q.dtype)
-                float_mask.masked_fill_(attn_mask, float('-inf'))
+                float_mask.masked_fill_(attn_mask, float("-inf"))
                 attn_mask = float_mask
             sdpa_mask = sdpa_mask + attn_mask if sdpa_mask is not None else attn_mask
 
         if key_padding_mask is not None:
             pad_bias = torch.zeros(B, 1, 1, L, device=q.device, dtype=q.dtype)
-            pad_bias.masked_fill_(key_padding_mask[:, None, None, :], float('-inf'))
+            pad_bias.masked_fill_(key_padding_mask[:, None, None, :], float("-inf"))
             sdpa_mask = sdpa_mask + pad_bias if sdpa_mask is not None else pad_bias
 
         if sdpa_mask is not None:
             y = F.scaled_dot_product_attention(
-                q, k, v,
+                q,
+                k,
+                v,
                 attn_mask=sdpa_mask,
                 is_causal=False,
                 dropout_p=dropout_p,
@@ -110,7 +118,9 @@ class FlashMHA(nn.Module):
         else:
             # No bias — pure flash kernel, fastest path
             y = F.scaled_dot_product_attention(
-                q, k, v,
+                q,
+                k,
+                v,
                 is_causal=is_causal,
                 dropout_p=dropout_p,
             )

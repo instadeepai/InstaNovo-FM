@@ -71,11 +71,28 @@ instanovo-fm train \
     model.n_layers=2 \
     model.dim_model=128 \
     model.n_heads=4 \
-    training_steps=200
+    train_batch_size=16 \
+    predict_batch_size=16 \
+    training_steps=200 \
+    checkpoint_interval=100 \
+    post_training_evaluation.enabled=False
 ```
 
 Watch the reconstruction loss fall. That is the whole training signal: the model is predicting the
 *m/z* of peaks it was not allowed to see.
+
+Those last four overrides exist only because this is a small run, and each one fails in a way that
+is hard to read if you leave it out:
+
+- **`train_batch_size`** defaults to 1024 and the training loader drops incomplete batches, so a
+  dataset smaller than 1024 spectra produces no batches at all and training stops with a bare
+  `StopIteration`. Set it below your spectrum count.
+- **`predict_batch_size`** governs validation and wants the same treatment.
+- **`checkpoint_interval`** defaults to 10,000 steps, so a 200-step run writes no checkpoint and
+  the evaluation step below has nothing to load.
+- **`post_training_evaluation.enabled`** is on by default and runs the full task battery against
+  `dataset.test_path` when training finishes. This tutorial never sets a test split, so leaving it
+  on ends the run with a `FileNotFoundError`. Set a `dataset.test_path` instead if you do want it.
 
 > **This is a demonstration, not the published model**
 >
@@ -97,7 +114,7 @@ instanovo-fm evaluate \
 (effective rank, anisotropy, mean pairwise similarity). Results land in:
 
 ```
-<output>/instanovo/foundational/eval/embed_eval_results/<variant>/<task>/task_summary.json
+<output>/instanovo_fm/eval/embed_eval_results/<task>/task_summary.json
 ```
 
 If your spectra *are* annotated, the probe tasks become available and will tell you what is

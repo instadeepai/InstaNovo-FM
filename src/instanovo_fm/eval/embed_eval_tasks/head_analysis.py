@@ -31,20 +31,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from matplotlib.axes import Axes
 
 from instanovo.__init__ import console
 from instanovo.constants import CARBON_MASS_DELTA, H2O_MASS, PROTON_MASS_AMU
 from instanovo_fm.eval.embed_eval_tasks import BaseTask
-from instanovo_fm.utils.modifications import clean_peptide_sequence
-from instanovo_fm.utils.peak_classification import (
-    extract_fragment_position,
-    extract_ion_type,
-)
 from instanovo_fm.utils.ion_visualization import (
     CATEGORY_COLORS,
     TEXT_COLORS,
     categorize_ion,
     format_annotation_display,
+)
+from instanovo_fm.utils.modifications import clean_peptide_sequence
+from instanovo_fm.utils.peak_classification import (
+    extract_fragment_position,
+    extract_ion_type,
 )
 from instanovo.utils.colorlogging import ColorLog
 
@@ -59,17 +60,37 @@ _ISOTOPE_TOL = 0.02  # Da tolerance for isotope spacing
 _ISOTOPE_SPACING = CARBON_MASS_DELTA  # 1.00335 Da
 
 # Standard amino acid residue masses (monoisotopic)
-_RESIDUE_MASSES = np.array([
-    57.021464, 71.037114, 87.032028, 97.052764, 99.068414,   # G A S P V
-    101.047670, 103.009185, 113.084064, 113.084064, 114.042927,  # T C L I N
-    115.026943, 128.058578, 128.094963, 129.042593, 131.040485,  # D Q K E M
-    137.058912, 147.068414, 156.101111, 163.063329, 186.079313,  # H F R Y W
-], dtype=np.float64)
+_RESIDUE_MASSES = np.array(
+    [
+        57.021464,
+        71.037114,
+        87.032028,
+        97.052764,
+        99.068414,  # G A S P V
+        101.047670,
+        103.009185,
+        113.084064,
+        113.084064,
+        114.042927,  # T C L I N
+        115.026943,
+        128.058578,
+        128.094963,
+        129.042593,
+        131.040485,  # D Q K E M
+        137.058912,
+        147.068414,
+        156.101111,
+        163.063329,
+        186.079313,  # H F R Y W
+    ],
+    dtype=np.float64,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helper: online statistics
 # ---------------------------------------------------------------------------
+
 
 class _RunningStats:
     """Welford online mean/variance accumulator."""
@@ -77,26 +98,30 @@ class _RunningStats:
     __slots__ = ("_sum", "_sum_sq", "_count")
 
     def __init__(self) -> None:
+        """Initialise the input."""
         self._sum = 0.0
         self._sum_sq = 0.0
         self._count = 0
 
     def update(self, value: float) -> None:
+        """Update."""
         self._sum += value
         self._sum_sq += value * value
         self._count += 1
 
     def finalize(self) -> Dict[str, float]:
+        """Finalize."""
         if self._count == 0:
             return {"mean": 0.0, "std": 0.0, "count": 0}
         mean = self._sum / self._count
         var = max(0.0, self._sum_sq / self._count - mean * mean)
-        return {"mean": float(mean), "std": float(var ** 0.5), "count": self._count}
+        return {"mean": float(mean), "std": float(var**0.5), "count": self._count}
 
 
 # ---------------------------------------------------------------------------
 # Task
 # ---------------------------------------------------------------------------
+
 
 class HeadAnalysisTask(BaseTask):
     """Peak-to-peak attention pattern analysis per head."""
@@ -130,8 +155,9 @@ class HeadAnalysisTask(BaseTask):
         min_fragment_groups: int = 0,
         # Output
         dpi: int = 300,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
+        """Initialise the input."""
         super().__init__(output_dir=output_dir, **kwargs)
         self.output_dir = Path(output_dir)
         self.sample_n = sample_n
@@ -152,29 +178,38 @@ class HeadAnalysisTask(BaseTask):
     # Public interface
     # ------------------------------------------------------------------
 
-    def run(self, emb, meta, faiss_index, model=None, dataloader=None, config=None, device=None):
+    def run(self, emb: Any, meta: Any, faiss_index: Any, model: Any = None, dataloader: Any = None, config: Any = None, device: Any = None) -> Any:
+        """Run."""
         for name, val in [("model", model), ("dataloader", dataloader), ("config", config), ("device", device)]:
             if val is None:
                 return {"task_name": self.name, "error": f"requires {name}", "success": False}
         return self._run_with_model(model, config, dataloader, device, str(self.output_dir), meta)
 
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
+        """Return loggable metrics."""
         metrics: Dict[str, float] = {}
         for k in (
             # Enrichment (strong signal: parent-child, isotope, neutral loss)
-            "mean_parent_child_enrichment", "mean_isotope_spacing_enrichment",
-            "mean_neutral_loss_enrichment", "mean_ion_ladder_enrichment",
-            "max_isotope_spacing_enrichment", "max_ion_ladder_enrichment",
+            "mean_parent_child_enrichment",
+            "mean_isotope_spacing_enrichment",
+            "mean_neutral_loss_enrichment",
+            "mean_ion_ladder_enrichment",
+            "max_isotope_spacing_enrichment",
+            "max_ion_ladder_enrichment",
             # Charge state variant enrichment
-            "mean_charge_state_variant_enrichment", "max_charge_state_variant_enrichment",
+            "mean_charge_state_variant_enrichment",
+            "max_charge_state_variant_enrichment",
             # Head pattern counts
-            "n_structural_heads", "n_local_heads",
+            "n_structural_heads",
+            "n_local_heads",
             # Annotation routing (global property)
             "mean_annotated_to_annotated",
             # Column-sum headline metric
-            "attn_intensity_correlation", "annotated_attn_ratio",
+            "attn_intensity_correlation",
+            "annotated_attn_ratio",
             # Distance + entropy
-            "mean_attn_distance_da", "mean_head_entropy",
+            "mean_attn_distance_da",
+            "mean_head_entropy",
             # Immonium region routing
             "mean_region_frag_to_imm_enrichment",
             "mean_ann_backbone_to_immonium_enrichment",
@@ -190,7 +225,7 @@ class HeadAnalysisTask(BaseTask):
     # Main loop
     # ------------------------------------------------------------------
 
-    def _run_with_model(self, model, config, dataloader, device, output_dir, metadata):
+    def _run_with_model(self, model: Any, config: Any, dataloader: Any, device: Any, output_dir: Any, metadata: Any) -> Any:
         start = time.time()
         metadata = metadata or {}
 
@@ -257,7 +292,7 @@ class HeadAnalysisTask(BaseTask):
                     continue
 
                 peak_attn, valid_mask = self._extract_peak_peak_attention(layer_attn, spectra, special_mask)
-                B, H, L, _ = peak_attn.shape
+                B, H, L, _ = peak_attn.shape  # noqa: N806
 
                 if n_heads is None:
                     n_heads = H
@@ -274,11 +309,7 @@ class HeadAnalysisTask(BaseTask):
                         continue
 
                     # --- Quality gate ---
-                    if (
-                        spectrum_quality_arr is not None
-                        and global_idx < len(spectrum_quality_arr)
-                        and spectrum_quality_arr[global_idx] is not None
-                    ):
+                    if spectrum_quality_arr is not None and global_idx < len(spectrum_quality_arr) and spectrum_quality_arr[global_idx] is not None:
                         sq = spectrum_quality_arr[global_idx]
                         if isinstance(sq, dict):
                             bc = sq.get("backbone_coverage", 0.0)
@@ -303,10 +334,10 @@ class HeadAnalysisTask(BaseTask):
                         seq_len = len(clean_seq)
 
                     # Align variable-length metadata arrays to full spectrum length L
-                    ann_mask_L = self._align_bool_mask(ann_mask_raw, valid_i, L)
-                    matched_ann_L = self._align_object_array(matched_ann_raw, valid_i, L)
-                    parent_ann_L = self._align_object_array(parent_ann_raw, valid_i, L)
-                    frag_group_L = self._align_object_array(frag_group_raw, valid_i, L)
+                    ann_mask_L = self._align_bool_mask(ann_mask_raw, valid_i, L)  # noqa: N806
+                    matched_ann_L = self._align_object_array(matched_ann_raw, valid_i, L)  # noqa: N806
+                    parent_ann_L = self._align_object_array(parent_ann_raw, valid_i, L)  # noqa: N806
+                    frag_group_L = self._align_object_array(frag_group_raw, valid_i, L)  # noqa: N806
 
                     has_theory = matched_ann_L is not None and any(a is not None for a in matched_ann_L)
                     if has_theory:
@@ -317,9 +348,7 @@ class HeadAnalysisTask(BaseTask):
                     ann_mask_keys: List[str] = []  # track which masks are annotation-based
 
                     if has_theory:
-                        ann_masks = self._build_annotation_masks(
-                            matched_ann_L, parent_ann_L, frag_group_L, seq_len, valid_i, L
-                        )
+                        ann_masks = self._build_annotation_masks(matched_ann_L, parent_ann_L, frag_group_L, seq_len, valid_i, L)
                         rel_masks.update(ann_masks)
                         ann_mask_keys = list(ann_masks.keys())
 
@@ -328,9 +357,7 @@ class HeadAnalysisTask(BaseTask):
 
                     # --- Column-sum analysis (once per spectrum, all heads) ---
                     intensity_i = spectra[i, :, 1].cpu().numpy()
-                    col_sum_stats = self._compute_column_sum_stats(
-                        peak_attn[i], ann_mask_L, intensity_i, valid_i
-                    )
+                    col_sum_stats = self._compute_column_sum_stats(peak_attn[i], ann_mask_L, intensity_i, valid_i)
 
                     # --- Per-head analysis ---
                     head_vecs: Dict[int, np.ndarray] = {}
@@ -341,37 +368,43 @@ class HeadAnalysisTask(BaseTask):
                         routing = self._compute_annotation_routing(ha, ann_mask_L, valid_i)
                         entropy_stats = self._compute_head_entropy_stats(ha, valid_i)
                         dist_profile = self._compute_distance_profile(ha, mz_da[i], valid_i)
-                        immonium_routing = self._compute_immonium_routing(
-                            ha, mz_da[i], matched_ann_L, valid_i
-                        )
+                        immonium_routing = self._compute_immonium_routing(ha, mz_da[i], matched_ann_L, valid_i)
 
                         self._update_accumulators(
-                            accumulators, h, enrichment,
-                            category, routing, entropy_stats,
-                            dist_profile, col_sum_stats,
+                            accumulators,  # type: ignore[arg-type]
+                            h,
+                            enrichment,
+                            category,
+                            routing,
+                            entropy_stats,
+                            dist_profile,
+                            col_sum_stats,
                             immonium_routing,
-                            has_theory, ann_mask_keys,
+                            has_theory,
+                            ann_mask_keys,
                         )
                         head_vecs[h] = ha[np.ix_(valid_i, valid_i)].flatten()
 
-                    self._update_head_similarity(sim_accum, head_vecs)
+                    self._update_head_similarity(sim_accum, head_vecs)  # type: ignore[arg-type]
 
                     # Collect hero candidates with full metadata for spectrum plots
                     if ann_mask_L is not None and ann_mask_L.sum() >= self.min_annotated_peaks:
-                        hero_candidates.append({
-                            "peak_attn": peak_attn[i].copy(),
-                            "valid_mask": valid_i.copy(),
-                            "mz_da": mz_da[i].copy(),
-                            "intensity": intensity_i.copy(),
-                            "ann_mask": ann_mask_L.copy(),
-                            "matched_ann": matched_ann_L,
-                            "global_idx": global_idx,
-                            "n_valid": n_valid,
-                            "n_annotated": int(ann_mask_L.sum()),
-                            "sequence": seq if isinstance(seq, str) else "",
-                            "charge": prec_charge,
-                            "frag_type": self._get_meta_scalar(metadata, "frag_type", global_idx, ""),
-                        })
+                        hero_candidates.append(
+                            {
+                                "peak_attn": peak_attn[i].copy(),
+                                "valid_mask": valid_i.copy(),
+                                "mz_da": mz_da[i].copy(),
+                                "intensity": intensity_i.copy(),
+                                "ann_mask": ann_mask_L.copy(),
+                                "matched_ann": matched_ann_L,
+                                "global_idx": global_idx,
+                                "n_valid": n_valid,
+                                "n_annotated": int(ann_mask_L.sum()),
+                                "sequence": seq if isinstance(seq, str) else "",
+                                "charge": prec_charge,
+                                "frag_type": self._get_meta_scalar(metadata, "frag_type", global_idx, ""),
+                            }
+                        )
 
             total_spectra += bs
 
@@ -394,23 +427,25 @@ class HeadAnalysisTask(BaseTask):
 
         elapsed = time.time() - start
         if n_skipped_low_quality > 0:
-            logger.info(f"Quality gate: skipped {n_skipped_low_quality} spectra "
-                        f"(min_backbone_coverage={self.min_backbone_coverage}, "
-                        f"min_fragment_groups={self.min_fragment_groups})")
-        logger.info(f"Head analysis complete: {total_spectra} spectra ({n_spectra_with_theory} with theory), "
-                     f"{n_heads} heads, {elapsed:.1f}s")
+            logger.info(
+                f"Quality gate: skipped {n_skipped_low_quality} spectra "
+                f"(min_backbone_coverage={self.min_backbone_coverage}, "
+                f"min_fragment_groups={self.min_fragment_groups})"
+            )
+        logger.info(f"Head analysis complete: {total_spectra} spectra ({n_spectra_with_theory} with theory), {n_heads} heads, {elapsed:.1f}s")
 
-        result = {
-            "task_name": self.name, "success": True,
+        result: dict[str, Any] = {
+            "task_name": self.name,
+            "success": True,
             "num_spectra_analyzed": total_spectra,
             "n_spectra_with_theory": n_spectra_with_theory,
             "n_skipped_low_quality": n_skipped_low_quality,
-            "n_heads": n_heads, "execution_time": elapsed,
+            "n_heads": n_heads,
+            "execution_time": elapsed,
             "per_head_summary": summary,
         }
         # Aggregate across heads
-        for rel_key in ("series_adjacent", "by_complement", "parent_child",
-                         "ion_ladder", "isotope_spacing", "charge_state_variant"):
+        for rel_key in ("series_adjacent", "by_complement", "parent_child", "ion_ladder", "isotope_spacing", "charge_state_variant"):
             vals = [summary[str(h)].get(f"{rel_key}_enrichment", {}).get("mean", 0.0) for h in range(n_heads)]
             if vals:
                 result[f"mean_{rel_key}_enrichment"] = float(np.mean(vals))
@@ -437,10 +472,14 @@ class HeadAnalysisTask(BaseTask):
         aar = [summary[str(h)].get("annotated_attn_ratio", {}).get("mean", 0.0) for h in range(n_heads)]
         result["annotated_attn_ratio"] = float(np.mean(aar)) if aar else 0.0
         # Immonium region routing
-        for imm_key in ("region_frag_to_imm", "region_imm_to_frag",
-                          "region_frag_to_imm_enrichment",
-                          "ann_backbone_to_immonium", "ann_immonium_to_backbone",
-                          "ann_backbone_to_immonium_enrichment"):
+        for imm_key in (
+            "region_frag_to_imm",
+            "region_imm_to_frag",
+            "region_frag_to_imm_enrichment",
+            "ann_backbone_to_immonium",
+            "ann_immonium_to_backbone",
+            "ann_backbone_to_immonium_enrichment",
+        ):
             vals = [summary[str(h)].get(imm_key, {}).get("mean", 0.0) for h in range(n_heads)]
             result[f"mean_{imm_key}"] = float(np.mean(vals)) if vals else 0.0
             if "enrichment" in imm_key:
@@ -453,7 +492,10 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _extract_peak_peak_attention(
-        self, layer_attn: torch.Tensor, spectra: torch.Tensor, special_mask: torch.Tensor,
+        self,
+        layer_attn: torch.Tensor,
+        spectra: torch.Tensor,
+        special_mask: torch.Tensor,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Extract peak×peak attention submatrix.
 
@@ -463,8 +505,8 @@ class HeadAnalysisTask(BaseTask):
         """
         if layer_attn.dim() == 3:
             layer_attn = layer_attn.unsqueeze(1)
-        B, H, T, _ = layer_attn.shape
-        L = spectra.size(1)
+        B, H, T, _ = layer_attn.shape  # noqa: N806
+        L = spectra.size(1)  # noqa: N806
         num_prepended = T - L
 
         peak_attn = layer_attn[:, :, num_prepended:, num_prepended:].detach().cpu().numpy().astype(np.float32)
@@ -488,7 +530,7 @@ class HeadAnalysisTask(BaseTask):
         return np.asarray(val)
 
     @staticmethod
-    def _get_meta_scalar(metadata: Dict, key: str, idx: int, default=None):
+    def _get_meta_scalar(metadata: Dict, key: str, idx: int, default: Any = None) -> Any:
         if key not in metadata:
             return default
         arr = metadata[key]
@@ -498,7 +540,7 @@ class HeadAnalysisTask(BaseTask):
         return val if val is not None else default
 
     @staticmethod
-    def _align_bool_mask(mask, valid_mask: np.ndarray, L: int) -> Optional[np.ndarray]:
+    def _align_bool_mask(mask: Any, valid_mask: np.ndarray, L: int) -> Optional[np.ndarray]:  # noqa: N803
         """Align a boolean mask (possibly valid-peaks-only) to full spectrum length L."""
         if mask is None or len(mask) == 0:
             return None
@@ -516,7 +558,7 @@ class HeadAnalysisTask(BaseTask):
         return full
 
     @staticmethod
-    def _align_object_array(arr, valid_mask: np.ndarray, L: int) -> Optional[List]:
+    def _align_object_array(arr: Any, valid_mask: np.ndarray, L: int) -> Optional[List]:  # noqa: N803
         """Align an object array (annotations, etc.) to full spectrum length L.
 
         If arr has length == n_valid_peaks, expand into full-length list using valid_mask.
@@ -544,9 +586,13 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _build_annotation_masks(
-        self, matched_ann_L: Optional[List], parent_ann_L: Optional[List],
-        frag_group_L: Optional[List], seq_len: int,
-        valid_mask: np.ndarray, L: int,
+        self,
+        matched_ann_L: Optional[List],  # noqa: N803
+        parent_ann_L: Optional[List],  # noqa: N803
+        frag_group_L: Optional[List],  # noqa: N803
+        seq_len: int,
+        valid_mask: np.ndarray,
+        L: int,  # noqa: N803
     ) -> Dict[str, np.ndarray]:
         """Build (L, L) boolean masks from precomputed theoretical annotations."""
         masks: Dict[str, np.ndarray] = {}
@@ -631,11 +677,14 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _build_mz_masks(
-        self, mz_da: np.ndarray, valid_mask: np.ndarray,
-        precursor_mz: float, precursor_charge: int,
+        self,
+        mz_da: np.ndarray,
+        valid_mask: np.ndarray,
+        precursor_mz: float,
+        precursor_charge: int,
     ) -> Dict[str, np.ndarray]:
         """Build (L, L) boolean masks from raw m/z differences."""
-        L = len(mz_da)
+        L = len(mz_da)  # noqa: N806
         tol = self.da_tol
         masks: Dict[str, np.ndarray] = {}
 
@@ -667,7 +716,7 @@ class HeadAnalysisTask(BaseTask):
         # Neutral loss offsets (H₂O, NH₃, CO/a-ion, H₃PO₄, SO₃)
         # Check at z=1 (raw delta) and z≥2 (delta = loss_mass/z) to
         # match how isotope_spacing handles charge-dependent spacing.
-        _NL_MASSES = (H2O_MASS, _NH3_MASS, _CO_MASS, _H3PO4_MASS, _SO3_MASS)
+        _NL_MASSES = (H2O_MASS, _NH3_MASS, _CO_MASS, _H3PO4_MASS, _SO3_MASS)  # noqa: N806
         nl = np.zeros((L, L), dtype=bool)
         for loss_mass in _NL_MASSES:
             nl |= np.abs(delta - loss_mass) < tol
@@ -688,10 +737,7 @@ class HeadAnalysisTask(BaseTask):
         if precursor_mz > 0 and precursor_charge >= 1:
             # M_neutral = m/z·z − z·proton (same as (m/z − p)·z, written
             # literally so the derivation reads left-to-right).
-            precursor_mass = (
-                precursor_mz * precursor_charge
-                - precursor_charge * PROTON_MASS_AMU
-            )
+            precursor_mass = precursor_mz * precursor_charge - precursor_charge * PROTON_MASS_AMU
             for z_b in range(1, precursor_charge + 1):
                 for z_y in range(1, precursor_charge + 1):
                     if z_b + z_y > precursor_charge:
@@ -712,9 +758,7 @@ class HeadAnalysisTask(BaseTask):
         csv = np.zeros((L, L), dtype=bool)
         for z_b in range(2, precursor_charge + 1):
             for z_a in range(1, z_b):
-                expected_mz_a = (
-                    mz_da[None, :] * z_b - PROTON_MASS_AMU * (z_b - z_a)
-                ) / z_a
+                expected_mz_a = (mz_da[None, :] * z_b - PROTON_MASS_AMU * (z_b - z_a)) / z_a
                 csv_pair = np.abs(mz_da[:, None] - expected_mz_a) < tol
                 csv |= csv_pair | csv_pair.T
         masks["charge_state_variant"] = csv & valid_2d
@@ -726,11 +770,14 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _compute_enrichment(
-        self, head_attn: np.ndarray, rel_masks: Dict[str, np.ndarray], valid_mask: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        rel_masks: Dict[str, np.ndarray],
+        valid_mask: np.ndarray,
     ) -> Dict[str, Dict[str, float]]:
         """Compute fraction_of_attention and enrichment_ratio for each relationship."""
         valid_2d = valid_mask[:, None] & valid_mask[None, :]
-        A = head_attn * valid_2d
+        A = head_attn * valid_2d  # noqa: N806
         total_attn = float(A.sum())
         n_total = int(valid_2d.sum())
 
@@ -750,12 +797,15 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _categorize_head_pattern(
-        self, head_attn: np.ndarray, valid_mask: np.ndarray,
-        enrichment: Dict[str, Dict[str, float]], mz_da: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        valid_mask: np.ndarray,
+        enrichment: Dict[str, Dict[str, float]],
+        mz_da: np.ndarray,
     ) -> str:
-        L = len(valid_mask)
+        L = len(valid_mask)  # noqa: N806
         valid_2d = valid_mask[:, None] & valid_mask[None, :]
-        A = head_attn * valid_2d
+        A = head_attn * valid_2d  # noqa: N806
         total = float(A.sum()) + 1e-12
         n_valid = int(valid_mask.sum())
 
@@ -766,10 +816,13 @@ class HeadAnalysisTask(BaseTask):
             sorted_vals = np.sort(flat)
             n = len(sorted_vals)
             index = np.arange(1, n + 1)
-            gini = float(np.clip(
-                (2 * (index * sorted_vals).sum() / (n * sorted_vals.sum() + 1e-12)) - (n + 1) / n,
-                0.0, 1.0,
-            ))
+            gini = float(
+                np.clip(
+                    (2 * (index * sorted_vals).sum() / (n * sorted_vals.sum() + 1e-12)) - (n + 1) / n,
+                    0.0,
+                    1.0,
+                )
+            )
 
         # Check structural first (enrichment on physical relationships)
         max_enr = max((v["enrichment_ratio"] for v in enrichment.values()), default=0.0)
@@ -798,8 +851,8 @@ class HeadAnalysisTask(BaseTask):
             if row_sum < 1e-12:
                 continue
             p = row / row_sum
-            H_val = -float(np.sum(p[p > 1e-12] * np.log(p[p > 1e-12] + 1e-12)))
-            H_max = np.log(max(n_valid, 2))
+            H_val = -float(np.sum(p[p > 1e-12] * np.log(p[p > 1e-12] + 1e-12)))  # noqa: N806
+            H_max = np.log(max(n_valid, 2))  # noqa: N806
             entropies.append(H_val / H_max)
 
         if entropies and np.mean(entropies) > self.entropy_diffuse_threshold:
@@ -812,31 +865,39 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _compute_annotation_routing(
-        self, head_attn: np.ndarray, ann_mask: Optional[np.ndarray], valid_mask: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        ann_mask: Optional[np.ndarray],
+        valid_mask: np.ndarray,
     ) -> Dict[str, float]:
         """Partition attention into 2x2 matrix: annotated vs unannotated peaks."""
         if ann_mask is None or ann_mask.sum() < self.min_annotated_peaks:
-            return {"annotated_to_annotated": 0.0, "annotated_to_unannotated": 0.0,
-                    "unannotated_to_annotated": 0.0, "unannotated_to_unannotated": 0.0}
+            return {
+                "annotated_to_annotated": 0.0,
+                "annotated_to_unannotated": 0.0,
+                "unannotated_to_annotated": 0.0,
+                "unannotated_to_unannotated": 0.0,
+            }
 
         ann = ann_mask & valid_mask
         unann = (~ann_mask) & valid_mask
-        A = head_attn
+        A = head_attn  # noqa: N806
         total = float(A[np.ix_(valid_mask, valid_mask)].sum()) + 1e-12
 
         aa = float(A[np.ix_(ann, ann)].sum()) / total
         au = float(A[np.ix_(ann, unann)].sum()) / total
         ua = float(A[np.ix_(unann, ann)].sum()) / total
         uu = float(A[np.ix_(unann, unann)].sum()) / total
-        return {"annotated_to_annotated": aa, "annotated_to_unannotated": au,
-                "unannotated_to_annotated": ua, "unannotated_to_unannotated": uu}
+        return {"annotated_to_annotated": aa, "annotated_to_unannotated": au, "unannotated_to_annotated": ua, "unannotated_to_unannotated": uu}
 
     # ------------------------------------------------------------------
     # Entropy stats
     # ------------------------------------------------------------------
 
     def _compute_head_entropy_stats(
-        self, head_attn: np.ndarray, valid_mask: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        valid_mask: np.ndarray,
     ) -> Dict[str, float]:
         n_valid = int(valid_mask.sum())
         if n_valid < 2:
@@ -851,7 +912,7 @@ class HeadAnalysisTask(BaseTask):
             if s < 1e-12:
                 continue
             p = row / s
-            H_val = -float(np.sum(p[p > 1e-12] * np.log(p[p > 1e-12] + 1e-12)))
+            H_val = -float(np.sum(p[p > 1e-12] * np.log(p[p > 1e-12] + 1e-12)))  # noqa: N806
             entropies.append(H_val)
 
         flat = head_attn[np.ix_(valid_mask, valid_mask)].flatten()
@@ -860,10 +921,13 @@ class HeadAnalysisTask(BaseTask):
             sorted_vals = np.sort(flat)
             n = len(sorted_vals)
             index = np.arange(1, n + 1)
-            gini = float(np.clip(
-                (2 * (index * sorted_vals).sum() / (n * sorted_vals.sum())) - (n + 1) / n,
-                0.0, 1.0,
-            ))
+            gini = float(
+                np.clip(
+                    (2 * (index * sorted_vals).sum() / (n * sorted_vals.sum())) - (n + 1) / n,
+                    0.0,
+                    1.0,
+                )
+            )
 
         return {"row_entropy": float(np.mean(entropies)) if entropies else 0.0, "gini": gini}
 
@@ -872,15 +936,25 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _compute_distance_profile(
-        self, head_attn: np.ndarray, mz_da: np.ndarray, valid_mask: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        mz_da: np.ndarray,
+        valid_mask: np.ndarray,
     ) -> Dict[str, float]:
         """Attention-weighted m/z distance profile and fingerprint."""
         valid_2d = valid_mask[:, None] & valid_mask[None, :]
-        A = head_attn * valid_2d
+        A = head_attn * valid_2d  # noqa: N806
         total = float(A.sum())
         if total < 1e-12:
-            return {"attn_mean_distance": 0.0, "dist_bin_0_2": 0.0, "dist_bin_2_25": 0.0,
-                    "dist_bin_25_50": 0.0, "dist_bin_50_200": 0.0, "dist_bin_200_500": 0.0, "dist_bin_500_inf": 0.0}
+            return {
+                "attn_mean_distance": 0.0,
+                "dist_bin_0_2": 0.0,
+                "dist_bin_2_25": 0.0,
+                "dist_bin_25_50": 0.0,
+                "dist_bin_50_200": 0.0,
+                "dist_bin_200_500": 0.0,
+                "dist_bin_500_inf": 0.0,
+            }
 
         delta = np.abs(mz_da[:, None] - mz_da[None, :])
         mean_dist = float((A * delta).sum() / total)
@@ -889,7 +963,7 @@ class HeadAnalysisTask(BaseTask):
         bins = [(0, 2), (2, 25), (25, 50), (50, 200), (200, 500)]
         bin_names = ["dist_bin_0_2", "dist_bin_2_25", "dist_bin_25_50", "dist_bin_50_200", "dist_bin_200_500"]
         result: Dict[str, float] = {"attn_mean_distance": mean_dist}
-        for (lo, hi), name in zip(bins, bin_names):
+        for (lo, hi), name in zip(bins, bin_names, strict=False):
             mask = (delta >= lo) & (delta < hi) & valid_2d
             result[name] = float(A[mask].sum() / total)
         # Last bin: [500, inf)
@@ -902,11 +976,14 @@ class HeadAnalysisTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _compute_column_sum_stats(
-        self, peak_attn_all_heads: np.ndarray, ann_mask: Optional[np.ndarray],
-        intensity: np.ndarray, valid_mask: np.ndarray,
+        self,
+        peak_attn_all_heads: np.ndarray,
+        ann_mask: Optional[np.ndarray],
+        intensity: np.ndarray,
+        valid_mask: np.ndarray,
     ) -> Dict[str, float]:
         """Per-peak attention received (column sum), correlated with intensity and annotation status."""
-        H = peak_attn_all_heads.shape[0]
+        H = peak_attn_all_heads.shape[0]  # noqa: N806
         n_valid = int(valid_mask.sum())
         if n_valid < 3:
             return {"attn_intensity_spearman": 0.0, "annotated_attn_ratio": 0.0}
@@ -915,7 +992,7 @@ class HeadAnalysisTask(BaseTask):
         valid_2d = valid_mask[:, None] & valid_mask[None, :]
         col_sums = np.zeros(len(valid_mask), dtype=np.float32)
         for h in range(H):
-            A = peak_attn_all_heads[h] * valid_2d
+            A = peak_attn_all_heads[h] * valid_2d  # noqa: N806
             col_sums += A.sum(axis=0)
         col_sums /= max(H, 1)
 
@@ -926,6 +1003,7 @@ class HeadAnalysisTask(BaseTask):
         attn_intensity_spearman = 0.0
         try:
             from scipy.stats import spearmanr
+
             res = spearmanr(valid_cols, valid_intensity)
             rho = float(res.correlation if hasattr(res, "correlation") else res[0])
             if np.isfinite(rho):
@@ -951,8 +1029,11 @@ class HeadAnalysisTask(BaseTask):
     _IMMONIUM_MZ_THRESHOLD = 200.0  # Da — peaks below this are in the immonium region
 
     def _compute_immonium_routing(
-        self, head_attn: np.ndarray, mz_da: np.ndarray,
-        matched_ann_L: Optional[List], valid_mask: np.ndarray,
+        self,
+        head_attn: np.ndarray,
+        mz_da: np.ndarray,
+        matched_ann_L: Optional[List],  # noqa: N803
+        valid_mask: np.ndarray,
     ) -> Dict[str, float]:
         """Measure attention flow between immonium region (<200 Da) and fragment region.
 
@@ -965,7 +1046,7 @@ class HeadAnalysisTask(BaseTask):
         """
         result: Dict[str, float] = {}
         valid_2d = valid_mask[:, None] & valid_mask[None, :]
-        A = head_attn * valid_2d
+        A = head_attn * valid_2d  # noqa: N806
         total = float(A.sum()) + 1e-12
 
         # --- m/z-based region routing (annotation-free) ---
@@ -997,15 +1078,16 @@ class HeadAnalysisTask(BaseTask):
         # Only include ann_* keys when both immonium and backbone annotations
         # exist, so that spectra without annotations don't dilute the means.
         if matched_ann_L is not None:
-            imm_ann = np.array([
-                bool(a and isinstance(a, str) and "immonium" in a) and valid_mask[j]
-                for j, a in enumerate(matched_ann_L)
-            ], dtype=bool)
-            backbone_ann = np.array([
-                bool(a and isinstance(a, str) and a[0].lower() in "byaxcz"
-                     and not a.startswith("custom:")) and valid_mask[j]
-                for j, a in enumerate(matched_ann_L)
-            ], dtype=bool)
+            imm_ann = np.array(
+                [bool(a and isinstance(a, str) and "immonium" in a) and valid_mask[j] for j, a in enumerate(matched_ann_L)], dtype=bool
+            )
+            backbone_ann = np.array(
+                [
+                    bool(a and isinstance(a, str) and a[0].lower() in "byaxcz" and not a.startswith("custom:")) and valid_mask[j]
+                    for j, a in enumerate(matched_ann_L)
+                ],
+                dtype=bool,
+            )
             n_imm_ann = int(imm_ann.sum())
             n_backbone = int(backbone_ann.sum())
 
@@ -1026,9 +1108,17 @@ class HeadAnalysisTask(BaseTask):
 
     def _init_accumulators(self, n_heads: int) -> Dict:
         acc: Dict[str, Any] = {}
-        rel_keys = ["series_adjacent", "by_complement", "parent_child", "fragment_group",
-                     "ion_ladder", "isotope_spacing", "neutral_loss", "by_complement_mz",
-                     "charge_state_variant"]
+        rel_keys = [
+            "series_adjacent",
+            "by_complement",
+            "parent_child",
+            "fragment_group",
+            "ion_ladder",
+            "isotope_spacing",
+            "neutral_loss",
+            "by_complement_mz",
+            "charge_state_variant",
+        ]
         for h in range(n_heads):
             h_acc: Dict[str, Any] = {}
             for rk in rel_keys:
@@ -1047,10 +1137,15 @@ class HeadAnalysisTask(BaseTask):
             h_acc["attn_intensity_spearman"] = _RunningStats()
             h_acc["annotated_attn_ratio"] = _RunningStats()
             # Immonium region routing
-            for ik in ("region_frag_to_imm", "region_imm_to_frag", "region_imm_to_imm",
-                        "region_frag_to_imm_enrichment",
-                        "ann_backbone_to_immonium", "ann_immonium_to_backbone",
-                        "ann_backbone_to_immonium_enrichment"):
+            for ik in (
+                "region_frag_to_imm",
+                "region_imm_to_frag",
+                "region_imm_to_imm",
+                "region_frag_to_imm_enrichment",
+                "ann_backbone_to_immonium",
+                "ann_immonium_to_backbone",
+                "ann_backbone_to_immonium_enrichment",
+            ):
                 h_acc[ik] = _RunningStats()
             # Separate counters for annotation-based metrics
             h_acc["n_with_theory"] = 0
@@ -1058,11 +1153,18 @@ class HeadAnalysisTask(BaseTask):
         return acc
 
     def _update_accumulators(
-        self, acc: Dict, h: int, enrichment: Dict,
-        category: str, routing: Dict[str, float], entropy_stats: Dict[str, float],
-        dist_profile: Dict[str, float], col_sum_stats: Dict[str, float],
+        self,
+        acc: Dict,
+        h: int,
+        enrichment: Dict,
+        category: str,
+        routing: Dict[str, float],
+        entropy_stats: Dict[str, float],
+        dist_profile: Dict[str, float],
+        col_sum_stats: Dict[str, float],
         immonium_routing: Dict[str, float],
-        has_theory: bool, ann_mask_keys: List[str],
+        has_theory: bool,
+        ann_mask_keys: List[str],
     ) -> None:
         ha = acc[str(h)]
         for name, vals in enrichment.items():
@@ -1124,7 +1226,7 @@ class HeadAnalysisTask(BaseTask):
         vecs = np.zeros((len(heads), max_len), dtype=np.float32)
         for idx, h in enumerate(heads):
             v = head_vectors[h]
-            vecs[idx, :len(v)] = v
+            vecs[idx, : len(v)] = v
 
         # Normalize each head vector for this spectrum (per-spectrum cosine)
         norms = np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -1200,8 +1302,7 @@ class HeadAnalysisTask(BaseTask):
     # Visualizations
     # ------------------------------------------------------------------
 
-    def _generate_visualizations(self, summary: Dict, sim_matrix: np.ndarray,
-                                  hero_data: List[Dict], fig_dir: Path) -> None:
+    def _generate_visualizations(self, summary: Dict, sim_matrix: np.ndarray, hero_data: List[Dict], fig_dir: Path) -> None:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
@@ -1222,18 +1323,34 @@ class HeadAnalysisTask(BaseTask):
         except Exception as e:
             logger.warning(f"Visualization generation failed: {e}")
 
-    def _plot_specialization_heatmap(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_specialization_heatmap(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         """Heads × relationship types heatmap of enrichment ratios."""
         heads = sorted(summary.keys(), key=int)
-        rel_keys = ["series_adjacent", "by_complement", "parent_child", "fragment_group",
-                     "ion_ladder", "isotope_spacing", "neutral_loss", "by_complement_mz",
-                     "charge_state_variant"]
-        labels = ["Series\nadjacent", "b/y\ncomplement", "Parent\nchild", "Fragment\ngroup",
-                  "Ion\nladder", "Isotope\nspacing", "Neutral\nloss", "b/y comp.\n(m/z)",
-                  "Charge\nvariant"]
+        rel_keys = [
+            "series_adjacent",
+            "by_complement",
+            "parent_child",
+            "fragment_group",
+            "ion_ladder",
+            "isotope_spacing",
+            "neutral_loss",
+            "by_complement_mz",
+            "charge_state_variant",
+        ]
+        labels = [
+            "Series\nadjacent",
+            "b/y\ncomplement",
+            "Parent\nchild",
+            "Fragment\ngroup",
+            "Ion\nladder",
+            "Isotope\nspacing",
+            "Neutral\nloss",
+            "b/y comp.\n(m/z)",
+            "Charge\nvariant",
+        ]
 
-        H = len(heads)
-        M = np.ones((H, len(rel_keys)))
+        H = len(heads)  # noqa: N806
+        M = np.ones((H, len(rel_keys)))  # noqa: N806
         for i, h in enumerate(heads):
             for j, rk in enumerate(rel_keys):
                 val = summary[h].get(f"{rk}_enrichment", {})
@@ -1250,15 +1367,14 @@ class HeadAnalysisTask(BaseTask):
         if H <= 16:
             for i in range(H):
                 for j in range(len(rel_keys)):
-                    ax.text(j, i, f"{M[i, j]:.2f}", ha="center", va="center", fontsize=8,
-                            color="white" if M[i, j] < vmax * 0.4 else "black")
+                    ax.text(j, i, f"{M[i, j]:.2f}", ha="center", va="center", fontsize=8, color="white" if M[i, j] < vmax * 0.4 else "black")
         plt.colorbar(im, ax=ax, label="Enrichment ratio (1.0 = random)")
         ax.set_title("Structural Enrichment per Head")
         fig.tight_layout()
         fig.savefig(fig_dir / "specialization_heatmap.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_pattern_categorization(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_pattern_categorization(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         cats = [summary[h].get("dominant_category", "mixed") for h in sorted(summary.keys(), key=int)]
         counts = Counter(cats)
         categories = ["structural", "local", "global", "sparse", "mixed"]
@@ -1277,12 +1393,12 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "pattern_categorization.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_annotation_routing_matrix(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_annotation_routing_matrix(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         heads = sorted(summary.keys(), key=int)
         routing_keys = ["annotated_to_annotated", "annotated_to_unannotated", "unannotated_to_annotated", "unannotated_to_unannotated"]
         labels = ["Ann->Ann", "Ann->Unann", "Unann->Ann", "Unann->Unann"]
-        H = len(heads)
-        M = np.zeros((H, 4))
+        H = len(heads)  # noqa: N806
+        M = np.zeros((H, 4))  # noqa: N806
         for i, h in enumerate(heads):
             for j, rk in enumerate(routing_keys):
                 val = summary[h].get(rk, {})
@@ -1304,7 +1420,7 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "annotation_routing_matrix.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_head_entropy_comparison(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_head_entropy_comparison(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         heads = sorted(summary.keys(), key=int)
         ent_means = [summary[h].get("row_entropy", {}).get("mean", 0.0) for h in heads]
         ent_stds = [summary[h].get("row_entropy", {}).get("std", 0.0) for h in heads]
@@ -1331,14 +1447,14 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "head_entropy_comparison.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_distance_fingerprint_heatmap(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_distance_fingerprint_heatmap(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         """Heads × distance bins heatmap showing where attention operates in m/z space."""
         heads = sorted(summary.keys(), key=int)
         bin_keys = ["dist_bin_0_2", "dist_bin_2_25", "dist_bin_25_50", "dist_bin_50_200", "dist_bin_200_500", "dist_bin_500_inf"]
         bin_labels = ["[0,2)\nIsotope", "[2,25)\nLosses", "[25,50)\nLarge loss", "[50,200)\nResidue", "[200,500)\nMulti-res", "[500+)\nLong-range"]
 
-        H = len(heads)
-        M = np.zeros((H, len(bin_keys)))
+        H = len(heads)  # noqa: N806
+        M = np.zeros((H, len(bin_keys)))  # noqa: N806
         for i, h in enumerate(heads):
             for j, bk in enumerate(bin_keys):
                 val = summary[h].get(bk, {})
@@ -1360,10 +1476,10 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "distance_fingerprint_heatmap.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_immonium_routing(self, summary: Dict, fig_dir: Path, plt) -> None:
+    def _plot_immonium_routing(self, summary: Dict, fig_dir: Path, plt: Any) -> None:
         """Per-head immonium attention routing: m/z-region and annotation-based enrichment."""
         heads = sorted(summary.keys(), key=int)
-        H = len(heads)
+        H = len(heads)  # noqa: N806
 
         region_enr = [summary[h].get("region_frag_to_imm_enrichment", {}).get("mean", 0.0) for h in heads]
         ann_enr = [summary[h].get("ann_backbone_to_immonium_enrichment", {}).get("mean", 0.0) for h in heads]
@@ -1382,11 +1498,9 @@ class HeadAnalysisTask(BaseTask):
 
         # --- Left panel: enrichment comparison ---
         ax = axes[0]
-        bars1 = ax.bar(x - w / 2, region_enr, w, yerr=region_std, capsize=3,
-                        label="m/z region (<200 Da)", color="#3498db", alpha=0.85, edgecolor="black")
+        ax.bar(x - w / 2, region_enr, w, yerr=region_std, capsize=3, label="m/z region (<200 Da)", color="#3498db", alpha=0.85, edgecolor="black")
         if has_ann:
-            bars2 = ax.bar(x + w / 2, ann_enr, w, yerr=ann_std, capsize=3,
-                            label="Annotation-based", color="#e74c3c", alpha=0.85, edgecolor="black")
+            ax.bar(x + w / 2, ann_enr, w, yerr=ann_std, capsize=3, label="Annotation-based", color="#e74c3c", alpha=0.85, edgecolor="black")
         ax.axhline(1.0, color="gray", linestyle="--", linewidth=1, label="Random baseline")
         ax.set_xticks(x)
         ax.set_xticklabels([f"H{h}" for h in heads])
@@ -1399,7 +1513,7 @@ class HeadAnalysisTask(BaseTask):
         ax2 = axes[1]
         ax2.bar(x, frag_to_imm, label="Frag → Imm", color="#3498db", alpha=0.8)
         ax2.bar(x, imm_to_frag, bottom=frag_to_imm, label="Imm → Frag", color="#2ecc71", alpha=0.8)
-        bottoms = [a + b for a, b in zip(frag_to_imm, imm_to_frag)]
+        bottoms = [a + b for a, b in zip(frag_to_imm, imm_to_frag, strict=False)]
         ax2.bar(x, imm_to_imm, bottom=bottoms, label="Imm → Imm", color="#9b59b6", alpha=0.8)
         ax2.set_xticks(x)
         ax2.set_xticklabels([f"H{h}" for h in heads])
@@ -1412,13 +1526,14 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "immonium_routing.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_head_similarity_heatmap(self, sim_matrix: np.ndarray, fig_dir: Path, plt) -> None:
+    def _plot_head_similarity_heatmap(self, sim_matrix: np.ndarray, fig_dir: Path, plt: Any) -> None:
         n = sim_matrix.shape[0]
         if n == 0:
             return
         try:
             from scipy.cluster.hierarchy import dendrogram, linkage
             from scipy.spatial.distance import squareform
+
             dist = np.clip(1 - sim_matrix, 0, 2)
             np.fill_diagonal(dist, 0)
             condensed = squareform(dist, checks=False)
@@ -1440,15 +1555,15 @@ class HeadAnalysisTask(BaseTask):
         fig.savefig(fig_dir / "head_similarity_heatmap.png", dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
 
-    def _plot_hero_spectrum_attention(self, hero_data: List[Dict], fig_dir: Path, plt) -> None:
+    def _plot_hero_spectrum_attention(self, hero_data: List[Dict], fig_dir: Path, plt: Any) -> None:
         hero_dir = fig_dir / "hero_spectra"
         hero_dir.mkdir(exist_ok=True)
-        for idx, hero in enumerate(hero_data[:self.n_hero_spectra]):
+        for idx, hero in enumerate(hero_data[: self.n_hero_spectra]):
             peak_attn = hero["peak_attn"]
             valid = hero["valid_mask"]
             mz = hero["mz_da"]
             ann_mask_hero = hero["ann_mask"]
-            H = peak_attn.shape[0]
+            H = peak_attn.shape[0]  # noqa: N806
 
             n_valid = int(valid.sum())
             if n_valid < 3:
@@ -1482,13 +1597,15 @@ class HeadAnalysisTask(BaseTask):
                 r, c = divmod(h, ncols)
                 axes[r][c].set_visible(False)
 
-            fig.suptitle(f"Spectrum {hero.get('global_idx', idx)} — Peak x Peak Attention "
-                         f"({n_valid} valid, {hero.get('n_annotated', 0)} annotated)", fontsize=12)
+            fig.suptitle(
+                f"Spectrum {hero.get('global_idx', idx)} — Peak x Peak Attention ({n_valid} valid, {hero.get('n_annotated', 0)} annotated)",
+                fontsize=12,
+            )
             fig.tight_layout()
             fig.savefig(hero_dir / f"hero_{idx:03d}.png", dpi=self.dpi, bbox_inches="tight")
             plt.close(fig)
 
-    def _plot_hero_spectrum_with_attention(self, hero_data: List[Dict], fig_dir: Path, plt) -> None:
+    def _plot_hero_spectrum_with_attention(self, hero_data: List[Dict], fig_dir: Path, plt: Any) -> None:
         """Individual spectrum plots with attention overlaid on m/z stems.
 
         3-panel layout per spectrum (mirrors confidence analysis):
@@ -1496,20 +1613,17 @@ class HeadAnalysisTask(BaseTask):
         Panel 2: m/z spectrum colored by mean attention received (all heads)
         Panel 3: m/z spectrum colored by per-head attention (small multiples)
         """
-        from matplotlib.colors import Normalize
-        from matplotlib.cm import ScalarMappable
-
         spec_dir = fig_dir / "individual_spectra"
         spec_dir.mkdir(exist_ok=True)
 
-        for plot_idx, hero in enumerate(hero_data[:self.n_hero_spectra]):
+        for plot_idx, hero in enumerate(hero_data[: self.n_hero_spectra]):
             peak_attn = hero["peak_attn"]  # (H, L, L)
-            valid = hero["valid_mask"]     # (L,)
-            mz_full = hero["mz_da"]        # (L,)
+            valid = hero["valid_mask"]  # (L,)
+            mz_full = hero["mz_da"]  # (L,)
             intensity_full = hero.get("intensity", np.zeros_like(mz_full))  # (L,)
-            ann_mask_hero = hero["ann_mask"]   # (L,)
+            ann_mask_hero = hero["ann_mask"]  # (L,)
             ann_list = hero.get("matched_ann") or [None] * len(valid)
-            H = peak_attn.shape[0]
+            H = peak_attn.shape[0]  # noqa: N806
 
             n_valid = int(valid.sum())
             if n_valid < 3:
@@ -1564,19 +1678,24 @@ class HeadAnalysisTask(BaseTask):
             fig.suptitle(suptitle, fontsize=14, fontweight="bold", y=0.995)
 
             # Panel 1: Ion-type coloring (reference)
-            self._draw_mz_ion_panel(axes[0], mz, norm_int, peak_categories,
-                                     peak_ann_display, n_valid, plt)
+            self._draw_mz_ion_panel(axes[0], mz, norm_int, peak_categories, peak_ann_display, n_valid, plt)
 
             # Panel 2: Mean attention received coloring
-            self._draw_mz_attention_panel(axes[1], mz, norm_int, attn_norm,
-                                           ann_valid_hero, peak_ann_display,
-                                           peak_categories, n_valid, plt,
-                                           title="Mean Attention Received (all heads)")
+            self._draw_mz_attention_panel(
+                axes[1],
+                mz,
+                norm_int,
+                attn_norm,
+                ann_valid_hero,
+                peak_ann_display,
+                peak_categories,
+                n_valid,
+                plt,
+                title="Mean Attention Received (all heads)",
+            )
 
             # Panel 3: Per-head small multiples (top row of a grid inside the axis)
-            self._draw_per_head_attention_panels(axes[2], mz, norm_int,
-                                                  attn_received_per_head, ann_valid_hero,
-                                                  n_valid, H, plt)
+            self._draw_per_head_attention_panels(axes[2], mz, norm_int, attn_received_per_head, ann_valid_hero, n_valid, H, plt)
 
             # Adjust spacing for panels 1-2 only (panel 3 uses manual inset axes)
             fig.subplots_adjust(top=0.95, hspace=0.35)
@@ -1585,8 +1704,7 @@ class HeadAnalysisTask(BaseTask):
 
     # --- Spectrum panel drawing helpers ---
 
-    def _draw_mz_ion_panel(self, ax, mz, norm_int, peak_categories,
-                            peak_ann_display, n_valid, plt) -> None:
+    def _draw_mz_ion_panel(self, ax: Axes, mz: Any, norm_int: Any, peak_categories: Any, peak_ann_display: Any, n_valid: Any, plt: Any) -> None:
         """Panel 1: m/z stems colored by ion type."""
         max_int = norm_int.max() if n_valid > 0 else 1.0
 
@@ -1600,14 +1718,11 @@ class HeadAnalysisTask(BaseTask):
                     continue
                 color, alpha = CATEGORY_COLORS.get(cat, ("#9467bd", 0.8))
                 zorder = 2 if cat == "unannotated" else 3
-                ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color,
-                        linewidth=1.2, alpha=alpha, zorder=zorder)
-                ax.scatter([mz[i]], [norm_int[i]], color=color, s=20,
-                           alpha=alpha, zorder=zorder)
+                ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=1.2, alpha=alpha, zorder=zorder)
+                ax.scatter([mz[i]], [norm_int[i]], color=color, s=20, alpha=alpha, zorder=zorder)
 
         # Labels with anti-collision
-        self._add_peak_labels(ax, mz, norm_int, peak_categories,
-                               peak_ann_display, n_valid, max_int)
+        self._add_peak_labels(ax, mz, norm_int, peak_categories, peak_ann_display, n_valid, max_int)
 
         ax.set_xlabel("m/z", fontsize=11, fontweight="bold")
         ax.set_ylabel("Normalized Intensity", fontsize=11, fontweight="bold")
@@ -1616,12 +1731,22 @@ class HeadAnalysisTask(BaseTask):
         ax.set_xlim(50, mz.max() + 50 if n_valid > 0 else 2500)
         ax.set_ylim(0, max_int * 1.45)
 
-    def _draw_mz_attention_panel(self, ax, mz, norm_int, attn_norm, ann_valid_hero,
-                                  peak_ann_display, peak_categories, n_valid,
-                                  plt, title="Attention Received") -> None:
+    def _draw_mz_attention_panel(
+        self,
+        ax: Axes,
+        mz: Any,
+        norm_int: Any,
+        attn_norm: Any,
+        ann_valid_hero: Any,
+        peak_ann_display: Any,
+        peak_categories: Any,
+        n_valid: Any,
+        plt: Any,
+        title: str = "Attention Received",
+    ) -> None:
         """Panel 2: m/z stems colored by attention score (viridis)."""
-        from matplotlib.colors import Normalize
         from matplotlib.cm import ScalarMappable
+        from matplotlib.colors import Normalize
 
         max_int = norm_int.max() if n_valid > 0 else 1.0
         cmap = plt.cm.viridis
@@ -1629,16 +1754,13 @@ class HeadAnalysisTask(BaseTask):
 
         for i in range(n_valid):
             color = cmap(norm(attn_norm[i]))
-            ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color,
-                    linewidth=1.5, alpha=0.85, zorder=2)
+            ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=1.5, alpha=0.85, zorder=2)
             # Red edge for annotated peaks
             edge = "red" if ann_valid_hero[i] else "none"
-            ax.scatter([mz[i]], [norm_int[i]], color=color, s=25,
-                       edgecolors=edge, linewidths=0.8, alpha=0.85, zorder=3)
+            ax.scatter([mz[i]], [norm_int[i]], color=color, s=25, edgecolors=edge, linewidths=0.8, alpha=0.85, zorder=3)
 
         # Labels
-        self._add_peak_labels(ax, mz, norm_int, peak_categories,
-                               peak_ann_display, n_valid, max_int)
+        self._add_peak_labels(ax, mz, norm_int, peak_categories, peak_ann_display, n_valid, max_int)
 
         # Colorbar
         sm = ScalarMappable(cmap=cmap, norm=norm)
@@ -1648,10 +1770,10 @@ class HeadAnalysisTask(BaseTask):
 
         # Legend
         n_ann = int(ann_valid_hero.sum())
-        ax.plot([], [], "o", color="gray", markeredgecolor="red", markeredgewidth=1.0,
-                markersize=6, label=f"Annotated peaks ({n_ann})", linestyle="None")
-        ax.plot([], [], "o", color="gray", markersize=6,
-                label=f"Unannotated peaks ({n_valid - n_ann})", linestyle="None")
+        ax.plot(
+            [], [], "o", color="gray", markeredgecolor="red", markeredgewidth=1.0, markersize=6, label=f"Annotated peaks ({n_ann})", linestyle="None"
+        )
+        ax.plot([], [], "o", color="gray", markersize=6, label=f"Unannotated peaks ({n_valid - n_ann})", linestyle="None")
         ax.legend(loc="upper right", fontsize=9, framealpha=0.9)
 
         ax.set_xlabel("m/z", fontsize=11, fontweight="bold")
@@ -1661,12 +1783,19 @@ class HeadAnalysisTask(BaseTask):
         ax.set_xlim(50, mz.max() + 50 if n_valid > 0 else 2500)
         ax.set_ylim(0, max_int * 1.45)
 
-    def _draw_per_head_attention_panels(self, ax, mz, norm_int,
-                                         attn_received_per_head, ann_valid_hero,
-                                         n_valid, H, plt) -> None:
+    def _draw_per_head_attention_panels(
+        self,
+        ax: Axes,
+        mz: Any,
+        norm_int: Any,
+        attn_received_per_head: Any,
+        ann_valid_hero: Any,
+        n_valid: Any,
+        H: Any,  # noqa: N803
+        plt: Any,
+    ) -> None:
         """Panel 3: per-head attention as small-multiples bar charts."""
         from matplotlib.colors import Normalize
-        from matplotlib.cm import ScalarMappable
 
         # Clear the main axis — we'll create inset axes
         ax.set_visible(False)
@@ -1693,7 +1822,7 @@ class HeadAnalysisTask(BaseTask):
 
             norm_obj = Normalize(vmin=0, vmax=1)
             colors = [cmap(norm_obj(v)) for v in attn_norm_h]
-            bars = inset.bar(range(n_valid), norm_int, color=colors, width=1.0, linewidth=0)
+            inset.bar(range(n_valid), norm_int, color=colors, width=1.0, linewidth=0)
 
             # Mark annotated peaks with red ticks on x-axis
             for j in range(n_valid):
@@ -1717,8 +1846,7 @@ class HeadAnalysisTask(BaseTask):
         # (no action needed — we only create axes for existing heads)
 
     @staticmethod
-    def _add_peak_labels(ax, mz, norm_int, peak_categories, peak_ann_display,
-                          n_valid, max_int) -> None:
+    def _add_peak_labels(ax: Axes, mz: Any, norm_int: Any, peak_categories: Any, peak_ann_display: Any, n_valid: Any, max_int: Any) -> None:
         """Add ion annotation labels with intensity threshold + m/z anti-collision."""
         min_label_intensity = max_int * 0.03
         min_mz_gap = 20.0
@@ -1726,9 +1854,7 @@ class HeadAnalysisTask(BaseTask):
 
         # Annotated peaks sorted by intensity descending
         annotated = [
-            (i, mz[i], norm_int[i], peak_ann_display[i])
-            for i in range(n_valid)
-            if peak_categories[i] != "unannotated" and peak_ann_display[i]
+            (i, mz[i], norm_int[i], peak_ann_display[i]) for i in range(n_valid) if peak_categories[i] != "unannotated" and peak_ann_display[i]
         ]
         annotated.sort(key=lambda t: t[2], reverse=True)
 
@@ -1741,9 +1867,16 @@ class HeadAnalysisTask(BaseTask):
             cat = peak_categories[idx]
             text_color = TEXT_COLORS.get(cat, "black")
             ax.annotate(
-                display, xy=(m, inten), xytext=(0, 5), textcoords="offset points",
-                ha="center", fontsize=7, color=text_color, rotation=90,
-                alpha=0.9, fontweight="bold",
+                display,
+                xy=(m, inten),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                color=text_color,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
             )
 
         # Top-20 unannotated peaks labeled with m/z
@@ -1759,10 +1892,14 @@ class HeadAnalysisTask(BaseTask):
                     continue
                 placed_mz.append(mz[i])
                 ax.annotate(
-                    f"{mz[i]:.1f}", xy=(mz[i], norm_int[i]),
-                    xytext=(0, 5), textcoords="offset points",
-                    ha="center", fontsize=6, color="#555555",
-                    rotation=90, alpha=0.7, fontstyle="italic",
+                    f"{mz[i]:.1f}",
+                    xy=(mz[i], norm_int[i]),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=6,
+                    color="#555555",
+                    rotation=90,
+                    alpha=0.7,
+                    fontstyle="italic",
                 )
-
-

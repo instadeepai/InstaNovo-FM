@@ -55,6 +55,7 @@ class GlassBoxAttributionTask(BaseTask):
     requires_model = False
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
         self.max_samples: int = kwargs.get("max_samples", 20000)
         self.random_state: int = kwargs.get("random_state", 42)
@@ -117,21 +118,19 @@ class GlassBoxAttributionTask(BaseTask):
     def _plot_embedding_by_cluster(self, emb2d: np.ndarray, labels: Optional[np.ndarray], save_dir: Path) -> str:
         fig, ax = plt.subplots(figsize=(10, 8))
         if labels is None:
-            ax.scatter(emb2d[:, 0], emb2d[:, 1], c="steelblue", s=self.point_size,
-                       alpha=self.alpha, edgecolors="none")
+            ax.scatter(emb2d[:, 0], emb2d[:, 1], c="steelblue", s=self.point_size, alpha=self.alpha, edgecolors="none")
         else:
             noise = labels < 0
             if noise.any():
-                ax.scatter(emb2d[noise, 0], emb2d[noise, 1], c="lightgray",
-                           s=self.point_size, alpha=0.4, edgecolors="none")
+                ax.scatter(emb2d[noise, 0], emb2d[noise, 1], c="lightgray", s=self.point_size, alpha=0.4, edgecolors="none")
             uniq = [c for c in np.unique(labels) if c >= 0]
             cmap = plt.cm.get_cmap("tab20", max(len(uniq), 1))
             for i, c in enumerate(uniq):
                 m = labels == c
-                ax.scatter(emb2d[m, 0], emb2d[m, 1], c=[cmap(i % cmap.N)],
-                           s=self.point_size, alpha=self.alpha, edgecolors="none")
+                ax.scatter(emb2d[m, 0], emb2d[m, 1], c=[cmap(i % cmap.N)], s=self.point_size, alpha=self.alpha, edgecolors="none")
         ax.set_title("Glass Box embedding (descriptors) colored by EVōC cluster")
-        ax.set_xlabel("GlassBox-1"); ax.set_ylabel("GlassBox-2")
+        ax.set_xlabel("GlassBox-1")
+        ax.set_ylabel("GlassBox-2")
         path = save_dir / "glassbox_embedding_by_evoc_cluster.png"
         fig.savefig(path, dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
@@ -175,7 +174,8 @@ class GlassBoxAttributionTask(BaseTask):
     # Main entry point
     # ------------------------------------------------------------------
 
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:
+    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:  # type: ignore[override]  # base class run() signature differs across tasks
+        """Run."""
         start = time.time()
         rng = np.random.default_rng(self.random_state)
 
@@ -185,11 +185,10 @@ class GlassBoxAttributionTask(BaseTask):
         UMAPVisualisationTask._compute_annotation_properties(meta_s)
         UMAPVisualisationTask._compute_top_duplicate_peptides(meta_s)
 
-        X, feat_names = cc.build_descriptor_matrix(meta_s, self.numeric_features, n=len(emb_s))
+        X, feat_names = cc.build_descriptor_matrix(meta_s, self.numeric_features, n=len(emb_s))  # noqa: N806
         if X.shape[1] < 2:
             logger.warning("Glass Box: only %d usable descriptors — skipping", X.shape[1])
-            return {"task_name": self.name, "skipped": True,
-                    "reason": f"insufficient interpretable descriptors ({X.shape[1]})"}
+            return {"task_name": self.name, "skipped": True, "reason": f"insufficient interpretable descriptors ({X.shape[1]})"}
 
         try:
             from glass_box_umap import GlassBoxUMAP
@@ -212,14 +211,12 @@ class GlassBoxAttributionTask(BaseTask):
 
         # Per-sample feature importance (L2 over UMAP axes) and global importance.
         per_sample_importance = np.linalg.norm(contrib, axis=1)  # (N, n_features)
-        global_importance = per_sample_importance.mean(axis=0)   # (n_features,)
+        global_importance = per_sample_importance.mean(axis=0)  # (n_features,)
 
         # Bridge: cluster the *learned* embeddings with EVōC.
         labels: Optional[np.ndarray] = None
         try:
-            evoc_res = cc.run_evoc(
-                emb_s, normalize=self.normalize_emb, random_state=self.random_state, **self.evoc_params
-            )
+            evoc_res = cc.run_evoc(emb_s, normalize=self.normalize_emb, random_state=self.random_state, **self.evoc_params)
             labels = evoc_res.labels
         except ImportError:
             logger.warning("evoc not installed — Glass Box runs without cluster overlay")
@@ -237,9 +234,8 @@ class GlassBoxAttributionTask(BaseTask):
                 saved_paths.append(hm)
             uniq = [int(c) for c in np.unique(labels) if c >= 0]
             cluster_importance = {
-                int(c): {feat_names[j]: float(per_sample_importance[labels == c].mean(0)[j])
-                         for j in range(len(feat_names))}
-                for c in uniq
+                int(c): {feat_names[j]: float(per_sample_importance[labels == c].mean(0)[j]) for j in range(len(feat_names))}  # type: ignore[misc]
+                for c in uniq  # type: ignore[misc]
             }
 
         if self.create_metadata_views:
@@ -249,14 +245,18 @@ class GlassBoxAttributionTask(BaseTask):
         top_idx = int(np.argmax(global_importance))
         try:
             with open(save_dir / "glassbox_attribution.json", "w") as f:
-                json.dump({
-                    "feature_names": feat_names,
-                    "global_importance": {feat_names[i]: float(global_importance[i])
-                                          for i in range(len(feat_names))},
-                    "top_feature": feat_names[top_idx],
-                    "reconstruction_residual": recon_residual,
-                    "per_cluster_importance": cluster_importance,
-                }, f, indent=2, default=str)
+                json.dump(
+                    {
+                        "feature_names": feat_names,
+                        "global_importance": {feat_names[i]: float(global_importance[i]) for i in range(len(feat_names))},
+                        "top_feature": feat_names[top_idx],
+                        "reconstruction_residual": recon_residual,
+                        "per_cluster_importance": cluster_importance,
+                    },
+                    f,
+                    indent=2,
+                    default=str,
+                )
         except Exception as e:
             logger.warning("Failed to dump attribution JSON: %s", e)
 
@@ -278,6 +278,7 @@ class GlassBoxAttributionTask(BaseTask):
         }
 
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
+        """Return loggable metrics."""
         if task_results.get("skipped"):
             return {}
         metrics: Dict[str, float] = {

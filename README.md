@@ -209,10 +209,14 @@ A hosted docs site is planned. _(TODO: add docs site URL.)_ Until then, the guid
 
 - [The InstaNovo Foundation Model](docs/foundation_model.md) — what the model is, how masked-peak
   reconstruction works, and what the embeddings encode.
+- [Downstream de novo sequencing](src/instanovo_fm/downstream/de_novo_sequencing/README.md) — the
+  FM encoder plus an InstaNovo decoder, and the staged unfreeze schedule.
+- [Sanitisation of ported code](docs/sanitisation.md) — what is removed from the internal
+  repository on the way here, and how to review a port separately from its sanitisation.
 
 **Reference**
 
-- `instanovo-fm --help`, and `instanovo-fm train|evaluate --help` for per-command options.
+- `instanovo-fm --help`, and `instanovo-fm train|evaluate|denovo --help` for per-command options.
 - Configs live in [`src/instanovo_fm/configs/`](src/instanovo_fm/configs/); every setting is
   overridable with Hydra syntax on the command line.
 

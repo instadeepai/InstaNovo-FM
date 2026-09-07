@@ -80,7 +80,7 @@ The remaining published panels are produced by scripts that are not part of this
 Evaluation writes one directory per task:
 
 ```
-<output>/instanovo_fm/eval/embed_eval_results/<variant>/<task>/task_summary.json
+<output>/instanovo_fm/eval/embed_eval_results/<task>/task_summary.json
 ```
 
 `task_summary.json` holds the headline metrics; `task_results.json` holds per-class detail.

@@ -10,7 +10,7 @@ embedding_pooling:
 confidence_temperature: 1.0     # Softmax temperature for confidence pooling (lower = sharper, higher = smoother)
 batch_size: 128
 device: cuda  # "auto", "cuda", or "cpu"
-output_dir: "instanovo/foundational/eval/embed_eval_results"  # Where to save results (automatically uploaded to S3 on Aichor)
+output_dir: "instanovo_fm/eval/embed_eval_results"  # Where to save results (automatically uploaded to S3 on Aichor)
 max_samples: 20_000  # Maximum number of samples to use (null = use all data)
 save_embeddings: False  # Save embeddings to disk (default: False for speed and space savings)
 force_regenerate_embeddings: False  # Set to True to regenerate cached embeddings (only relevant if save_embeddings=True)

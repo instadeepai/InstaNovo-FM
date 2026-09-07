@@ -23,5 +23,3 @@ __all__ = [
     "find_isotopic_neighbors",
     "get_mask_function",
 ]
-
-

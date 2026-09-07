@@ -90,7 +90,7 @@ Both call `run_evaluation()` in `src/instanovo_fm/eval/embed_evaluation.py`.
 | Path | Default | Lifetime |
 |---|---|---|
 | Checkpoints | `checkpoints/instanovo-foundational-base` | written into, never cleared |
-| Evaluation results | `instanovo/foundational/eval/embed_eval_results` | one directory per variant and task, overwritten per run |
+| Evaluation results |  `instanovo_fm/eval/embed_eval_results` | one directory per task, overwritten per run |
 | Embedding cache | `<output>/embeddings_<split>/` | only when `save_embeddings=True`; **reused on the next run** unless `force_regenerate_embeddings=True` |
 | MLflow local fallback | `./mlruns` | only when the remote is unreachable and `mlflow_allow_local_fallback=True` |
 
@@ -127,5 +127,5 @@ Metrics are also written to the run's output directory as JSON, which does not d
 server being reachable at all:
 
 ```
-<output>/instanovo/foundational/eval/embed_eval_results/<variant>/<task>/task_summary.json
+<output>/instanovo_fm/eval/embed_eval_results/<task>/task_summary.json
 ```

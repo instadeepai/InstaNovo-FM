@@ -61,7 +61,7 @@ from instanovo.utils.colorlogging import ColorLog
 logger = ColorLog(console, __name__).logger
 
 # Path to config directory (same as train.py)
-CONFIG_PATH = Path(__file__).parent.parent.parent / "configs"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs"
 
 
 def _checkpoint_id(ckpt_path: str, index: int) -> str:
@@ -117,12 +117,14 @@ def run_evaluation(config: DictConfig) -> None:
 
             ckpt_config = OmegaConf.merge(
                 config,
-                OmegaConf.create({
-                    "evaluation": {
-                        "checkpoint_path": str(ckpt_path),
-                        "output_dir": str(shared_dir / ckpt_id),
+                OmegaConf.create(
+                    {
+                        "evaluation": {
+                            "checkpoint_path": str(ckpt_path),
+                            "output_dir": str(shared_dir / ckpt_id),
+                        }
                     }
-                }),
+                ),
             )
 
             try:
@@ -137,6 +139,7 @@ def run_evaluation(config: DictConfig) -> None:
             except Exception as e:
                 logger.error(f"Evaluation failed for {ckpt_id}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 sys.exit(1)
 
@@ -166,6 +169,7 @@ def run_evaluation(config: DictConfig) -> None:
         except Exception as e:
             logger.error(f"Evaluation failed: {e}")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
 
@@ -226,9 +230,7 @@ def _log_metrics_to_mlflow(
             token = os.environ.get(f"{author_slug}__MLFLOW_TOKEN")
             if token:
                 os.environ["MLFLOW_TRACKING_PASSWORD"] = token
-                os.environ.setdefault(
-                    "MLFLOW_TRACKING_USERNAME", "instadeep-mlflow"
-                )
+                os.environ.setdefault("MLFLOW_TRACKING_USERNAME", "instadeep-mlflow")
 
         # Get embedding stats for logging
         embeddings_info = {}
@@ -245,9 +247,7 @@ def _log_metrics_to_mlflow(
                 mlflow.log_metric(f"eval_post/{name}", value)
             mlflow.set_tag("embed_eval", "post_training")
 
-        logger.info(
-            f"Logged {len(loggable)} embedding metrics to MLflow run {run_id}"
-        )
+        logger.info(f"Logged {len(loggable)} embedding metrics to MLflow run {run_id}")
 
     except Exception as e:
         logger.warning(f"Failed to log metrics to MLflow: {e}")

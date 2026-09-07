@@ -5,7 +5,7 @@ Comprehensive evaluation framework for InstaNovo Foundation Model embeddings. Th
 ## Architecture
 
 ```
-instanovo/foundational/eval/
+instanovo_fm/eval/
 ├── README.md                  # This file
 ├── __init__.py
 ├── __main__.py               # CLI entry point

@@ -1,0 +1,89 @@
+# De novo sequencing model config.
+# Inherits shared parameters from instanovo_base and overrides encoder settings
+# to match the foundation model for correct pretrained weight transfer.
+
+defaults:
+  - instanovo_base
+
+# Must match the foundation model (12 heads, 768 dim -> 64 per head).
+n_head: 12
+dim_feedforward: 3072
+encoder_layers: 12
+
+remove_precursor_tol: 2.0 # deviates from encoder to avoid decoder 'cheating'
+min_intensity: 1e-6 #0.01
+# use_spectrum_utils: false # needs to be consistent with encoder
+normalize_mz: true # needs to be consistent with encoder
+
+use_meta_token: False
+
+# ===== Meta Token Configuration =====
+meta_token:
+  enabled: False  # Use meta token for precursor/metadata encoding
+  n_freq: 16     # Number of Fourier frequencies for continuous features
+  
+  # Continuous feature bounds
+  precursor_mass_max: 6500.0  # Maximum precursor mass in Da (observed max in data)
+  
+  # Feature inclusion flags
+  include_frag_type: True           # Fragmentation type (HCD, CID, ETD, HCID)
+  include_instrument: True          # Instrument model (20 categories)
+  include_collision_energy: True   # Collision energy (continuous, NCE 0-100)
+  include_precursor_charge: True   # Precursor charge (binned 2-6)
+  include_precursor_mass: True     # Precursor mass (continuous, neutral mass in Da)
+  include_acquisition: False         # Acquisition mode (DDA/DIA)
+  include_detector: False            # Detector type (Orbitrap, TOF, etc.)
+  include_enzyme: False              # Enzyme (trypsin, etc.)
+  include_quant: False               # Quantification method (TMT, iTRAQ, etc.)
+
+# ===== Peak Encoder =====
+# Options: "multiscale", "fourier", "rbf", or "linear"
+# Must match the foundation model's peak encoder type and config.
+peak_encoder:
+  type: "multiscale"
+  config:
+    dropout: 0.1
+    num_freqs: 192
+    strategy: "voronov_et_al"
+    trainable_fourier: true
+    # x_min: 0.001
+    # x_max: 1.5
+    # num_rbf: 1024
+
+# ===== Encoder Architecture =====
+# Must match the foundation model's architecture for correct weight transfer.
+architecture:
+  positional_encoding:
+    type: "none" # "rope"
+    config:
+      max_len: 512
+      dropout: 0.1
+      rotary_pct: 0.5
+      base: 10000.0
+  relative_bias:
+    type: "none" # "pa"
+    config:
+      max_seq_len: 256
+      max_relative_position: 32
+      pw_num_freqs: 64
+      pw_hidden_dim: 64
+      per_layer_pw: True
+      lambda_min: 0.001
+      lambda_max: 10000.0
+  attention:
+    backend: "flash"
+    config:
+      verbose: True
+
+# ===== Ion Ladder Encoder =====
+# To disable for ablation: override ion_ladder.enabled=False
+# Residue masses default to the residue_set passed to the model.
+# To match the foundation model exactly, set ion_ladder.residue_masses to the
+# same residues used during foundation training.
+ion_ladder:
+  enabled: False
+  window_k: 40
+  sigma: 0.35
+  charge_states: [1, 2]
+  neutral_losses:
+    enabled: False

@@ -29,7 +29,8 @@ dependencies = [
   "pyarrow>=18.0.0",
   "pandas>=2.2.3",
   "numpy>=2.0.2",
-  "typer==0.15.1",     # raised from the internal 0.12.5: instanovo 1.2.2 requires >=0.15.1
+  # instanovo 1.2.2 requires >=0.15.1. 0.16+ is required for Click 8.2+
+  "typer==0.27.2",
   "click>=8.1.7",
   "tqdm>=4.67.0",
   "pyyaml>=6.0.2",

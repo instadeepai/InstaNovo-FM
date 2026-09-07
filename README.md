@@ -95,6 +95,31 @@ cd InstaNovo-FM
 pip install -e .
 ```
 
+### Installing this accepts NVIDIA's proprietary licence, not only Apache-2.0
+
+This project is Apache-2.0, but **a default install on Linux fetches closed-source
+NVIDIA binaries, and installing them means accepting NVIDIA's licence terms.** Nothing
+here asks for a GPU, and neither `torch` nor any `nvidia-*` package appears in
+`pyproject.toml` — they arrive transitively:
+
+| declared here | pulls | which pulls |
+|---|---|---|
+| `instanovo==1.2.2` | `accelerate>=1.6.0` | `torch` |
+| `torch>=2.5,<2.9` (transitive) | — | **14 `nvidia-*` CUDA wheels**, 12 of them declaring an NVIDIA proprietary licence |
+| `gpu` extra: `cuml-cu12` | `cupy-cuda12x`, `nvidia-nvcomp-cu12` | more CUDA runtime; needs NVIDIA's package index |
+
+The proprietary libraries include **cuBLAS**, **cuDNN**, **cuSPARSELt**, **cuSOLVER** and
+**cuFFT**. cuDNN and cuBLAS are the kernel backends
+`torch.nn.functional.scaled_dot_product_attention` dispatches to, so on NVIDIA hardware
+they execute inside the model's forward pass. Each wheel ships NVIDIA's terms as
+`License.txt` in its `.dist-info` directory.
+
+This matters most if you **redistribute** a container image or a built environment: you
+are then redistributing NVIDIA's binaries under NVIDIA's terms, which are more
+restrictive than Apache-2.0. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for
+the full package list and a CPU-only recipe that avoids all of them. The dataset
+pipeline, the figure notebooks and the release scripts need no GPU.
+
 ## Quick start
 
 > _TODO: confirm the public API and CLI. The snippets below are illustrative placeholders._
@@ -205,6 +230,12 @@ GitHub's "Cite this repository" button and reference managers pick it up directl
 > the **Apache License 2.0** and model checkpoints under a **Creative Commons
 > Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)** license. Update this section once
 > finalized.
+
+Apache-2.0 covers the code in this repository. It does **not** cover the third-party binaries an
+install fetches. Twelve NVIDIA CUDA wheels arrive transitively and are governed by NVIDIA's
+proprietary licence, so installing or redistributing this project means accepting those terms in
+addition to Apache-2.0 — see [Installation](#installing-this-accepts-nvidias-proprietary-licence-not-only-apache-20)
+and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## Acknowledgements
 

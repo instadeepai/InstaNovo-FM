@@ -145,12 +145,12 @@ def main() -> None:
     parser.add_argument(
         "--medium-output-dir",
         required=True,
-        help="Output root for the medium-confidence subset (e.g. former mcfm tree)",
+        help="Output root for the medium-confidence subset (e.g. former MCFM tree)",
     )
     parser.add_argument(
         "--high-output-dir",
         required=True,
-        help="Output root for the high-confidence subset (e.g. former hcfm tree)",
+        help="Output root for the high-confidence subset (e.g. former HCFM tree)",
     )
     parser.add_argument(
         "--hold-back-modified-rows",

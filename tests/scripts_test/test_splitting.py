@@ -4,27 +4,6 @@ This module provides comprehensive tests for all the splits scripts
 to ensure they work correctly with realistic parquet data.
 """
 
-import pytest as _pytest
-
-# This module was written against an older shuffle_2pass API: it imports
-# two_pass_shuffle_split, shuffle_all_splits_2pass, forecast_max_chunk_size and
-# forecast_max_chunk_size_second_pass, none of which exist any more (the module
-# now provides shuffle_split, shuffle_all and forecast_chunk_size). The names
-# were already stale in the internal repo, so this is inherited, not a porting
-# regression. Skipping rather than deleting keeps the other ~50 tests recoverable:
-# reconcile the names and this guard disappears on its own.
-_pytest.importorskip("scripts.splitting.shuffle_2pass")
-import scripts.splitting.shuffle_2pass as _s2p
-_missing = [n for n in ("two_pass_shuffle_split", "shuffle_all_splits_2pass",
-                        "forecast_max_chunk_size", "forecast_max_chunk_size_second_pass")
-            if not hasattr(_s2p, n)]
-if _missing:
-    _pytest.skip(
-        "test_splitting.py targets a superseded shuffle_2pass API; missing: "
-        + ", ".join(_missing),
-        allow_module_level=True,
-    )
-
 import tempfile
 import shutil
 from pathlib import Path
@@ -37,6 +16,8 @@ from scripts.splitting.shuffle_indices import (
     shuffle_split_by_indices,
     shuffle_all_splits,
     get_split_info,
+    get_parquet_files,
+    count_rows_in_file,
     create_row_indices,
     shuffle_indices,
     chunk_indices,
@@ -45,23 +26,10 @@ from scripts.splitting.shuffle_indices import (
     write_chunk_file,
 )
 from scripts.splitting.shuffle_2pass import (
-    two_pass_shuffle_split,
-    shuffle_all_splits_2pass,
-    forecast_max_chunk_size,
-    forecast_max_chunk_size_second_pass,
-    estimate_bytes_per_row_from_sample,
-    get_parquet_files,
-    count_rows_in_file,
-)
-from scripts.splitting.split_labelled_data import (
-    replace_i_with_l,
-    load_existing_splits,
-    load_blacklist,
-    load_clash_blacklist,
-    create_initial_split_assignments,
-    assign_remaining_peptides,
-    create_and_verify_splits,
-    sets_to_dataframe,
+    shuffle_split,
+    shuffle_all,
+    forecast_chunk_size,
+    estimate_bytes_per_row,
 )
 from scripts.splitting.split_unlabelled_data import (
     load_existing_lsh_assignments,
@@ -70,6 +38,16 @@ from scripts.splitting.split_unlabelled_data import (
     dict_to_dataframe as lsh_dict_to_dataframe,
     create_and_verify_lsh_splits,
     normalise_dataframe_schema as normalise_unlabelled_schema,
+)
+from scripts.splitting.split_labelled_data import (
+    REGISTRY_FILENAME,
+    Mode,
+    assign_new_peptides,
+    collect_unique_peptides,
+    load_peptide_registry,
+    process_directories,
+    save_registry,
+    verify_no_unseen_peptides,
 )
 
 
@@ -316,39 +294,39 @@ class TestShuffleIndices:
 class TestShuffle2Pass:
     """Test suite for 2-pass shuffling."""
 
-    def test_forecast_max_chunk_size(self) -> None:
+    def test_forecast_chunk_size(self) -> None:
         """Test chunk size forecasting."""
-        forecast = forecast_max_chunk_size(
-            available_ram_gb=16.0,
-            num_processes=4,
+        forecast = forecast_chunk_size(
+            ram_gb=16.0,
+            num_procs=4,
             bytes_per_row=1000.0,
-            safety_factor=0.7,
+            safety=0.7,
+            pass2=False,
         )
 
         assert "max_chunk_size" in forecast
-        assert "max_chunk_size_formatted" in forecast
-        assert "data_memory_per_chunk_gb" in forecast
-        assert "total_memory_per_process_gb" in forecast
-        assert "total_memory_all_processes_gb" in forecast
-        assert "ram_utilization_percent" in forecast
+        assert "data_memory_per_process_gb" in forecast
+        assert "total_memory_all_procs_gb" in forecast
+        assert "ram_utilization_pct" in forecast
 
-    def test_forecast_max_chunk_size_second_pass(self) -> None:
+    def test_forecast_chunk_size_second_pass(self) -> None:
         """Test second pass chunk size forecasting."""
-        forecast = forecast_max_chunk_size_second_pass(
-            available_ram_gb=16.0,
-            num_processes=4,
+        forecast = forecast_chunk_size(
+            ram_gb=16.0,
+            num_procs=4,
             bytes_per_row=1000.0,
-            safety_factor=0.7,
+            safety=0.7,
+            pass2=True,
         )
 
         assert "max_chunk_size" in forecast
         assert "memory_multiplier" in forecast
         assert forecast["memory_multiplier"] == 2
 
-    def test_estimate_bytes_per_row_from_sample(self) -> None:
+    def test_estimate_bytes_per_row(self) -> None:
         """Test bytes per row estimation."""
         sample_file = str(self.split_dir / "train_0.parquet")
-        bytes_per_row = estimate_bytes_per_row_from_sample(sample_file, sample_size=100)
+        bytes_per_row = estimate_bytes_per_row(sample_file, n=100)
 
         assert isinstance(bytes_per_row, float)
         assert bytes_per_row > 0
@@ -368,15 +346,16 @@ class TestShuffle2Pass:
 
         assert row_count == 200
 
-    def test_two_pass_shuffle_split(self) -> None:
+    def test_shuffle_split(self) -> None:
         """Test complete 2-pass shuffle split."""
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=42,
             output_dir=str(self.output_dir),
-            num_processes=2,  # Use fewer processes for testing
+            chunk_size=300,
+            seed=42,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
         # Check output files
@@ -388,45 +367,43 @@ class TestShuffle2Pass:
         expected_rows = 5 * 200  # 5 files * 200 rows each
         assert total_rows == expected_rows
 
-    def test_shuffle_all_splits_2pass(self) -> None:
+    def test_shuffle_all(self) -> None:
         """Test 2-pass shuffling all splits."""
-        shuffle_all_splits_2pass(
-            str(self.test_dir),  # Pass parent directory containing lcfm_splits
+        shuffle_all(
+            str(self.split_dir),
             str(self.output_dir),
-            target_chunk_size=300,
+            chunk_size=300,
             seed=42,
-            num_processes=2,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Check output files for all splits
-        split_output_dir = self.output_dir / "lcfm_splits"
         for split_type in ["train", "valid", "test"]:
-            output_files = list(split_output_dir.glob(f"{split_type}_*.parquet"))
+            output_files = list(self.output_dir.glob(f"{split_type}_*.parquet"))
             assert len(output_files) > 0
 
     def test_2pass_determinism(self) -> None:
         """Test that 2-pass shuffling is deterministic with same seed."""
-        # First run
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=42,
             output_dir=str(self.output_dir / "run1"),
-            num_processes=2,
+            chunk_size=300,
+            seed=42,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Second run with same seed
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=42,
             output_dir=str(self.output_dir / "run2"),
-            num_processes=2,
+            chunk_size=300,
+            seed=42,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Compare outputs
         files1 = sorted(self.output_dir.glob("run1/train_*.parquet"))
         files2 = sorted(self.output_dir.glob("run2/train_*.parquet"))
 
@@ -439,27 +416,26 @@ class TestShuffle2Pass:
 
     def test_2pass_different_seeds_produce_different_results(self) -> None:
         """Test that different seeds produce different results in 2-pass."""
-        # First run
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=42,
             output_dir=str(self.output_dir / "seed42"),
-            num_processes=2,
+            chunk_size=300,
+            seed=42,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Second run with different seed
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=123,
             output_dir=str(self.output_dir / "seed123"),
-            num_processes=2,
+            chunk_size=300,
+            seed=123,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Compare outputs - they should be different
         files1 = sorted(self.output_dir.glob("seed42/train_*.parquet"))
         files2 = sorted(self.output_dir.glob("seed123/train_*.parquet"))
 
@@ -478,7 +454,6 @@ class TestShuffle2Pass:
 
     def test_data_integrity_preservation(self) -> None:
         """Test that 2-pass shuffling preserves data integrity."""
-        # Get original data
         original_files = list(self.split_dir.glob("train_*.parquet"))
         original_data = []
         for f in original_files:
@@ -488,17 +463,16 @@ class TestShuffle2Pass:
         original_combined = pl.concat(original_data, how="vertical_relaxed")
         original_sorted = original_combined.sort("id")
 
-        # Run 2-pass shuffle
-        two_pass_shuffle_split(
+        shuffle_split(
             str(self.split_dir),
             "train",
-            target_chunk_size=300,
-            seed=42,
             output_dir=str(self.output_dir),
-            num_processes=2,
+            chunk_size=300,
+            seed=42,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Get shuffled data
         shuffled_files = list(self.output_dir.glob("train_*.parquet"))
         shuffled_data = []
         for f in shuffled_files:
@@ -508,7 +482,6 @@ class TestShuffle2Pass:
         shuffled_combined = pl.concat(shuffled_data, how="vertical_relaxed")
         shuffled_sorted = shuffled_combined.sort("id")
 
-        # Data should be identical when sorted by id
         assert original_sorted.equals(shuffled_sorted)
 
     @pytest.fixture(autouse=True)
@@ -589,22 +562,22 @@ class TestSplitsIntegration:
 
     def test_complete_shuffle_workflow_2pass(self) -> None:
         """Test complete shuffle workflow using 2-pass method."""
-        # Shuffle all splits using 2-pass method
-        shuffle_all_splits_2pass(
-            str(self.test_dir),  # Pass parent directory containing lcfm_splits
+        # shuffle_all writes train_*.parquet directly into output_dir
+        shuffle_all(
+            str(self.split_dir),
             str(self.output_dir / "2pass"),
-            target_chunk_size=400,
+            chunk_size=400,
             seed=42,
-            num_processes=2,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
-        # Verify all splits were processed
-        split_output_dir = self.output_dir / "2pass" / "lcfm_splits"
         for split_type in ["train", "valid", "test"]:
-            output_files = list(split_output_dir.glob(f"{split_type}_*.parquet"))
+            output_files = list(
+                (self.output_dir / "2pass").glob(f"{split_type}_*.parquet")
+            )
             assert len(output_files) > 0
 
-            # Verify row count preservation
             total_rows = sum(len(pl.read_parquet(f)) for f in output_files)
             expected_rows = {"train": 8 * 250, "valid": 2 * 200, "test": 2 * 150}[
                 split_type
@@ -613,7 +586,6 @@ class TestSplitsIntegration:
 
     def test_comparison_between_methods(self) -> None:
         """Test comparison between indices and 2-pass methods."""
-        # Run both methods
         shuffle_all_splits(
             str(self.test_dir),  # Pass parent directory containing lcfm_splits
             chunk_size=400,
@@ -621,17 +593,18 @@ class TestSplitsIntegration:
             output_dir=str(self.output_dir / "indices"),
         )
 
-        shuffle_all_splits_2pass(
-            str(self.test_dir),  # Pass parent directory containing lcfm_splits
+        shuffle_all(
+            str(self.split_dir),
             str(self.output_dir / "2pass"),
-            target_chunk_size=400,
+            chunk_size=400,
             seed=42,
-            num_processes=2,
+            pass1_procs=1,
+            pass2_procs=1,
         )
 
         # Both methods should preserve total row counts
         indices_output_dir = self.output_dir / "indices" / "lcfm_splits"
-        twopass_output_dir = self.output_dir / "2pass" / "lcfm_splits"
+        twopass_output_dir = self.output_dir / "2pass"
         for split_type in ["train", "valid", "test"]:
             indices_files = list(indices_output_dir.glob(f"{split_type}_*.parquet"))
             twopass_files = list(twopass_output_dir.glob(f"{split_type}_*.parquet"))
@@ -670,7 +643,6 @@ class TestSplitsIntegration:
 
     def test_memory_forecasting_integration(self) -> None:
         """Test memory forecasting integration."""
-        # Test forecasting for different scenarios
         scenarios = [
             {"ram_gb": 8.0, "processes": 2},
             {"ram_gb": 16.0, "processes": 4},
@@ -678,16 +650,16 @@ class TestSplitsIntegration:
         ]
 
         for scenario in scenarios:
-            forecast = forecast_max_chunk_size(
-                available_ram_gb=scenario["ram_gb"],
-                num_processes=int(scenario["processes"]),
+            forecast = forecast_chunk_size(
+                ram_gb=scenario["ram_gb"],
+                num_procs=int(scenario["processes"]),
                 bytes_per_row=1000.0,
-                safety_factor=0.7,
+                safety=0.7,
             )
 
             assert forecast["max_chunk_size"] > 0
-            assert forecast["ram_utilization_percent"] <= 100.0
-            assert forecast["ram_utilization_percent"] > 0.0
+            assert forecast["ram_utilization_pct"] <= 100.0
+            assert forecast["ram_utilization_pct"] > 0.0
 
     @pytest.fixture(autouse=True)
     def _setup_integration_environment(self) -> Generator[None, None, None]:
@@ -768,529 +740,287 @@ class TestSplitsIntegration:
 
 
 class TestSplitLabelledData:
-    """Test suite for split_labelled_data.py - peptide leakage prevention."""
-
-    def test_replace_i_with_l(self) -> None:
-        """Test I to L replacement in peptide sequences."""
-        assert replace_i_with_l("PEPTIDE") == "PEPTLDE"
-        assert replace_i_with_l("IIII") == "LLLL"
-        assert replace_i_with_l("ACDEFGHKLMNPQRSTVWY") == "ACDEFGHKLMNPQRSTVWY"
-        assert replace_i_with_l("") == ""
-
-    def test_load_existing_splits(self) -> None:
-        """Test loading existing split assignments from CSV."""
-        existing_splits = load_existing_splits([str(self.consolidated_splits_file)])
-
-        assert "train" in existing_splits
-        assert "test" in existing_splits
-        assert "valid" in existing_splits
-
-        # Check that peptides were loaded correctly (I replaced with L)
-        # TRAINPEPTIDE -> TRALNPEPTLDE (both I's converted)
-        assert "TRALNPEPTLDE" in existing_splits["train"]
-        assert "TESTPEPTLDE" in existing_splits["test"]
-        assert "VALLDPEPTLDE" in existing_splits["valid"]
-
-    def test_load_blacklist(self) -> None:
-        """Test loading blacklisted peptides."""
-        blacklist = load_blacklist(str(self.blacklist_file))
-
-        # Check that blacklisted peptides were loaded (I replaced with L)
-        assert "BLACKLLSTED" in blacklist
-        assert "EXCLUDEME" in blacklist
-
-    def test_load_clash_blacklist(self) -> None:
-        """Test loading clash blacklisted peptides."""
-        clash_blacklist = load_clash_blacklist(str(self.clash_blacklist_file))
-
-        # Check that clash blacklisted peptides were loaded (I replaced with L)
-        assert "CLASHPEPTLDE" in clash_blacklist
-
-    def test_create_initial_split_assignments_respects_existing(self) -> None:
-        """Test that initial split assignments respect existing assignments."""
-        existing_splits = {
-            "train": {"EXISTINGTRAIN"},
-            "test": {"EXISTINGTEST"},
-            "valid": {"EXISTINGVALID"},
-        }
-        all_peptides = {"EXISTINGTRAIN", "EXISTINGTEST", "EXISTINGVALID", "NEWPEPTIDE"}
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        split_df = create_initial_split_assignments(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Check that existing assignments are preserved
-        train_peptides = set(
-            split_df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        test_peptides = set(
-            split_df.filter(pl.col("split") == "test")["normalised_peptide"]
-        )
-        valid_peptides = set(
-            split_df.filter(pl.col("split") == "valid")["normalised_peptide"]
-        )
-
-        assert "EXISTINGTRAIN" in train_peptides
-        assert "EXISTINGTEST" in test_peptides
-        assert "EXISTINGVALID" in valid_peptides
-
-        # New peptide should be unassigned (None)
-        unassigned = split_df.filter(pl.col("split").is_null())
-        assert "NEWPEPTIDE" in set(unassigned["normalised_peptide"])
-
-    def test_create_initial_split_assignments_excludes_clash_blacklist(self) -> None:
-        """Test that clash blacklisted peptides are excluded from all splits."""
-        existing_splits = {
-            "train": {"TRAINPEPTIDE"},
-            "test": set(),
-            "valid": set(),
-        }
-        all_peptides = {"TRAINPEPTIDE", "CLASHPEPTIDE", "NEWPEPTIDE"}
-        blacklisted: set[str] = set()
-        clash_blacklisted = {"CLASHPEPTIDE"}
-
-        split_df = create_initial_split_assignments(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Clash blacklisted peptides should not appear in the dataframe at all
-        all_assigned_peptides = set(split_df["normalised_peptide"])
-        assert "CLASHPEPTIDE" not in all_assigned_peptides
-
-    def test_create_initial_split_assignments_blacklist_not_in_train(self) -> None:
-        """Test that blacklisted peptides are not assigned to train."""
-        existing_splits = {
-            "train": {"BLACKLISTED"},  # Even if in existing train
-            "test": set(),
-            "valid": set(),
-        }
-        all_peptides = {"BLACKLISTED", "NORMALPEPTIDE"}
-        blacklisted = {"BLACKLISTED"}
-        clash_blacklisted: set[str] = set()
-
-        split_df = create_initial_split_assignments(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Blacklisted peptide should not be in train (should be None for later assignment)
-        train_peptides = set(
-            split_df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        assert "BLACKLISTED" not in train_peptides
-
-    def test_assign_remaining_peptides_achieves_target_ratios(self) -> None:
-        """Test that assign_remaining_peptides achieves approximately 80/10/10 split."""
-        # Create 97 unassigned peptides + 3 pre-assigned (to avoid empty filter bug)
-        peptides = [f"PEPTIDE{i}" for i in range(100)]
-        # Pre-assign 3 peptides to ensure the function works correctly
-        splits: list[str | None] = ["train", "test", "valid"] + [None] * 97
-        split_df = pl.DataFrame({"normalised_peptide": peptides, "split": splits})
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        result_df = assign_remaining_peptides(split_df, blacklisted, clash_blacklisted)
-
-        # Count split assignments
-        train_count = len(result_df.filter(pl.col("split") == "train"))
-        test_count = len(result_df.filter(pl.col("split") == "test"))
-        valid_count = len(result_df.filter(pl.col("split") == "valid"))
-        total = train_count + test_count + valid_count
-
-        # Should be approximately 80/10/10 (allow some rounding variance)
-        assert total == 100
-        assert 78 <= train_count <= 82, f"Expected ~80 train, got {train_count}"
-        assert 8 <= test_count <= 12, f"Expected ~10 test, got {test_count}"
-        assert 8 <= valid_count <= 12, f"Expected ~10 valid, got {valid_count}"
-
-    def test_assign_remaining_peptides_blacklisted_go_to_test_or_valid(self) -> None:
-        """Test that blacklisted peptides are assigned to test or valid, not train."""
-        # Create enough peptides to ensure proper distribution
-        # 2 blacklisted + 18 normal = 20 total (so ~16 train, ~2 test, ~2 valid)
-        # Pre-assign 3 peptides to avoid empty filter schema bug
-        peptides = (
-            ["PREASSIGNED_TRAIN", "PREASSIGNED_TEST", "PREASSIGNED_VALID"]
-            + ["BLACKLISTED1", "BLACKLISTED2"]
-            + [f"NORMAL{i}" for i in range(15)]
-        )
-        splits: list[str | None] = ["train", "test", "valid"] + [None] * 17
-        split_df = pl.DataFrame({"normalised_peptide": peptides, "split": splits})
-        blacklisted = {"BLACKLISTED1", "BLACKLISTED2"}
-        clash_blacklisted: set[str] = set()
-
-        result_df = assign_remaining_peptides(split_df, blacklisted, clash_blacklisted)
-
-        # Blacklisted peptides should not be in train
-        train_peptides = set(
-            result_df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        assert "BLACKLISTED1" not in train_peptides
-        assert "BLACKLISTED2" not in train_peptides
-
-        # Blacklisted peptides should be in test or valid
-        test_valid_peptides = set(
-            result_df.filter(
-                (pl.col("split") == "test") | (pl.col("split") == "valid")
-            )["normalised_peptide"]
-        )
-        assert "BLACKLISTED1" in test_valid_peptides
-        assert "BLACKLISTED2" in test_valid_peptides
-
-    def test_no_peptide_leakage_between_splits(self) -> None:
-        """Test that no peptide appears in multiple splits (critical leakage test)."""
-        # Create peptides with some overlapping in existing splits
-        existing_splits = {
-            "train": {f"TRAIN{i}" for i in range(50)},
-            "test": {f"TEST{i}" for i in range(10)},
-            "valid": {f"VALID{i}" for i in range(10)},
-        }
-        all_peptides = (
-            existing_splits["train"]
-            | existing_splits["test"]
-            | existing_splits["valid"]
-            | {f"NEW{i}" for i in range(30)}
-        )
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        # Create initial assignments
-        split_df = create_initial_split_assignments(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Assign remaining
-        result_df = assign_remaining_peptides(split_df, blacklisted, clash_blacklisted)
-
-        # Extract peptide sets for each split
-        train_peptides = set(
-            result_df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        test_peptides = set(
-            result_df.filter(pl.col("split") == "test")["normalised_peptide"]
-        )
-        valid_peptides = set(
-            result_df.filter(pl.col("split") == "valid")["normalised_peptide"]
-        )
-
-        # CRITICAL: No peptide should appear in multiple splits
-        assert train_peptides.isdisjoint(test_peptides), (
-            f"Peptide leakage between train and test: "
-            f"{train_peptides & test_peptides}"
-        )
-        assert train_peptides.isdisjoint(valid_peptides), (
-            f"Peptide leakage between train and valid: "
-            f"{train_peptides & valid_peptides}"
-        )
-        assert test_peptides.isdisjoint(valid_peptides), (
-            f"Peptide leakage between test and valid: "
-            f"{test_peptides & valid_peptides}"
-        )
-
-    def test_no_leakage_with_i_l_equivalence(self) -> None:
-        """Test that I/L equivalent peptides are treated as the same peptide."""
-        # Peptides that differ only in I/L should be normalized to the same sequence
-        existing_splits = {
-            "train": {"PEPTLDE"},  # L version
-            "test": set(),
-            "valid": set(),
-        }
-
-        # Include both I and L versions in input
-        all_peptides = {
-            "PEPTIDE",
-            "PEPTLDE",
-            "NEWPEPTIDE",
-        }  # I version will normalize to L
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        # Note: In real usage, all_peptides would already be normalized
-        # This test verifies the concept of I/L equivalence
-
-        # Normalize all peptides first (as the real code does)
-        normalized_peptides = {replace_i_with_l(p) for p in all_peptides}
-
-        split_df = create_initial_split_assignments(
-            normalized_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Both I and L versions should map to train (as PEPTLDE)
-        train_peptides = set(
-            split_df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        assert "PEPTLDE" in train_peptides
-
-    def test_all_peptides_assigned_except_clash_blacklist(self) -> None:
-        """Test that all peptides get assigned except clash blacklisted ones."""
-        all_peptides = {f"PEPTIDE{i}" for i in range(50)}
-        clash_blacklisted = {"PEPTIDE0", "PEPTIDE1", "PEPTIDE2"}
-        # Pre-assign some peptides to avoid empty filter schema bug
-        existing_splits = {
-            "train": {"PEPTIDE3"},
-            "test": {"PEPTIDE4"},
-            "valid": {"PEPTIDE5"},
-        }
-        blacklisted: set[str] = set()
-
-        split_df = create_initial_split_assignments(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Verify clash blacklisted are not in initial assignments
-        initial_peptides = set(split_df["normalised_peptide"])
-        for clash in clash_blacklisted:
-            assert clash not in initial_peptides
-
-        result_df = assign_remaining_peptides(split_df, blacklisted, clash_blacklisted)
-
-        # All non-clash-blacklisted peptides should be assigned
-        assigned_peptides = set(result_df["normalised_peptide"])
-        expected_peptides = all_peptides - clash_blacklisted
-
-        assert assigned_peptides == expected_peptides
-
-        # No peptide should have None split after assignment
-        unassigned = result_df.filter(pl.col("split").is_null())
-        assert len(unassigned) == 0, f"Found unassigned peptides: {unassigned}"
-
-    def test_sets_to_dataframe_creates_correct_format(self) -> None:
-        """Test that sets_to_dataframe creates correct DataFrame for CSV output."""
-        split_sets = {
-            "train": {"PEPTIDE1", "PEPTIDE2"},
-            "test": {"PEPTIDE3"},
-            "valid": {"PEPTIDE4", "PEPTIDE5"},
-        }
-
-        df = sets_to_dataframe(split_sets)
-
-        # Check all peptides are present
-        all_peptides = set(df["normalised_peptide"])
-        expected = {"PEPTIDE1", "PEPTIDE2", "PEPTIDE3", "PEPTIDE4", "PEPTIDE5"}
-        assert all_peptides == expected
-
-        # Check splits are correct
-        train_peptides = set(
-            df.filter(pl.col("split") == "train")["normalised_peptide"]
-        )
-        assert train_peptides == {"PEPTIDE1", "PEPTIDE2"}
-
-        test_peptides = set(df.filter(pl.col("split") == "test")["normalised_peptide"])
-        assert test_peptides == {"PEPTIDE3"}
-
-        valid_peptides = set(
-            df.filter(pl.col("split") == "valid")["normalised_peptide"]
-        )
-        assert valid_peptides == {"PEPTIDE4", "PEPTIDE5"}
-
-    def test_create_and_verify_splits_updates_existing_splits(self) -> None:
-        """Test that create_and_verify_splits updates existing_splits with new assignments."""
-        # Initial existing splits with some peptides
-        existing_splits = {
-            "train": {"EXISTING_TRAIN1", "EXISTING_TRAIN2"},
-            "test": {"EXISTING_TEST1"},
-            "valid": {"EXISTING_VALID1"},
-        }
-
-        # New batch of peptides - some overlap with existing, some new
-        all_peptides = {
-            "EXISTING_TRAIN1",  # Already in train
-            "EXISTING_TEST1",  # Already in test
-            "NEW_PEPTIDE1",  # New peptide
-            "NEW_PEPTIDE2",  # New peptide
-            "NEW_PEPTIDE3",  # New peptide
-        }
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        # Call create_and_verify_splits
-        split_df, updated_existing_splits = create_and_verify_splits(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Check that existing assignments are preserved in result
-        assert "EXISTING_TRAIN1" in updated_existing_splits["train"]
-        assert "EXISTING_TEST1" in updated_existing_splits["test"]
-
-        # Check that NEW peptides were added to updated_existing_splits
-        new_peptides = {"NEW_PEPTIDE1", "NEW_PEPTIDE2", "NEW_PEPTIDE3"}
-        assigned_new_peptides = (
-            (updated_existing_splits["train"] & new_peptides)
-            | (updated_existing_splits["test"] & new_peptides)
-            | (updated_existing_splits["valid"] & new_peptides)
-        )
-        assert (
-            assigned_new_peptides == new_peptides
-        ), f"New peptides not all assigned: {new_peptides - assigned_new_peptides}"
-
-        # Check that the DataFrame has all peptides from current batch
-        df_peptides = set(split_df["normalised_peptide"])
-        assert df_peptides == all_peptides
-
-        # Check no leakage: each new peptide should be in exactly one split
-        for peptide in new_peptides:
-            in_train = peptide in updated_existing_splits["train"]
-            in_test = peptide in updated_existing_splits["test"]
-            in_valid = peptide in updated_existing_splits["valid"]
-            assert (
-                sum([in_train, in_test, in_valid]) == 1
-            ), f"Peptide {peptide} is in multiple or no splits"
-
-    def test_split_assignments_csv_contains_all_peptides(self) -> None:
-        """Test that the split assignments output contains all peptides (historical + new)."""
-
-        # Initial existing splits
-        existing_splits = {
-            "train": {"HISTORICAL_TRAIN1", "HISTORICAL_TRAIN2"},
-            "test": {"HISTORICAL_TEST1"},
-            "valid": {"HISTORICAL_VALID1"},
-        }
-
-        # Process new peptides
-        all_peptides = {
-            "HISTORICAL_TRAIN1",  # Existing
-            "NEW_PEPTIDE1",
-            "NEW_PEPTIDE2",
-        }
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        _, updated_existing_splits = create_and_verify_splits(
-            all_peptides, existing_splits, blacklisted, clash_blacklisted
-        )
-
-        # Simulate writing split_assignments.csv (as the real script does)
-        output_dir = self.data_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        all_assignments_df = sets_to_dataframe(updated_existing_splits)
-        output_path = output_dir / "split_assignments.csv"
-        all_assignments_df.rename({"normalised_peptide": "sequence"}).write_csv(
-            str(output_path)
-        )
-
-        # Read the CSV back and verify contents
-        assert output_path.exists(), "split_assignments.csv was not created"
-
-        import pandas as pd
-
-        written_df = pd.read_csv(output_path)
-
-        # Check ALL peptides are in the CSV (historical + new)
-        written_peptides = set(written_df["sequence"])
-        expected_peptides = (
-            existing_splits["train"]
-            | existing_splits["test"]
-            | existing_splits["valid"]
-            | {"NEW_PEPTIDE1", "NEW_PEPTIDE2"}
-        )
-        assert (
-            written_peptides == expected_peptides
-        ), f"Missing peptides in CSV: {expected_peptides - written_peptides}"
-
-        # Check that splits are correct
-        for _, row in written_df.iterrows():
-            peptide = row["sequence"]
-            split = row["split"]
-            assert (
-                peptide in updated_existing_splits[split]
-            ), f"Peptide {peptide} has wrong split {split} in CSV"
-
-    def test_no_leakage_after_multiple_updates(self) -> None:
-        """Test that no peptide leakage occurs after multiple incremental updates."""
-        # Start with some seed peptides to avoid schema mismatch bug
-        existing_splits: dict[str, set[str]] = {
-            "train": {"SEED_TRAIN"},
-            "test": {"SEED_TEST"},
-            "valid": {"SEED_VALID"},
-        }
-        blacklisted: set[str] = set()
-        clash_blacklisted: set[str] = set()
-
-        # Process 3 batches of peptides with some overlap
-        for batch_num in range(3):
-            batch_peptides = {f"PEPTIDE{batch_num}_{i}" for i in range(30)}
-            # Add some overlap with previous batches
-            if batch_num > 0:
-                batch_peptides |= {f"PEPTIDE{batch_num - 1}_{i}" for i in range(5)}
-            # Include seed peptides in first batch
-            if batch_num == 0:
-                batch_peptides |= {"SEED_TRAIN", "SEED_TEST", "SEED_VALID"}
-
-            _, existing_splits = create_and_verify_splits(
-                batch_peptides, existing_splits, blacklisted, clash_blacklisted
-            )
-
-        # Final verification: no peptide should be in multiple splits
-        train = existing_splits["train"]
-        test = existing_splits["test"]
-        valid = existing_splits["valid"]
-
-        assert train.isdisjoint(test), f"Leakage between train and test: {train & test}"
-        assert train.isdisjoint(
-            valid
-        ), f"Leakage between train and valid: {train & valid}"
-        assert test.isdisjoint(valid), f"Leakage between test and valid: {test & valid}"
+    """Test suite for split_labelled_data.py — registry extension and leakage."""
 
     @pytest.fixture(autouse=True)
     def _setup_test_environment(self) -> Generator[None, None, None]:
-        """Set up test environment with temporary directories and test data."""
+        """Temporary directories for local registries and parquet fixtures."""
         self.test_dir = tempfile.mkdtemp()
         self.data_dir = Path(self.test_dir) / "data"
-        self.splits_dir = Path(self.test_dir) / "splits"
-
-        # Create test directories
+        self.registry_dir = Path(self.test_dir) / "registry"
+        self.output_dir = Path(self.test_dir) / "output"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.splits_dir.mkdir(parents=True, exist_ok=True)
-
-        # Create test files
-        self._create_consolidated_splits_file()
-        self._create_blacklist_file()
-        self._create_clash_blacklist_file()
-
+        self.registry_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         yield
-
-        # Cleanup
         shutil.rmtree(self.test_dir)
 
-    def _create_consolidated_splits_file(self) -> None:
-        """Create a test consolidated splits CSV file."""
-        import pandas as pd
+    @staticmethod
+    def _empty_splits() -> dict[str, set[str]]:
+        return {"train": set(), "test": set(), "valid": set()}
 
-        data = {
-            "sequence": [
-                "TRAINPEPTIDE",  # Will be normalized to TRAINPEPTLDE
-                "TESTPEPTIDE",  # Will be normalized to TESTPEPTLDE
-                "VALIDPEPTIDE",  # Will be normalized to VALLDPEPTLDE
-                "TRAINPEPTIDE2",
-                "TESTPEPTIDE2",
-            ],
-            "split": ["train", "test", "valid", "train", "test"],
+    @staticmethod
+    def _write_registry(
+        directory: Path, splits: dict[str, set[str]], *, use_hf_valid: bool = False
+    ) -> Path:
+        """Write peptide_registry.parquet; HF schema uses 'validation' not 'valid'."""
+        peptides: list[str] = []
+        labels: list[str] = []
+        for split_name, seqs in splits.items():
+            label = (
+                "validation"
+                if use_hf_valid and split_name == "valid"
+                else split_name
+            )
+            for peptide in sorted(seqs):
+                peptides.append(peptide)
+                labels.append(label)
+        path = directory / REGISTRY_FILENAME
+        pl.DataFrame({"peptide": peptides, "split": labels}).write_parquet(path)
+        return path
+
+    @staticmethod
+    def _minimal_labelled_parquet(
+        path: Path,
+        sequences: list[str],
+        *,
+        unmodified: list[str] | None = None,
+    ) -> None:
+        """Write a tiny parquet that passes quality filters (null filter cols pass)."""
+        n = len(sequences)
+        data: dict = {
+            "index": list(range(n)),
+            "scan": [str(i) for i in range(n)],
+            "header": [f"h{i}" for i in range(n)],
+            "sequence": sequences,
+            "mz_array": [[100.0 + i, 200.0 + i] for i in range(n)],
+            "intensity_array": [[1.0, 2.0] for _ in range(n)],
         }
-        df = pd.DataFrame(data)
-        self.consolidated_splits_file = self.splits_dir / "consolidated_splits.csv"
-        df.to_csv(self.consolidated_splits_file, index=False)
+        if unmodified is not None:
+            data["unmodified_peptide"] = unmodified
+        # Leave retention_time / precursor_* / lower_offset absent so schema
+        # normalisation fills nulls and _nullable_filter lets rows through.
+        pl.DataFrame(data).write_parquet(path)
 
-    def _create_blacklist_file(self) -> None:
-        """Create a test blacklist CSV file."""
-        import pandas as pd
+    def test_collect_unique_peptides_normalises_i_to_l(self) -> None:
+        """I→L and unmodified_peptide-from-sequence feed the registry key space."""
+        parquet = self.data_dir / "sample.parquet"
+        self._minimal_labelled_parquet(
+            parquet,
+            sequences=["PEPTIDE[UNIMOD:4]", "PEPTLDE", "AAAA"],
+            unmodified=None,
+        )
+        peptides = collect_unique_peptides([str(parquet)])
+        assert "PEPTLDE" in peptides
+        assert "PEPTIDE" not in peptides
+        assert "AAAA" in peptides
 
-        data = {
-            "sequence": ["BLACKLISTED", "EXCLUDEME"],  # BLACKLISTED -> BLACKLLSTED
+    def test_assign_preserves_existing_and_places_only_new(self) -> None:
+        """Seeded registry peptides stay put; only absent peptides are assigned."""
+        existing = {
+            "train": {"SEEDTRAIN", "SEEDTRAIN2"},
+            "test": {"SEEDTEST"},
+            "valid": {"SEEDVALID"},
         }
-        df = pd.DataFrame(data)
-        self.blacklist_file = self.splits_dir / "blacklist.csv"
-        df.to_csv(self.blacklist_file, index=False)
-
-    def _create_clash_blacklist_file(self) -> None:
-        """Create a test clash blacklist CSV file."""
-        import pandas as pd
-
-        data = {
-            "sequence": ["CLASHPEPTIDE"],  # CLASHPEPTIDE -> CLASHPEPTLDE
+        dataset = {
+            "SEEDTRAIN",
+            "SEEDTRAIN2",
+            "SEEDTEST",
+            "SEEDVALID",
+            "NEW1",
+            "NEW2",
+            "NEW3",
+            "NEW4",
+            "NEW5",
         }
-        df = pd.DataFrame(data)
-        self.clash_blacklist_file = self.splits_dir / "clash_blacklist.csv"
-        df.to_csv(self.clash_blacklist_file, index=False)
+        before = {k: set(v) for k, v in existing.items()}
+        updated, added = assign_new_peptides(dataset, existing)
+
+        assert updated["train"] >= before["train"]
+        assert updated["test"] >= before["test"]
+        assert updated["valid"] >= before["valid"]
+        assert "SEEDTRAIN" in updated["train"]
+        assert "SEEDTEST" in updated["test"]
+        assert "SEEDVALID" in updated["valid"]
+
+        new = {"NEW1", "NEW2", "NEW3", "NEW4", "NEW5"}
+        assigned_new = (
+            (updated["train"] & new)
+            | (updated["test"] & new)
+            | (updated["valid"] & new)
+        )
+        assert assigned_new == new
+        assert sum(added.values()) == len(new)
+
+        for peptide in new:
+            membership = sum(peptide in updated[s] for s in ("train", "test", "valid"))
+            assert membership == 1, f"{peptide} in {membership} splits"
+
+    def test_no_peptide_leakage(self) -> None:
+        """No peptide appears in more than one split after incremental updates."""
+        existing = {
+            "train": {f"TRAIN{i}" for i in range(40)},
+            "test": {f"TEST{i}" for i in range(5)},
+            "valid": {f"VALID{i}" for i in range(5)},
+        }
+        dataset = (
+            existing["train"]
+            | existing["test"]
+            | existing["valid"]
+            | {f"NEW{i}" for i in range(50)}
+        )
+        updated, _ = assign_new_peptides(dataset, existing)
+        assert updated["train"].isdisjoint(updated["test"])
+        assert updated["train"].isdisjoint(updated["valid"])
+        assert updated["test"].isdisjoint(updated["valid"])
+
+    def test_assign_is_deterministic(self) -> None:
+        """Same seed and inputs yield identical assignments."""
+        existing_a = self._empty_splits()
+        existing_b = self._empty_splits()
+        peptides = {f"P{i:03d}" for i in range(100)}
+        a, _ = assign_new_peptides(peptides, existing_a)
+        b, _ = assign_new_peptides(peptides, existing_b)
+        assert a["train"] == b["train"]
+        assert a["test"] == b["test"]
+        assert a["valid"] == b["valid"]
+
+    def test_saturation_skips_overfull_split(self) -> None:
+        """When train already meets its share of dataset_peptides, new go elsewhere."""
+        # |dataset|=92; train target ≈ 73.6; train ∩ dataset = 80 → train saturated
+        train_seed = {f"TS{i}" for i in range(80)}
+        existing = {
+            "train": set(train_seed),
+            "test": {"TE0"},
+            "valid": {"TV0"},
+        }
+        news = {f"NEW{i}" for i in range(10)}
+        dataset = train_seed | {"TE0", "TV0"} | news
+        updated, added = assign_new_peptides(dataset, existing)
+        assert added["train"] == 0
+        assert news.isdisjoint(updated["train"])
+        assert news <= (updated["test"] | updated["valid"])
+
+    def test_save_load_registry_roundtrip_maps_validation(self) -> None:
+        """HF 'validation' label loads as local 'valid'; round-trip preserves sets."""
+        splits = {
+            "train": {"AAA", "BBB"},
+            "test": {"CCC"},
+            "valid": {"DDD", "EEE"},
+        }
+        self._write_registry(self.registry_dir, splits, use_hf_valid=True)
+        _, loaded = load_peptide_registry(str(self.registry_dir))
+        assert loaded["train"] == splits["train"]
+        assert loaded["test"] == splits["test"]
+        assert loaded["valid"] == splits["valid"]
+
+        out = self.output_dir / REGISTRY_FILENAME
+        save_registry(loaded, out, upload_to_hf=False)
+        _, reloaded = load_peptide_registry(str(self.output_dir))
+        assert reloaded == loaded
+
+    def test_empty_registry_edge_case_fills_ratios(self) -> None:
+        """0-row stub registry → empty sets; assign_new_peptides fills ~80/10/10."""
+        self._write_registry(self.registry_dir, self._empty_splits())
+        _, existing = load_peptide_registry(str(self.registry_dir))
+        assert existing == self._empty_splits()
+
+        peptides = {f"P{i:03d}" for i in range(100)}
+        updated, added = assign_new_peptides(peptides, existing)
+        total = sum(len(updated[s]) for s in ("train", "test", "valid"))
+        assert total == 100
+        assert sum(added.values()) == 100
+        assert updated["train"].isdisjoint(updated["test"])
+        assert updated["train"].isdisjoint(updated["valid"])
+        assert updated["test"].isdisjoint(updated["valid"])
+        assert 75 <= len(updated["train"]) <= 85
+        assert 5 <= len(updated["test"]) <= 15
+        assert 5 <= len(updated["valid"]) <= 15
+
+    def test_verify_no_unseen_peptides_raises(self) -> None:
+        """split-only guard fails when a peptide is missing from the registry."""
+        split_lookup = {
+            "train": {"KNOWN"},
+            "test": set(),
+            "valid": set(),
+        }
+        with pytest.raises(ValueError, match="not in registry"):
+            verify_no_unseen_peptides(
+                parquet_files=[],
+                split_lookup=split_lookup,
+                dataset_peptides={"KNOWN", "MISSING"},
+            )
+
+    def test_verify_no_unseen_peptides_passes(self) -> None:
+        """All dataset peptides present in registry → no error."""
+        split_lookup = {
+            "train": {"A", "B"},
+            "test": {"C"},
+            "valid": {"D"},
+        }
+        verify_no_unseen_peptides(
+            parquet_files=[],
+            split_lookup=split_lookup,
+            dataset_peptides={"A", "C"},
+        )
+
+    def test_process_directories_preserves_seed_and_writes_shards(self) -> None:
+        """E2E: seeded local registry + both mode writes shards without moving seeds."""
+        seed = {
+            "train": {"SEEDAAA", "SEEDBBB"},
+            "test": {"SEEDCCC"},
+            "valid": {"SEEDDDD"},
+        }
+        self._write_registry(self.registry_dir, seed, use_hf_valid=True)
+
+        sequences = [
+            "SEEDAAA",
+            "SEEDBBB",
+            "SEEDCCC",
+            "SEEDDDD",
+            "NEWPEPAA",
+            "NEWPEPBB",
+            "NEWPEPCC",
+            "NEWPEPDD",
+            "NEWPEPEE",
+            "NEWPEPFF",
+        ]
+        self._minimal_labelled_parquet(
+            self.data_dir / "batch.parquet",
+            sequences=sequences,
+            unmodified=sequences,
+        )
+
+        process_directories(
+            input_dirs=[str(self.data_dir)],
+            output_dir=str(self.output_dir),
+            rows_per_file=100,
+            registry_dir=str(self.registry_dir),
+            mode=Mode.BOTH,
+            upload_to_hf=False,
+        )
+
+        _, updated = load_peptide_registry(str(self.output_dir))
+        assert "SEEDAAA" in updated["train"]
+        assert "SEEDBBB" in updated["train"]
+        assert "SEEDCCC" in updated["test"]
+        assert "SEEDDDD" in updated["valid"]
+
+        train_files = list(self.output_dir.glob("train_*.parquet"))
+        assert train_files, "expected train shards"
+        assert list(self.output_dir.glob("test_*.parquet"))
+        assert list(self.output_dir.glob("valid_*.parquet"))
+
+        all_written: set[str] = set()
+        for pattern in ("train_*.parquet", "test_*.parquet", "valid_*.parquet"):
+            for f in self.output_dir.glob(pattern):
+                all_written.update(
+                    pl.read_parquet(f)["unmodified_peptide"].to_list()
+                )
+        assert "SEEDAAA" in all_written
+        assert "SEEDCCC" in all_written
+        assert "SEEDDDD" in all_written
+        assert {"NEWPEPAA", "NEWPEPBB", "NEWPEPCC", "NEWPEPDD", "NEWPEPEE", "NEWPEPFF"} <= all_written
 
 
 def _existing_df(mapping: dict) -> pl.DataFrame:
@@ -1660,7 +1390,7 @@ class TestLSHHashComputation:
 
     def test_lsh_hash_is_reproducible(self) -> None:
         """Test that LSH hash computation is reproducible (same input = same hash)."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         # Create two identical projectors with same seed
@@ -1688,7 +1418,7 @@ class TestLSHHashComputation:
 
     def test_lsh_hash_differs_with_different_seed(self) -> None:
         """Test that different seeds produce different hash values."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         projector_seed1 = BatchedPeakListRandomProjection(
@@ -1713,7 +1443,7 @@ class TestLSHHashComputation:
 
     def test_batch_computation_matches_sequential(self) -> None:
         """Test that batch computation produces same results as sequential computation."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         # Create projector with small subbatch size to force batched processing
@@ -1747,7 +1477,7 @@ class TestLSHHashComputation:
 
     def test_identical_spectra_produce_same_hash(self) -> None:
         """Test that identical spectra produce the same LSH hash."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         projector = BatchedPeakListRandomProjection(
@@ -1777,7 +1507,7 @@ class TestLSHHashComputation:
 
     def test_different_spectra_produce_different_hashes(self) -> None:
         """Test that significantly different spectra produce different LSH hashes."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         projector = BatchedPeakListRandomProjection(
@@ -1809,7 +1539,7 @@ class TestLSHHashComputation:
 
     def test_rows_assigned_correctly_based_on_computed_hash(self) -> None:
         """Test that rows are assigned to the correct split based on their LSH hash."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         # Create test spectra
@@ -1855,7 +1585,7 @@ class TestLSHHashComputation:
     def test_hash_computation_with_padded_arrays(self) -> None:
         """Test LSH hash computation with padded arrays (as used in split_unlabelled_data)."""
         from scripts.splitting.split_unlabelled_data import get_spectra
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         # Create a mock DataFrame with mz_array and intensity_array
@@ -1899,7 +1629,7 @@ class TestLSHHashComputation:
 
     def test_spectra_with_same_hash_go_to_same_split(self) -> None:
         """Test that spectra producing the same hash are assigned to the same split."""
-        from instanovo.utils.lsh import BatchedPeakListRandomProjection
+        from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
         import numpy as np
 
         # Create duplicate spectra that will have the same hash

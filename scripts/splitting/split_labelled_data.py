@@ -14,11 +14,11 @@ by removing bracketed segments (e.g. ``[UNIMOD:123]``) and all hyphen (``-``)
 characters.
 
 Usage:
-    python split_labelled_data_v2.py split --input-dir lcfm --output-dir splits
-    python split_labelled_data_v2.py split -i lcfm -o splits --mode split-only
-    python split_labelled_data_v2.py split -i data -o splits \\
+    python split_labelled_data.py split --input-dir lcfm --output-dir splits
+    python split_labelled_data.py split -i lcfm -o splits --mode split-only
+    python split_labelled_data.py split -i data -o splits \\
         --column-remap '{"legacy_peptide":"unmodified_peptide"}'
-    python split_labelled_data_v2.py batch dir1 dir2 --output-dir splits/
+    python split_labelled_data.py batch dir1 dir2 --output-dir splits/
 """
 
 from __future__ import annotations

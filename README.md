@@ -6,12 +6,17 @@ scripts that generate everything here — see `tools/projectpage/` on `main`.
 ## Layout
 
 ```
-index.html              thin shell: a short summary and the explorer, embedded
-umap/index.html         the explorer itself, also usable standalone / full screen
-umap/data/              column-sharded point set + manifest.json
+index.html              the UMAP explorer -- what the site serves at its root
+data/                   column-sharded point set + manifest.json
+selftest.html           the explorer's own diagnostic page
+landing.html            the project landing page, kept but not served at the root
+umap/index.html         stub redirecting to ../ , so old /umap/ links still work
 static/css|js|images    stylesheets, vendored Plotly, viewer, favicon, social card
 .nojekyll               serve the tree as-is
 ```
+
+The root deliberately serves the **explorer**, not a landing page. See
+[Swapping the root back](#swapping-the-root-back).
 
 ## Serve it locally
 
@@ -52,13 +57,40 @@ That option needs an organisation on GitHub Enterprise Cloud, which `instadeepai
 A privately published site is served from a unique random subdomain shown on that same
 settings page, and changes take up to ten minutes to appear.
 
+## Swapping the root back
+
+The landing page is still in the tree, so putting it back at the root is three moves
+and three path rewrites -- the reverse of what the switch did:
+
+```bash
+git mv index.html umap/index.html      # explorer back under umap/ (replaces the stub)
+git mv selftest.html umap/selftest.html
+git mv data umap/data
+git mv landing.html index.html
+
+sed -i 's|"static/|"../static/|g' umap/index.html umap/selftest.html
+sed -i 's|href="landing.html"|href="../"|' umap/index.html
+sed -i 's|href="./"|href="umap/"|g' index.html
+```
+
+Or recover the whole site as it stood before the switch, exactly:
+
+```bash
+git checkout -B gh-pages gh-pages-landing-2026-09-07
+```
+
+That tag is the last commit with the landing page at the root. Either way, check the
+result with the local server above: every path in the tree is relative, and the
+explorer resolves its data as `data/` relative to whatever document loads it, so
+moving the explorer means moving `data/` with it.
+
 ## Why the landing page is only a shell
 
-The explorer is the deliverable for this version, so `index.html` is deliberately thin: a wordmark,
-a summary of at most five lines, three links, and the explorer in an iframe taking the rest of the
-viewport. The explorer detects being framed (`window.self !== window.top`) and sets
-`data-framed="true"` on its root, which hides its own back-link and title so the identity is not
-stated twice.
+The explorer is the deliverable for this version, so `landing.html` is deliberately thin: a
+wordmark, a summary of at most five lines, three links to the explorer, and the figures. It is no
+longer what the site serves at its root, and it no longer embeds the explorer in an iframe -- it
+links to it. The explorer still detects being framed (`window.self !== window.top`) and sets
+`data-framed="true"` on its root, which hides its own back-link and title; that path is unused
+while nothing frames it, and costs nothing to keep.
 
-The explorer remains a standalone page. `umap/` works on its own, is what the "Full screen" link
-opens, and is the URL to share directly.
+The URL to share is the site root.

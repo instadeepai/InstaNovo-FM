@@ -46,21 +46,12 @@ CASANOVO_TO_UNIMOD: dict[str, str] = {
     "[+25.980265]": "[UNIMOD:5][UNIMOD:385]",
 }
 
-# The *vendored* XuanjiNovo decoder detokenises to unbracketed mass-offset notation (e.g. "C+57.021",
-# "M+15.995", "+42.011") — used by the in-repo greedy baseline (predict_xuanjinovo_de_novo).
-XUANJINOVO_TO_UNIMOD: dict[str, str] = {
-    "C+57.021": "C[UNIMOD:4]",
-    "M+15.995": "M[UNIMOD:35]",
-    "N+0.984": "N[UNIMOD:7]",
-    "Q+0.984": "Q[UNIMOD:7]",
-    "+42.011": "[UNIMOD:1]",  # acetylation (N-term)
-    "+43.006": "[UNIMOD:5]",  # carbamylation (N-term)
-    "-17.027": "[UNIMOD:385]",  # loss of ammonia (N-term)
-}
-
-# The *upstream* XuanjiNovo model's denovo.tsv writes the same offsets in BRACKETED notation
-# (e.g. "C[+57.021]", "M[+15.995]", "[+42.011]") — used by the faithful AIchor pipeline
-# (score_xuanjinovo). Same masses as XUANJINOVO_TO_UNIMOD, different surface syntax.
+# XuanjiNovo writes modifications as bracketed mass offsets (e.g. "C[+57.021]",
+# "M[+15.995]", "[+42.011]"), both in the upstream model's denovo.tsv that
+# score_xuanjinovo reads and in the residue vocabulary convert_parquet_to_mgf
+# filters against. There used to be a second table for the same masses in
+# unbracketed notation, for an in-repo greedy baseline that no longer exists;
+# both notations produced an identical canonical vocabulary, so one is enough.
 XUANJINOVO_BRACKETED_TO_UNIMOD: dict[str, str] = {
     "C[+57.021]": "C[UNIMOD:4]",
     "M[+15.995]": "M[UNIMOD:35]",
@@ -74,7 +65,6 @@ XUANJINOVO_BRACKETED_TO_UNIMOD: dict[str, str] = {
 
 MODEL_SCORING: dict[str, dict[str, Any]] = {
     "casanovo": {"residue_remapping": CASANOVO_TO_UNIMOD},
-    "xuanjinovo": {"residue_remapping": XUANJINOVO_TO_UNIMOD},  # TODO is this used?
     "xuanjinovo_upstream": {"residue_remapping": XUANJINOVO_BRACKETED_TO_UNIMOD},
 }
 

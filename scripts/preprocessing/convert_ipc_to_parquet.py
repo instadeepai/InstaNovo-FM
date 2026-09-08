@@ -183,33 +183,31 @@ def convert_ipc_with_metadata(
 
     lazy_frame = pl.scan_ipc(ipc_path)
     original_file_length = lazy_frame.select(pl.len()).collect().item()
-    # Naming denominator preserved from the previous implementation for
-    # byte-identical output filenames.
-    num_shards = original_file_length // max_shard_size + 1
+    if original_file_length == 0:
+        raise ValueError(f"IPC file is empty: {ipc_path}")
 
-    first_parquet = parquet_path_for_ipc_shard(ipc_path, 0, num_shards)
+    # ceil(len / max). Filename denominator must match files written so
+    # check_conversion accepts exact multiples of max_shard_size.
+    n_shards = (original_file_length + max_shard_size - 1) // max_shard_size
+
+    first_parquet = parquet_path_for_ipc_shard(ipc_path, 0, n_shards)
     lookup_key = extract_file_name(str(first_parquet))
     acquisition = acquisition_map.get((project, lookup_key))
     if acquisition is None:
         raise ValueError(f"No acquisition in search data for {project}/{lookup_key}")
 
     column_mapping = column_mapping or {}
-    # Number of shards actually written == ceil(len / max), matching the count
-    # yielded by the previous get_data_shards path (min 1 for empty files).
-    n_shards_to_write = max(
-        1, (original_file_length + max_shard_size - 1) // max_shard_size
-    )
     if verbose:
         logger.debug(
-            f"{ipc_path}: {original_file_length:,} rows -> {n_shards_to_write} shard(s)"
+            f"{ipc_path}: {original_file_length:,} rows -> {n_shards} shard(s)"
         )
 
-    for shard_counter in range(n_shards_to_write):
+    for shard_counter in range(n_shards):
         shard = lazy_frame.slice(
             shard_counter * max_shard_size, max_shard_size
         ).collect()
         shard = _prepare_ipc_shard(shard, column_mapping)
-        parquet_path = parquet_path_for_ipc_shard(ipc_path, shard_counter, num_shards)
+        parquet_path = parquet_path_for_ipc_shard(ipc_path, shard_counter, n_shards)
         enriched = enrich_acfm_metadata(
             shard, parquet_path, acquisition, add_usi=add_usi
         )
@@ -389,6 +387,8 @@ def process_ipc_files(
                         add_usi=add_usi,
                     )
                 else:
+                    if pl.scan_ipc(ipc_path).select(pl.len()).collect().item() == 0:
+                        raise ValueError(f"IPC file is empty: {ipc_path}")
                     SpectrumDataFrame.load(
                         ipc_path,
                         column_mapping=column_mapping,

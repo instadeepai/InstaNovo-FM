@@ -63,9 +63,13 @@ jobs:
       - name: List what would be uploaded
         run: ls -lh dist/
 
+      # v1.14.2 or newer: the Twine bundled inside older releases predates
+      # Metadata-Version 2.5, which hatchling emits, and rejects the wheel with
+      # `InvalidDistribution: '2.5' is not a valid metadata version` before it
+      # uploads anything.
       - name: Publish to PyPI
         if: github.event_name == 'release' || inputs.dry_run == false
-        uses: pypa/gh-action-pypi-publish@v1.13.0
+        uses: pypa/gh-action-pypi-publish@v1.14.2
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}

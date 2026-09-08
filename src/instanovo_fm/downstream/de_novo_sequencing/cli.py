@@ -193,7 +193,7 @@ def denovo_predict(
         raise ValueError(
             "Expected 'denovo_model' but found None. Please specify it in the "
             "`config/inference/<your_config>.yaml` configuration file or with the cli flag "
-            "`instanovo denovo predict --denovo_model=path/to/model.ckpt`."
+            "`instanovo-fm denovo predict --denovo-model=path/to/model.ckpt`."
         )
 
     logger.info("Initializing InstaNovo downstream de novo inference.")

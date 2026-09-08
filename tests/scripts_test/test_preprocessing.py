@@ -161,9 +161,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             detect_app,
             [
-                "detect-duplicates",
+                "--input-dir",
                 str(self.data_dir / "acfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "duplicates.txt"),
                 "--verbose",
             ],
@@ -185,9 +185,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             find_empty_app,
             [
-                "find-empty",
+                "--input-dir",
                 str(self.data_dir / "lcfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "empty_files.txt"),
                 "--verbose",
             ],
@@ -212,9 +212,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             enforce_app,
             [
-                "enforce",
+                "--input-dir",
                 str(self.data_dir / "hcfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "enforced.csv"),
                 "--verbose",
             ],
@@ -242,9 +242,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             infer_app,
             [
-                "infer-targets",
+                "--input-dir",
                 glob_pattern,
-                "--log",
+                "--output-file",
                 str(self.output_dir / "inferred.txt"),
                 "--verbose",
             ],
@@ -267,9 +267,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             find_mods_app,
             [
-                "find-mods",
+                "--input-dir",
                 str(self.data_dir / "mcfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "modifications.xlsx"),
                 "--verbose",
             ],
@@ -292,9 +292,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_app,
             [
-                "check-conversion",
+                "--input-dir",
                 str(self.data_dir / "acfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "conversion_check.txt"),
                 "--verbose",
             ],
@@ -320,9 +320,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             detect_multi_app,
             [
-                "detect-duplicates",
+                "--input-file",
                 str(input_file),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "multi_duplicates.txt"),
                 "--verbose",
             ],
@@ -353,7 +353,7 @@ class TestDataConversionScripts:
         result = runner.invoke(
             delete_files_app,
             [
-                "delete",
+                "--input-file",
                 str(file_list),
                 "--error-log",
                 str(error_log),
@@ -373,9 +373,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             detect_app,
             [
-                "detect-duplicates",
+                "--input-dir",
                 str(self.data_dir),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "batch_duplicates.txt"),
                 "--verbose",
             ],
@@ -393,10 +393,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             convert_app,
             [
-                "convert",
-                "--source-dir",
+                "--input-dir",
                 str(self.data_dir / "acfm"),
-                "--output",
+                "--output-file",
                 str(self.output_dir / "conversion_errors.txt"),
                 "--verbose",
             ],
@@ -417,9 +416,9 @@ class TestDataConversionScripts:
         result = runner.invoke(
             detect_app,
             [
-                "detect-duplicates",
+                "--input-dir",
                 "/non/existent/path",
-                "--output",
+                "--output-file",
                 str(self.output_dir / "error.txt"),
             ],
         )
@@ -455,7 +454,7 @@ class TestDataConversionScripts:
             assert "Usage:" in result.output
 
     def test_label_modifications_unimod(self) -> None:
-        """Test label_modifications script with UniMod modifications."""
+        """Test label_modifications script with UNIMOD modifications."""
         if not script_exists("label_modifications"):
             pytest.skip("label_modifications script not available")
 
@@ -487,9 +486,11 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "check-mods",
+                "--input-file",
                 str(excel_file),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
                 "--verbose",
             ],
@@ -518,9 +519,11 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "check-mods",
+                "--input-file",
                 str(excel_file),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
             ],
         )
@@ -554,9 +557,11 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "check-mods",
+                "--input-file",
                 str(excel_file),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
                 "--verbose",
             ],
@@ -588,12 +593,13 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "batch-check-mods",
+                "--input-file",
                 str(excel_file1),
+                "--input-file",
                 str(excel_file2),
-                "--gold-standard",
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
-                "--pxd009449",
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
             ],
         )
@@ -622,12 +628,13 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "batch-check-mods",
+                "--input-file",
                 str(excel_file1),
+                "--input-file",
                 str(excel_file2),
-                "--gold-standard",
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
-                "--pxd009449",
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
             ],
         )
@@ -655,9 +662,11 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "check-mods",
+                "--input-file",
                 str(excel_file),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
             ],
         )
@@ -680,9 +689,11 @@ class TestDataConversionScripts:
         result = runner.invoke(
             check_mods_app,
             [
-                "check-mods",
+                "--input-file",
                 str(excel_file),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
             ],
         )
@@ -702,9 +713,11 @@ class TestDataConversionScripts:
             result = runner.invoke(
                 label_app,
                 [
-                    "label-mods",
+                    "--input-dir",
                     "mcfm_mods",
+                    "--gold-standard-mods",
                     str(self.gold_standard_file),
+                    "--ambiguous-mods",
                     str(self.pxd009449_file),
                     "--sequence-col",
                     "unmodified_peptide",

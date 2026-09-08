@@ -2,62 +2,40 @@
 
 Some source files store missing ``collision_energy`` or ``frag_type`` as the
 text ``Unknown``. Downstream schemas treat that as a real value, so this script
-rewrites it to null before alignment or training. Batch mode writes a separate
-affected-file report for each dataset.
+rewrites it to null before alignment or training.
 
 CLI::
 
     python scripts/preprocessing/enforce_nulls.py --help
-    python scripts/preprocessing/enforce_nulls.py enforce <data-root>/lcfm
-    python scripts/preprocessing/enforce_nulls.py batch-enforce <data-root>/lcfm <data-root>/hcfm
+    python scripts/preprocessing/enforce_nulls.py --input-dir <data-root>/lcfm --output-file enforced_nulls.csv
+    python scripts/preprocessing/enforce_nulls.py --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file enforced_nulls.csv
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
-import polars as pl
-from tqdm import tqdm
-import logging
-from typing import List, Optional
-from pathlib import Path
-import glob
-import typer
+from __future__ import annotations
 
-# Configure logging
+import glob
+import logging
+from pathlib import Path
+from typing import Annotated, List, Optional
+
+import polars as pl
+import typer
+from tqdm import tqdm
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="Enforce null values in parquet files")
+app = typer.Typer(
+    help="Enforce null values in parquet files",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
-# Default columns to process
 DEFAULT_COLUMNS = ["collision_energy", "frag_type"]
-
-# Module-level constants to avoid B008 errors
-INPUT_DIR_ARG = typer.Argument(..., help="Input directory to process")
-OUTPUT_FILE_OPTION = typer.Option(
-    "enforced_nulls.csv",
-    "--output",
-    "-o",
-    help="Output file for affected files list",
-)
-COLUMNS_OPTION = typer.Option(
-    None,
-    "--column",
-    "-c",
-    help="Column name(s) to process (can be specified multiple times). "
-    "Defaults to: collision_energy, frag_type",
-)
-OLD_VALUE_OPTION = typer.Option("Unknown", "--old-value", help="Value to replace")
-NEW_VALUE_OPTION = typer.Option(None, "--new-value", help="New value (None for null)")
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-INPUT_DIRS_ARG = typer.Argument(..., help="Input directories to process")
-OUTPUT_DIR_OPTION = typer.Option(
-    "output_files", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "unknown_nulls", "--prefix", "-p", help="Prefix for output files"
-)
 
 
 def find_files(input_dir: str, file_pattern: str) -> list[str]:
@@ -135,21 +113,24 @@ def _write_affected_files_list(output_path: str, files_with_unknown: List[str]) 
 
 def enforce_nulls(
     input_dir: str,
-    output_path: str,
+    output_path: str | None = None,
     column_names: Optional[List[str]] = None,
     old_value: str = "Unknown",
     new_value: Optional[str] = None,
     verbose: bool = False,
-) -> None:
+) -> List[str]:
     """Rewrite placeholder metadata to null so missing values are stored as null, not text.
 
     Args:
         input_dir: Directory containing Parquet files to update.
-        output_path: CSV destination listing modified files.
+        output_path: Optional CSV destination listing modified files.
         column_names: Metadata columns to inspect.
         old_value: Placeholder string to replace, typically ``Unknown``.
         new_value: Replacement value, normally null.
         verbose: Whether to print processing details.
+
+    Returns:
+        Paths of files that were updated.
     """
     if column_names is None:
         column_names = DEFAULT_COLUMNS
@@ -158,7 +139,8 @@ def enforce_nulls(
         typer.echo(f"Processing directory: {input_dir}")
         typer.echo(f"Columns: {', '.join(column_names)}")
         typer.echo(f"Replacing '{old_value}' with {new_value}")
-        typer.echo(f"Output file: {output_path}")
+        if output_path:
+            typer.echo(f"Output file: {output_path}")
 
     matched_files = find_files(input_dir=input_dir, file_pattern="**/*.parquet")
 
@@ -170,85 +152,79 @@ def enforce_nulls(
         if _process_parquet_file(file, column_names, old_value, new_value, verbose):
             files_with_unknown.append(file)
 
-    if files_with_unknown:
-        _write_affected_files_list(output_path, files_with_unknown)
-    else:
-        typer.echo("No files were updated.")
+    if output_path is not None:
+        if files_with_unknown:
+            _write_affected_files_list(output_path, files_with_unknown)
+        else:
+            typer.echo("No files were updated.")
+
+    return files_with_unknown
 
 
 @app.command()
-def enforce(
-    input_dir: str = INPUT_DIR_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    columns: Optional[List[str]] = COLUMNS_OPTION,
-    old_value: str = OLD_VALUE_OPTION,
-    new_value: Optional[str] = NEW_VALUE_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Directory containing parquet files (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="CSV of affected file paths",
+        ),
+    ] = Path("enforced_nulls.csv"),
+    column: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--column",
+            "-c",
+            help="Column name(s) to process (repeatable; default collision_energy, frag_type)",
+        ),
+    ] = None,
+    old_value: Annotated[
+        str,
+        typer.Option("--old-value", help="Value to replace"),
+    ] = "Unknown",
+    new_value: Annotated[
+        Optional[str],
+        typer.Option("--new-value", help="New value (omit for null)"),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Replace placeholder metadata with null in one dataset before downstream use.
-
-    Args:
-        input_dir: Directory containing Parquet files.
-        output_file: CSV destination listing modified files.
-        columns: Metadata columns to inspect.
-        old_value: Placeholder string to replace, typically ``Unknown``.
-        new_value: Replacement value, normally null.
-        verbose: Whether to print processing details.
-    """
-    enforce_nulls(
-        input_dir=input_dir,
-        output_path=output_file,
-        column_names=columns,
-        old_value=old_value,
-        new_value=new_value,
-        verbose=verbose,
-    )
-
-
-@app.command()
-def batch_enforce(
-    input_dirs: List[str] = INPUT_DIRS_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    columns: Optional[List[str]] = COLUMNS_OPTION,
-    old_value: str = OLD_VALUE_OPTION,
-    new_value: Optional[str] = NEW_VALUE_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Normalise several datasets while keeping separate change reports.
-
-    Args:
-        input_dirs: Dataset directories to process.
-        output_dir: Directory that receives change reports.
-        columns: Metadata columns to inspect.
-        old_value: Placeholder string to replace, typically ``Unknown``.
-        new_value: Replacement value, normally null.
-        prefix: Prefix used for report filenames.
-    """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for input_dir in input_dirs:
-        output_file = output_path / f"{prefix}_{input_dir}.csv"
-        typer.echo(f"Processing directory: {input_dir}")
-        enforce_nulls(
-            input_dir=input_dir,
-            output_path=str(output_file),
-            column_names=columns,
-            old_value=old_value,
-            new_value=new_value,
+    """Replace placeholder metadata with null in parquet files."""
+    all_updated: List[str] = []
+    for directory in input_dir:
+        if not directory.exists():
+            typer.echo(
+                f"Warning: Directory '{directory}' does not exist, skipping...",
+                err=True,
+            )
+            continue
+        typer.echo(f"Processing directory: {directory}")
+        all_updated.extend(
+            enforce_nulls(
+                input_dir=str(directory),
+                output_path=None,
+                column_names=column,
+                old_value=old_value,
+                new_value=new_value,
+                verbose=verbose,
+            )
         )
 
-
-def main() -> None:
-    """Preserve backwards-compatible normalisation of historical hardcoded paths."""
-    # Legacy behaviour for backwards compatibility
-    input_dirs = ["lcfm", "hcfm", "mcfm"]
-    output_dir = "output_files"
-
-    for input_dir in input_dirs:
-        output_file = f"{output_dir}/unknown_ce_{input_dir}.csv"
-        typer.echo(f"Processing directory: {input_dir}")
-        enforce_nulls(input_dir, output_file)
+    if all_updated:
+        _write_affected_files_list(str(output_file), all_updated)
+    else:
+        typer.echo("No files were updated.")
 
 
 if __name__ == "__main__":

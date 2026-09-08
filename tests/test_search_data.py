@@ -16,8 +16,8 @@ Two things are checked:
 
 from __future__ import annotations
 
-import os
 import ntpath
+import os
 import pathlib
 import re
 
@@ -64,9 +64,9 @@ def test_raw_filename_column_is_present_and_sanitised(local: pd.DataFrame) -> No
     assert RAW_FILENAME_COLUMN in local.columns
     filenames = local[RAW_FILENAME_COLUMN].dropna().astype(str)
     assert not filenames.empty
-    assert filenames.map(ntpath.basename).eq(filenames).all(), (
-        "file path must contain only raw file names, never directory paths"
-    )
+    assert (
+        filenames.map(ntpath.basename).eq(filenames).all()
+    ), "file path must contain only raw file names, never directory paths"
     assert not filenames.str.contains(r"[\\\\/]", regex=True).any()
 
 

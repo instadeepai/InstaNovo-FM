@@ -14,7 +14,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Dict, List, Literal, Optional, Tuple
 
 import polars as pl
 import typer
@@ -22,43 +22,16 @@ from tqdm import tqdm
 
 from scripts.preprocessing.parquet_io import search_data_lookup_key
 
-app = typer.Typer(help="Add acquisition column to parquet files")
+app = typer.Typer(
+    help="Add acquisition column to parquet files",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-INPUT_DIR_OPTION = typer.Option(
-    ...,
-    "--input-dir",
-    "-i",
-    help="Input directory containing parquet files organised by project subfolders",
-)
-SEARCH_DATA_OPTION = typer.Option(
-    "search_data_with_new_projects.xlsx",
-    "--search-data",
-    "-s",
-    help="Path to search data Excel file with project, file path, and acquisition columns",
-)
-AWS_PROFILE_OPTION = typer.Option(
-    None,
-    "--aws-profile",
-    "-p",
-    help="AWS profile name for S3 access",
-)
-DRY_RUN_OPTION = typer.Option(
-    False,
-    "--dry-run",
-    "-n",
-    help="Preview changes without modifying files",
-)
-VERBOSE_OPTION = typer.Option(
-    False,
-    "--verbose",
-    "-v",
-    help="Enable verbose output",
-)
 
 
 def is_s3_path(path: str) -> bool:
@@ -368,24 +341,38 @@ def add_acquisition_column(
 
 @app.command()
 def main(
-    input_dir: str = INPUT_DIR_OPTION,
-    search_data: str = SEARCH_DATA_OPTION,
-    aws_profile: Optional[str] = AWS_PROFILE_OPTION,
-    dry_run: bool = DRY_RUN_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+    input_dir: Annotated[
+        Path,
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Local directory or S3 prefix with project subfolders",
+        ),
+    ],
+    search_data: Annotated[
+        Path,
+        typer.Option(
+            "--search-data",
+            help="Search-data Excel (project, file path, acquisition)",
+        ),
+    ],
+    aws_profile: Annotated[
+        Optional[str],
+        typer.Option("--aws-profile", help="AWS profile name for S3 access"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Preview without modifying files"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Enrich converted files with acquisition type.
-
-    Args:
-        input_dir: Local directory or S3 prefix containing data files.
-        search_data: Excel workbook with acquisition assignments.
-        aws_profile: Optional AWS profile for S3 access.
-        dry_run: Whether to preview without modifying files.
-        verbose: Whether to print per-file details.
-    """
+    """Enrich converted files with acquisition type."""
     add_acquisition_column(
-        input_dir=input_dir,
-        search_data_path=search_data,
+        input_dir=str(input_dir),
+        search_data_path=str(search_data),
         aws_profile=aws_profile,
         dry_run=dry_run,
         verbose=verbose,

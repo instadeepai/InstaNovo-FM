@@ -19,289 +19,131 @@ For other datasets that dictionary may need updating by hand.
 
 ## Individual script usage
 
+Shared flags are documented in [`../README.md`](../README.md). Every script is a single Typer command: `python <script>.py --help`. Repeat `--input-dir` / `--input-file` instead of separate batch subcommands.
+
 ### 1. Detect duplicates (`detect_all_duplicates.py`)
 
-Finds duplicate files based on base filenames across directories.
-
 ```bash
-# Detect duplicates in single directory
-python detect_all_duplicates.py detect-duplicates ./data --output duplicates.txt
-
-# Detect duplicates in multiple directories
-python detect_all_duplicates.py batch-detect ./data1 ./data2 ./data3 --output-dir results
-
-# Custom file extensions
-python detect_all_duplicates.py detect-duplicates ./data --extensions .ipc .parquet --verbose
+python detect_all_duplicates.py --input-dir ./data --output-file duplicates.txt
+python detect_all_duplicates.py --input-dir ./data1 --input-dir ./data2 --output-file duplicates.txt --verbose
+python detect_all_duplicates.py --input-dir ./data --extensions .ipc .parquet --output-file duplicates.txt
 ```
 
-#### Key features
-
-- Detects same-folder and multi-folder duplicates
-- Supports multiple file extensions
-- Batch processing for multiple directories
-- Generates detailed duplicate reports
-
-### 2. Delete duplicates (`delete_same_folder_duplicates.py`)
-
-Removes duplicate files from the same folder.
+### 2. Delete same-folder duplicates (`delete_same_folder_duplicates.py`)
 
 ```bash
-# Delete with confirmation
-python delete_same_folder_duplicates.py delete-duplicates duplicates.txt
-
-# Force delete without confirmation
-python delete_same_folder_duplicates.py delete-duplicates duplicates.txt --force
-
-# Dry run to preview changes
-python delete_same_folder_duplicates.py delete-duplicates duplicates.txt --dry-run
-
-# Batch delete from multiple files
-python delete_same_folder_duplicates.py batch-delete duplicates1.txt duplicates2.txt --force
+python delete_same_folder_duplicates.py --input-file duplicates.txt
+python delete_same_folder_duplicates.py --input-file duplicates.txt --force
+python delete_same_folder_duplicates.py --input-file duplicates.txt --dry-run
+python delete_same_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --force
 ```
-
-**Key features:**
-
-- Safe deletion with confirmation prompts
-- Dry-run mode for previewing changes
-- Batch processing for multiple duplicate files
-- Force mode for automated workflows
 
 ### 3. Find empty files (`find_empty_files.py`)
 
-Identifies empty or small files that should be removed.
-
 ```bash
-# Find empty files
-python find_empty_files.py find-empty ./data --output empty_files.txt
-
-# Find files smaller than threshold
-python find_empty_files.py find-empty ./data --min-size 1024 --output small_files.txt
-
-# Batch find in multiple directories
-python find_empty_files.py batch-find-empty ./acfm ./lcfm ./mcfm --output-dir results
+python find_empty_files.py --input-dir ./data --output-file empty_files.txt
+python find_empty_files.py --input-dir ./data --min-size 1024 --output-file small_files.txt
+python find_empty_files.py --input-dir ./acfm --input-dir ./lcfm --output-file empty_files.txt
 ```
-
-**Key features:**
-
-- Configurable minimum file size threshold
-- Custom file pattern matching
-- Batch processing for multiple directories
-- Detailed reporting of found files
 
 ### 4. Convert IPC to Parquet (`convert_ipc_to_parquet.py`)
 
-Converts IPC files to Parquet format for better compatibility.
-
 ```bash
-# Convert from directory
-python convert_ipc_to_parquet.py convert --source-dir ./data --output errors.txt
-
-# Convert from file list
-python convert_ipc_to_parquet.py convert --input-file file_list.txt --output errors.txt
-
-# Custom column renaming
-python convert_ipc_to_parquet.py convert --source-dir ./data \
-    --column-mapping '{"rt": "retention_time", "mz": "mz_array"}' \
-    --verbose
-
-# Batch convert multiple file lists
-python convert_ipc_to_parquet.py batch-convert list1.txt list2.txt --output batch_errors.txt
+python convert_ipc_to_parquet.py --input-dir ./data --output-file errors.txt
+python convert_ipc_to_parquet.py --input-file file_list.txt --output-file errors.txt
+python convert_ipc_to_parquet.py --input-dir ./data \
+    --column-mapping '{"rt": "retention_time", "mz": "mz_array"}' --verbose
+python convert_ipc_to_parquet.py --input-file list1.txt --input-file list2.txt --output-file errors.txt
 ```
-
-**Key features:**
-
-- Directory-based or file-list-based conversion
-- Custom column mapping support
-- Error logging and reporting
-- Batch processing for multiple file lists
-- Lazy loading option for memory efficiency
 
 ### 5. Enforce null values (`enforce_nulls.py`)
 
-Replaces specific values with null in parquet files.
-By default it processes the `collision_energy` and `frag_type` columns, replacing the string "Unknown" with null.
+By default replaces `"Unknown"` with null in `collision_energy` and `frag_type`.
 
 ```bash
-# Replace "Unknown" with null in default columns (collision_energy, frag_type)
-python enforce_nulls.py enforce ./data --output affected_files.csv
-
-# Custom column and values
-python enforce_nulls.py enforce ./data --column some_column --old-value "N/A" --new-value null
-
-# Batch process multiple directories
-python enforce_nulls.py batch-enforce ./acfm ./lcfm ./mcfm --output-dir results
+python enforce_nulls.py --input-dir ./data --output-file affected_files.csv
+python enforce_nulls.py --input-dir ./data --column some_column --old-value "N/A"
+python enforce_nulls.py --input-dir ./acfm --input-dir ./lcfm --output-file affected_files.csv
 ```
-
-**Key features:**
-
-- Default columns: `collision_energy` and `frag_type`
-- Replaces "Unknown" string values with proper null
-- Configurable column and value replacement
-- Batch processing for multiple directories
-- Detailed reporting of affected files
 
 ### 6. Delete files from a list (`delete_files.py`)
 
-Removes files listed in a text file.
-
 ```bash
-# Delete files from list
-python delete_files.py delete file_list.txt --error-log errors.txt
-
-# Dry run to preview
-python delete_files.py delete file_list.txt --dry-run
-
-# Batch delete from multiple lists
-python delete_files.py batch-delete list1.txt list2.txt --error-log batch_errors.txt
+python delete_files.py --input-file file_list.txt --error-log errors.txt
+python delete_files.py --input-file file_list.txt --dry-run
+python delete_files.py --input-file list1.txt --input-file list2.txt --error-log errors.txt
 ```
-
-**Key features:**
-
-- Safe deletion with error logging
-- Dry-run mode for previewing changes
-- Batch processing for multiple file lists
-- Comprehensive error reporting
 
 ### 7. Find modifications (`find_modifications.py`)
 
-Discovers modifications in parquet files.
-
 ```bash
-# Find modifications
-python find_modifications.py find-mods ./data --output modifications.parquet
-
-# Custom file pattern
-python find_modifications.py find-mods ./data --pattern "**/*.parquet" --verbose
-
-# Batch find in multiple directories
-python find_modifications.py batch-find-mods ./data1 ./data2 --output-dir results
+python find_modifications.py --input-dir ./data --output-file modifications.xlsx
+python find_modifications.py --input-dir ./data --pattern "**/*.parquet" --verbose
+python find_modifications.py --input-dir ./data1 --input-dir ./data2 --output-file modifications.xlsx
 ```
-
-**Key features:**
-
-- Detects peptide modifications in mass spec data
-- Custom file pattern matching
-- Batch processing for multiple directories
-- Outputs to Excel format for analysis
 
 ### 8. Check conversion completeness (`check_conversion.py`)
 
-Verifies that the IPC to Parquet conversion was complete.
-
 ```bash
-# Check conversion completeness
-python check_conversion.py check-conversion ./data --output missing_files.txt
-
-# Batch check multiple directories
-python check_conversion.py batch-check ./data1 ./data2 --output-dir results
+python check_conversion.py --input-dir ./data --output-file missing_files.txt
+python check_conversion.py --input-dir ./data1 --input-dir ./data2 --output-file missing_files.txt
 ```
-
-**Key features:**
-
-- Identifies missing converted files
-- Batch processing for multiple directories
-- Detailed reporting of conversion gaps
-- Essential for data integrity verification
 
 ### 9. Detect multi-folder duplicates (`detect_multi_folder_duplicates.py`)
 
-Finds duplicates across different folders.
-
 ```bash
-# Detect multi-folder duplicates
-python detect_multi_folder_duplicates.py detect-duplicates duplicates.txt --output multi_duplicates.txt
-
-# Batch detect from multiple files
-python detect_multi_folder_duplicates.py batch-detect duplicates1.txt duplicates2.txt --output-dir results
+python detect_multi_folder_duplicates.py --input-file duplicates.txt --output-file multi_duplicates.txt
+python detect_multi_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --output-file multi_duplicates.txt
 ```
-
-**Key features:**
-
-- Identifies duplicates across different directories
-- Requires manual resolution, so user input is needed
-- Batch processing for multiple duplicate files
-- Detailed cross-folder duplicate reporting
 
 ### 10. Delete multi-folder duplicates (`delete_multi_folder_duplicates.py`)
 
-Removes multi-folder duplicates after manual review.
-
 ```bash
-# Delete with confirmation
-python delete_multi_folder_duplicates.py delete-duplicates multi_duplicates.txt ./target_folder
-
-# Force delete without confirmation
-python delete_multi_folder_duplicates.py delete-duplicates multi_duplicates.txt ./target_folder --force
-
-# Dry run to preview
-python delete_multi_folder_duplicates.py delete-duplicates multi_duplicates.txt ./target_folder --dry-run
+python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder
+python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder --force
+python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder --dry-run
 ```
-
-**Key features:**
-
-- Safe deletion with confirmation prompts
-- Dry-run mode for previewing changes
-- Batch processing for multiple files
-- Target folder specification
 
 ### 11. Infer isolation targets (`infer_isolation_target.py`)
 
-Infers missing isolation target values in parquet files.
+`--input-dir` accepts a glob pattern selecting parquet files.
 
 ```bash
-# Infer isolation targets
-python infer_isolation_target.py infer-targets "./data/**/*.parquet" --log modified.txt
-
-# Batch infer in multiple directories
-python infer_isolation_target.py batch-infer "./data1/**/*.parquet" "./data2/**/*.parquet" --log-dir results
+python infer_isolation_target.py --input-dir "./data/**/*.parquet" --output-file modified.txt
+python infer_isolation_target.py --input-dir "./data1/**/*.parquet" --input-dir "./data2/**/*.parquet" \
+    --output-file modified.txt --error-log errors.txt
 ```
-
-**Key features:**
-
-- Infers missing isolation target values from experiment header metadata
-- Uses precursor m/z as fallback
-- Batch processing for multiple patterns
-- Detailed logging of modified files
 
 ### 12. Label modifications (`label_modifications.py`)
 
-Converts modifications to UNIMOD format.
-
 ```bash
-# Label modifications in subfolder
-python label_modifications.py label-mods subfolder_name
-
-# Batch label in multiple subfolders
-python label_modifications.py batch-label-mods subfolder1 subfolder2 subfolder3
+python label_modifications.py --input-dir subfolder_name \
+    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+python label_modifications.py --input-dir subfolder1 --input-dir subfolder2 \
+    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
 ```
 
-**Key features:**
+`check_modifications.py` compares inventories against the same mapping tables:
 
-- Converts EncyclopeDIA modifications to UNIMOD format
-- Hardcoded modification mapping dictionary
-- Batch processing for multiple subfolders
-- Essential for standardisation
-
-`check_modifications.py` compares labelled sequences against the same mapping tables.
+```bash
+python check_modifications.py --input-file modifications.xlsx \
+    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+```
 
 ### 13. Add acquisition column (`add_acquisition_column.py`)
 
-Adds an `acquisition` column to parquet files based on the search data.
-The value is either "DIA" or "DDA", as specified in the search data Excel file.
+Adds an `acquisition` column (DIA/DDA) from search-data Excel.
 
 ```bash
-# Add acquisition column from search data
 python add_acquisition_column.py \
     --input-dir <data-root>/lcfm/ \
-    --search-data search_data_with_new_projects.xlsx
+    --search-data search_data.xlsx
 
-# S3 bucket support
 python add_acquisition_column.py \
     --input-dir s3://bucket/acfm/ \
     --search-data search_data.xlsx \
     --aws-profile <your-aws-profile>
 
-# Dry run to preview changes
 python add_acquisition_column.py \
     --input-dir <data-root>/lcfm/ \
     --search-data search_data.xlsx \
@@ -310,12 +152,10 @@ python add_acquisition_column.py \
 
 **Key features:**
 
-- Reads acquisition type from the search data Excel file, using the `project`, `file path` and `acquisition` columns
-- Adds an `acquisition` column with the value "DIA" or "DDA" to each parquet file
+- Reads acquisition type from the search data Excel file (`project`, `file path`, `acquisition`)
 - Skips files that already have an `acquisition` column
-- Supports both local directories and S3 buckets
+- Supports local directories and S3 buckets
 - Dry-run mode for previewing changes
-- Reports files not found in the search data
 
 ## Data requirements
 

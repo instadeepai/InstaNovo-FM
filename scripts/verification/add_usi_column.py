@@ -38,7 +38,11 @@ from scripts.verification.verify_calc_mz import (
 )
 from scripts.preprocessing.parquet_io import search_data_lookup_key
 
-app = typer.Typer(help="Add USI column to labelled parquet datasets")
+app = typer.Typer(
+    help="Add USI column to labelled parquet datasets",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -63,7 +67,7 @@ DRY_RUN_OPTION = typer.Option(
     "-n",
     help="Log actions without modifying files",
 )
-VERBOSE_OPTION = typer.Option(False, "--verbose", help="Debug logging")
+VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Debug logging")
 OVERWRITE_OPTION = typer.Option(
     True,
     "--overwrite/--no-overwrite",

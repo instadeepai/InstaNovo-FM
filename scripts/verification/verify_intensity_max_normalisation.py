@@ -45,7 +45,11 @@ from scripts.verification.verify_calc_mz import (
     find_project_folders,
 )
 
-app = typer.Typer(help="Verify intensity max-normalisation and optional fix-in-place")
+app = typer.Typer(
+    help="Verify intensity max-normalisation and optional fix-in-place",
+    no_args_is_help=True,
+    add_completion=False,
+)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -54,7 +58,6 @@ logger = logging.getLogger(__name__)
 INPUT_OPTION = typer.Option(
     None,
     "--input",
-    "-f",
     help="Single .parquet or .ipc file",
 )
 INPUT_DIR_OPTION = typer.Option(

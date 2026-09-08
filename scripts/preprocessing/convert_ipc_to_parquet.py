@@ -7,10 +7,10 @@ ACFM acquisition and USI metadata during conversion.
 CLI::
 
     python scripts/preprocessing/convert_ipc_to_parquet.py --help
-    python scripts/preprocessing/convert_ipc_to_parquet.py convert --source-dir <data-root>/acfm
-    python scripts/preprocessing/convert_ipc_to_parquet.py batch-convert preprocessing/outputs/missing_files_lcfm.txt preprocessing/outputs/missing_files_acfm.txt
+    python scripts/preprocessing/convert_ipc_to_parquet.py --input-dir <data-root>/acfm
+    python scripts/preprocessing/convert_ipc_to_parquet.py --input-file missing_files_lcfm.txt --input-file missing_files_acfm.txt
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Annotated, Dict, List, Optional
 
 import polars as pl
 import typer
@@ -61,39 +61,10 @@ ACFM_REFERENCE_DTYPES: Dict[str, pl.DataType] = {
     "isolation_target_old": pl.Float64,
 }
 
-app = typer.Typer(help="Convert IPC files to Parquet format")
-
-# Module-level constants to avoid B008 errors
-SOURCE_DIR_OPTION = typer.Option(
-    None, "--source-dir", "-s", help="Directory to search for IPC files"
-)
-INPUT_FILE_OPTION = typer.Option(
-    None, "--input-file", "-i", help="File listing IPC files to convert"
-)
-OUTPUT_FILE_OPTION = typer.Option(
-    "conversion_errors.txt", "--output", "-o", help="Error log file"
-)
-MAX_SHARD_SIZE_OPTION = typer.Option(
-    500_000, "--max-shard-size", "-m", help="Maximum shard size"
-)
-LAZY_OPTION = typer.Option(True, "--lazy/--no-lazy", help="Use lazy loading")
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-COLUMN_MAPPING_OPTION = typer.Option(
-    None, "--column-mapping", "-c", help="JSON string for column mapping"
-)
-SEARCH_DATA_OPTION = typer.Option(
-    None,
-    "--search-data",
-    help="Search metadata Excel for acquisition lookup (enables ACFM metadata columns)",
-)
-ADD_USI_OPTION = typer.Option(
-    True,
-    "--add-usi/--no-usi",
-    help="Build USI column during ACFM metadata enrichment (requires --search-data)",
-)
-INPUT_FILES_ARG = typer.Argument(..., help="Input files listing IPC files to convert")
-BATCH_OUTPUT_FILE_OPTION = typer.Option(
-    "batch_conversion_errors.txt", "--output", "-o", help="Error log file"
+app = typer.Typer(
+    help="Convert IPC files to Parquet format",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
@@ -443,30 +414,62 @@ def log_error(output_file: str, ipc_path: str, error: Exception) -> None:
 
 
 @app.command()
-def convert(
-    source_dir: Optional[str] = SOURCE_DIR_OPTION,
-    input_file: Optional[str] = INPUT_FILE_OPTION,
-    output_file: str = OUTPUT_FILE_OPTION,
-    max_shard_size: int = MAX_SHARD_SIZE_OPTION,
-    lazy: bool = LAZY_OPTION,
-    verbose: bool = VERBOSE_OPTION,
-    column_mapping: Optional[str] = COLUMN_MAPPING_OPTION,
-    search_data: Optional[Path] = SEARCH_DATA_OPTION,
-    add_usi: bool = ADD_USI_OPTION,
+def main(
+    input_dir: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Directory to search for IPC files",
+        ),
+    ] = None,
+    input_file: Annotated[
+        Optional[List[Path]],
+        typer.Option(
+            "--input-file",
+            help="Text file listing IPC paths to convert (repeatable)",
+        ),
+    ] = None,
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Error log file",
+        ),
+    ] = Path("conversion_errors.txt"),
+    max_shard_size: Annotated[
+        int,
+        typer.Option("--max-shard-size", help="Maximum rows per output shard"),
+    ] = 500_000,
+    lazy: Annotated[
+        bool,
+        typer.Option("--lazy/--no-lazy", help="Use lazy loading"),
+    ] = True,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
+    column_mapping: Annotated[
+        Optional[str],
+        typer.Option("--column-mapping", help="JSON string for column mapping"),
+    ] = None,
+    search_data: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--search-data",
+            help="Search metadata Excel for acquisition lookup (enables ACFM metadata)",
+        ),
+    ] = None,
+    add_usi: Annotated[
+        bool,
+        typer.Option(
+            "--add-usi/--no-usi",
+            help="Build USI column during ACFM metadata enrichment (requires --search-data)",
+        ),
+    ] = True,
 ) -> None:
-    """Convert a directory or report-selected IPC set for Parquet preprocessing.
-
-    Args:
-        source_dir: Optional directory tree containing IPC files.
-        input_file: Optional text report listing IPC files.
-        output_file: Destination for conversion errors.
-        max_shard_size: Maximum rows per output shard.
-        lazy: Whether to use lazy loading.
-        verbose: Whether to print processing details.
-        column_mapping: Optional JSON mapping from source to canonical columns.
-        search_data: Optional workbook enabling ACFM metadata enrichment.
-        add_usi: Whether to add USIs during enriched conversion.
-    """
+    """Convert IPC files to Parquet from a directory and/or path lists."""
     parsed_column_mapping = None
     if column_mapping:
         try:
@@ -482,87 +485,43 @@ def convert(
             "intensity": "intensity_array",
         }
 
-    if not source_dir and not input_file:
-        typer.echo("Error: Must provide either --source-dir or --input-file", err=True)
+    input_files = input_file or []
+    if input_dir is None and not input_files:
+        typer.echo("Error: Must provide either --input-dir or --input-file", err=True)
         raise typer.Exit(1)
 
-    convert_ipc_to_parquet(
-        source_dir=source_dir,
-        input_file=input_file,
-        output_file=output_file,
-        column_mapping=parsed_column_mapping,
-        max_shard_size=max_shard_size,
-        lazy=lazy,
-        verbose=verbose,
-        search_data_path=search_data,
-        add_usi=add_usi,
-    )
-
-
-@app.command()
-def batch_convert(
-    input_files: list[str] = INPUT_FILES_ARG,
-    output_file: str = BATCH_OUTPUT_FILE_OPTION,
-    max_shard_size: int = MAX_SHARD_SIZE_OPTION,
-    lazy: bool = LAZY_OPTION,
-    verbose: bool = VERBOSE_OPTION,
-) -> None:
-    """Retry conversion queues from several validation reports in one run.
-
-    Args:
-        input_files: Text reports listing IPC files to convert.
-        output_file: Shared destination for conversion errors.
-        max_shard_size: Maximum rows per output shard.
-        lazy: Whether to use lazy loading.
-        verbose: Whether to print processing details.
-    """
-    column_mapping = {
-        "rt": "retention_time",
-        "mz": "mz_array",
-        "intensity": "intensity_array",
-    }
-
-    for input_file in input_files:
-        if not os.path.exists(input_file):
-            typer.echo(
-                f"Warning: Input file '{input_file}' does not exist, skipping...",
-                err=True,
-            )
-            continue
-
-        typer.echo(f"Processing input file: {input_file}")
+    if input_dir is not None:
         convert_ipc_to_parquet(
-            input_file=input_file,
-            output_file=output_file,
-            column_mapping=column_mapping,
+            source_dir=str(input_dir),
+            input_file=None,
+            output_file=str(output_file),
+            column_mapping=parsed_column_mapping,
             max_shard_size=max_shard_size,
             lazy=lazy,
             verbose=verbose,
+            search_data_path=search_data,
+            add_usi=add_usi,
         )
 
-
-def main() -> None:
-    """Preserve backwards-compatible conversion of historical hardcoded reports."""
-    column_mapping = {
-        "rt": "retention_time",
-        "mz": "mz_array",
-        "intensity": "intensity_array",
-    }
-
-    input_files = [
-        "preprocessing/outputs/missing_files_lcfm.txt",
-        "preprocessing/outputs/missing_files_acfm.txt",
-    ]
-
-    for input_file in input_files:
-        if os.path.exists(input_file):
-            typer.echo(f"Processing: {input_file}")
-            convert_ipc_to_parquet(
-                input_file=input_file,
-                column_mapping=column_mapping,
+    for path in input_files:
+        if not path.exists():
+            typer.echo(
+                f"Warning: Input file '{path}' does not exist, skipping...",
+                err=True,
             )
-        else:
-            typer.echo(f"Warning: Input file '{input_file}' does not exist", err=True)
+            continue
+        typer.echo(f"Processing input file: {path}")
+        convert_ipc_to_parquet(
+            source_dir=None,
+            input_file=str(path),
+            output_file=str(output_file),
+            column_mapping=parsed_column_mapping,
+            max_shard_size=max_shard_size,
+            lazy=lazy,
+            verbose=verbose,
+            search_data_path=search_data,
+            add_usi=add_usi,
+        )
 
 
 if __name__ == "__main__":

@@ -45,52 +45,33 @@ We expect the parquet files to contain the columns:
 CLI::
 
     python scripts/preprocessing/label_modifications.py --help
-    python scripts/preprocessing/label_modifications.py label-mods <subfolder> <gold-standard.xlsx> <pxd009449-ambiguous.xlsx>
-    python scripts/preprocessing/label_modifications.py batch-label-mods <subfolder-a> <subfolder-b> <gold-standard.xlsx> <pxd009449-ambiguous.xlsx>
+    python scripts/preprocessing/label_modifications.py --input-dir <subfolder> --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+    python scripts/preprocessing/label_modifications.py --input-dir <subfolder-a> --input-dir <subfolder-b> --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
-import polars as pl
-import glob
-import os
-from tqdm import tqdm
-import logging
-import typer
-from typing import Callable
+from __future__ import annotations
 
-# Configure logging
+import glob
+import logging
+import os
+from pathlib import Path
+from typing import Annotated, Callable, List
+
+import polars as pl
+import typer
+from tqdm import tqdm
+
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="Label modifications in parquet files")
-
-# Module-level constants to avoid B008 errors
-SUBFOLDER_ARG = typer.Argument(..., help="Subfolder to process")
-GOLD_STANDARD_MODIFICATIONS_FILE_ARG = typer.Argument(
-    ..., help="Gold standard modifications file"
-)
-PXD009449_AMBIGUOUS_MODIFICATIONS_FILE_ARG = typer.Argument(
-    ...,
-    help="PXD009449 ambiguous modifications file. This assigns ambiguous modifications using file names as a guide.",
-)
-SEQUENCE_COL_OPTION = typer.Option(
-    "unmodified_peptide",
-    "--sequence-col",
-    "-s",
-    help="Name of the unmodified sequence column",
-)
-MODIFIED_SEQUENCE_COL_OPTION = typer.Option(
-    "modified_peptide",
-    "--modified-sequence-col",
-    "-m",
-    help="Name of the modified sequence column",
-)
-SUBFOLDERS_ARG = typer.Argument(..., help="Subfolders to process")
-DROP_OLD_MODIFICATIONS_OPTION = typer.Option(
-    False, "--drop-old-modifications", "-d", help="Drop old modifications column"
+app = typer.Typer(
+    help="Label modifications in parquet files",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
@@ -468,81 +449,64 @@ def create_unimod_column(
 
 
 @app.command()
-def label_mods(
-    subfolder: str = SUBFOLDER_ARG,
-    gold_standard_modifications_file: str = GOLD_STANDARD_MODIFICATIONS_FILE_ARG,
-    pxd009449_ambiguous_modifications_file: str = PXD009449_AMBIGUOUS_MODIFICATIONS_FILE_ARG,
-    sequence_col: str = SEQUENCE_COL_OPTION,
-    modified_sequence_col: str = MODIFIED_SEQUENCE_COL_OPTION,
-    drop_old_modifications: bool = DROP_OLD_MODIFICATIONS_OPTION,
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Dataset tree containing parquet files (repeatable)",
+        ),
+    ],
+    gold_standard_mods: Annotated[
+        Path,
+        typer.Option(
+            "--gold-standard-mods",
+            help="Gold standard modifications Excel file",
+        ),
+    ],
+    ambiguous_mods: Annotated[
+        Path,
+        typer.Option(
+            "--ambiguous-mods",
+            help="PXD009449 ambiguous modifications Excel file",
+        ),
+    ],
+    sequence_col: Annotated[
+        str,
+        typer.Option("--sequence-col", help="Name of the unmodified sequence column"),
+    ] = "unmodified_peptide",
+    modified_sequence_col: Annotated[
+        str,
+        typer.Option(
+            "--modified-sequence-col",
+            help="Name of the modified sequence column",
+        ),
+    ] = "modified_peptide",
+    drop_old_modifications: Annotated[
+        bool,
+        typer.Option(
+            "--drop-old-modifications",
+            help="Drop the source modified-sequence column after labelling",
+        ),
+    ] = False,
 ) -> None:
-    """Translate one dataset only after its modification mappings are validated.
-
-    Args:
-        subfolder: Dataset tree containing Parquet files.
-        gold_standard_modifications_file: Workbook containing default mappings.
-        pxd009449_ambiguous_modifications_file: Workbook containing filename overrides.
-        sequence_col: Column containing unmodified peptide sequences.
-        modified_sequence_col: Column containing EncyclopeDIA annotations.
-        drop_old_modifications: Whether to remove the source annotation column.
-    """
+    """Translate EncyclopeDIA modifications to UNIMOD in parquet datasets."""
     gold_standard_modifications_df = read_gold_standard_modifications(
-        gold_standard_modifications_file
+        str(gold_standard_mods)
     )
     pxd009449_ambiguous_modifications_df = read_pxd009449_ambiguous_modifications(
-        pxd009449_ambiguous_modifications_file
+        str(ambiguous_mods)
     )
 
     mod_dict = create_mod_dict(gold_standard_modifications_df)
     n_term_mod_dict = create_n_term_mod_dict(gold_standard_modifications_df)
     c_term_mod_dict = create_c_term_mod_dict(gold_standard_modifications_df)
 
-    create_unimod_column(
-        subfolder=subfolder,
-        mod_dict=mod_dict,
-        n_term_mod_dict=n_term_mod_dict,
-        c_term_mod_dict=c_term_mod_dict,
-        pxd009449_ambiguous_modifications_df=pxd009449_ambiguous_modifications_df,
-        sequence_col=sequence_col,
-        modified_sequence_col=modified_sequence_col,
-        drop_old_modifications=drop_old_modifications,
-    )
-
-
-@app.command()
-def batch_label_mods(
-    subfolders: list[str] = SUBFOLDERS_ARG,
-    gold_standard_modifications_file: str = GOLD_STANDARD_MODIFICATIONS_FILE_ARG,
-    pxd009449_ambiguous_modifications_file: str = PXD009449_AMBIGUOUS_MODIFICATIONS_FILE_ARG,
-    sequence_col: str = SEQUENCE_COL_OPTION,
-    modified_sequence_col: str = MODIFIED_SEQUENCE_COL_OPTION,
-    drop_old_modifications: bool = DROP_OLD_MODIFICATIONS_OPTION,
-) -> None:
-    """Apply one validated mapping set consistently across several datasets.
-
-    Args:
-        subfolders: Dataset trees containing Parquet files.
-        gold_standard_modifications_file: Workbook containing default mappings.
-        pxd009449_ambiguous_modifications_file: Workbook containing filename overrides.
-        sequence_col: Column containing unmodified peptide sequences.
-        modified_sequence_col: Column containing EncyclopeDIA annotations.
-        drop_old_modifications: Whether to remove the source annotation column.
-    """
-    gold_standard_modifications_df = read_gold_standard_modifications(
-        gold_standard_modifications_file
-    )
-    pxd009449_ambiguous_modifications_df = read_pxd009449_ambiguous_modifications(
-        pxd009449_ambiguous_modifications_file
-    )
-
-    mod_dict = create_mod_dict(gold_standard_modifications_df)
-    n_term_mod_dict = create_n_term_mod_dict(gold_standard_modifications_df)
-    c_term_mod_dict = create_c_term_mod_dict(gold_standard_modifications_df)
-
-    for subfolder in subfolders:
+    for subfolder in input_dir:
         typer.echo(f"Processing subfolder: {subfolder}")
         create_unimod_column(
-            subfolder=subfolder,
+            subfolder=str(subfolder),
             mod_dict=mod_dict,
             n_term_mod_dict=n_term_mod_dict,
             c_term_mod_dict=c_term_mod_dict,
@@ -550,34 +514,6 @@ def batch_label_mods(
             sequence_col=sequence_col,
             modified_sequence_col=modified_sequence_col,
             drop_old_modifications=drop_old_modifications,
-        )
-
-
-def main() -> None:
-    """Preserve backwards-compatible labelling of historical hardcoded subfolders."""
-    # Legacy behaviour for backwards compatibility
-    subfolders = ["lcfm_splits", "mcfm_splits", "hcfm_splits"]
-
-    gold_standard_modifications_df = read_gold_standard_modifications(
-        GOLD_STANDARD_MODIFICATIONS_FILE_ARG
-    )
-    pxd009449_ambiguous_modifications_df = read_pxd009449_ambiguous_modifications(
-        PXD009449_AMBIGUOUS_MODIFICATIONS_FILE_ARG
-    )
-
-    mod_dict = create_mod_dict(gold_standard_modifications_df)
-    n_term_mod_dict = create_n_term_mod_dict(gold_standard_modifications_df)
-    c_term_mod_dict = create_c_term_mod_dict(gold_standard_modifications_df)
-
-    # Process each subfolder
-    for subfolder in subfolders:
-        logger.info(f"Processing {subfolder}...")
-        create_unimod_column(
-            subfolder=subfolder,
-            mod_dict=mod_dict,
-            n_term_mod_dict=n_term_mod_dict,
-            c_term_mod_dict=c_term_mod_dict,
-            pxd009449_ambiguous_modifications_df=pxd009449_ambiguous_modifications_df,
         )
 
 

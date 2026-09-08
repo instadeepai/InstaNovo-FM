@@ -6,34 +6,24 @@ cleanup stages have a complete candidate report.
 CLI::
 
     python scripts/preprocessing/detect_all_duplicates.py --help
-    python scripts/preprocessing/detect_all_duplicates.py detect-duplicates <data-root>/acfm
-    python scripts/preprocessing/detect_all_duplicates.py batch-detect <data-root>/acfm <data-root>/lcfm
+    python scripts/preprocessing/detect_all_duplicates.py --input-dir <data-root>/acfm --output-file duplicates.txt
+    python scripts/preprocessing/detect_all_duplicates.py --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file duplicates.txt
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
+from __future__ import annotations
+
 import os
-from typing import List, Dict
 from pathlib import Path
+from typing import Annotated, Dict, List, Optional
+
 import typer
 
-app = typer.Typer(help="Detect duplicate files in directory structure")
-
-# Module-level constants to avoid B008 errors
-SOURCE_DIR_ARG = typer.Argument(..., help="Source directory to search for duplicates")
-OUTPUT_FILE_OPTION = typer.Option(
-    "duplicate_files.txt", "--output", "-o", help="Output file for duplicates"
-)
-EXTENSIONS_OPTION = typer.Option(
-    [".ipc", ".mzML.ipc"], "--extensions", "-e", help="File extensions to check"
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-DIRECTORIES_ARG = typer.Argument(..., help="Directories to check for duplicates")
-OUTPUT_DIR_OPTION = typer.Option(
-    "outputs", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "duplicate_files", "--prefix", "-p", help="Prefix for output files"
+app = typer.Typer(
+    help="Detect duplicate files in directory structure",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
@@ -103,83 +93,67 @@ def save_duplicates(output_file: str, duplicates: List[List[str]]) -> None:
 
 
 @app.command()
-def detect_duplicates(
-    source_dir: str = SOURCE_DIR_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    extensions: List[str] = EXTENSIONS_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Dataset tree to search for duplicates (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Output file for duplicate groups",
+        ),
+    ] = Path("duplicate_files.txt"),
+    extensions: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--extensions",
+            "-e",
+            help="File extensions retained for CLI compatibility",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Generate a complete duplicate candidate report for one dataset.
+    """Generate a duplicate candidate report for one or more dataset trees."""
+    if extensions is None:
+        extensions = [".ipc", ".mzML.ipc"]
 
-    Args:
-        source_dir: Directory tree to inspect.
-        output_file: Destination for duplicate groups.
-        extensions: Requested extensions retained for CLI compatibility.
-        verbose: Whether to print scan details.
-    """
     if verbose:
-        typer.echo(f"Searching for duplicates in: {source_dir}")
+        typer.echo(f"Input dirs: {input_dir}")
         typer.echo(f"Output file: {output_file}")
         typer.echo(f"Extensions: {extensions}")
 
-    if not os.path.exists(source_dir):
-        typer.echo(f"Error: Source directory '{source_dir}' does not exist", err=True)
+    valid_dirs = [d for d in input_dir if d.exists()]
+    for missing in set(input_dir) - set(valid_dirs):
+        typer.echo(f"Warning: Directory '{missing}' does not exist, skipping...", err=True)
+
+    if not valid_dirs:
+        typer.echo("Error: no valid input directories", err=True)
         raise typer.Exit(1)
 
-    # Ensure output directory exists
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    find_duplicate_files(source_dir, output_file)
+    # Multiple trees: write one combined report (paths retain their folders).
+    all_duplicates: List[List[str]] = []
+    for directory in valid_dirs:
+        if verbose:
+            typer.echo(f"Searching for duplicates in: {directory}")
+        file_dict = group_files_by_base_name(str(directory))
+        all_duplicates.extend(identify_duplicates(file_dict))
+
+    save_duplicates(str(output_file), all_duplicates)
 
     if verbose:
         typer.echo("Duplicate detection completed successfully!")
-
-
-@app.command()
-def batch_detect(
-    directories: List[str] = DIRECTORIES_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Generate separate duplicate reports for several datasets.
-
-    Args:
-        directories: Dataset trees to inspect.
-        output_dir: Directory that receives the reports.
-        prefix: Prefix used for each report filename.
-    """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for directory in directories:
-        if not os.path.exists(directory):
-            typer.echo(
-                f"Warning: Directory '{directory}' does not exist, skipping...",
-                err=True,
-            )
-            continue
-
-        output_file = output_path / f"{prefix}_{Path(directory).name}.txt"
-        typer.echo(f"Checking duplicates in: {directory}")
-        find_duplicate_files(directory, str(output_file))
-
-
-def main() -> None:
-    """Preserve backwards-compatible scans of the historical hardcoded paths."""
-    # Legacy behaviour for backwards compatibility
-    directories = ["<data-root>/acfm", "<data-root>/lcfm"]
-    output_dir = "preprocessing/outputs"
-
-    for directory in directories:
-        if os.path.exists(directory):
-            output_file = (
-                f"{output_dir}/duplicate_files_{os.path.basename(directory)}.txt"
-            )
-            Path(output_dir).mkdir(parents=True, exist_ok=True)
-            find_duplicate_files(directory, output_file)
-        else:
-            typer.echo(f"Warning: Directory '{directory}' does not exist", err=True)
 
 
 if __name__ == "__main__":

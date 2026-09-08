@@ -34,7 +34,9 @@ from scripts.verification.apply_carbamido_from_calc_mz_report import (
 from scripts.verification.verify_calc_mz import find_parquet_files_in_project
 
 app = typer.Typer(
-    help="Carbamidomethylate sequences for explicitly listed project folders"
+    help="Carbamidomethylate sequences for explicitly listed project folders",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 logging.basicConfig(
@@ -60,7 +62,7 @@ DRY_RUN_OPTION = typer.Option(
     "-n",
     help="Log actions without writing files",
 )
-VERBOSE_OPTION = typer.Option(False, "--verbose", help="Debug logging")
+VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Debug logging")
 
 
 def run_manual(

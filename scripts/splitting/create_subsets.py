@@ -21,11 +21,13 @@ CLI::
 
 from __future__ import annotations
 
-import argparse
 import os
 from collections.abc import Iterable, Iterator
+from pathlib import Path
+from typing import Annotated
 
 import polars as pl
+import typer
 from tqdm import tqdm
 
 from scripts.splitting.split_labelled_data import (
@@ -35,6 +37,11 @@ from scripts.splitting.split_labelled_data import (
 
 _TEMP_SCORING_COLS = ("_composite_score", "_peptide_length")
 
+app = typer.Typer(
+    help="Build medium- and high-confidence parquet subsets from scored PSMs",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 def get_reference_schema() -> dict[str, pl.DataType]:
     """Get the canonical column schema so subsets stay compatible with the split pipeline.
@@ -175,49 +182,43 @@ def iter_parquet_files(input_root: str) -> Iterator[tuple[str, str, str]]:
                 yield subfolder, name, file_path
 
 
-def main() -> None:
-    """Carve a PSM corpus into medium- and high-confidence subsets with corpus-wide cutoffs.
-
-    Run this when you need consistently-filtered training tiers across many
-    datasets: pass 1 scores every input file to find the global top-10% and
-    top-2% thresholds, and pass 2 re-applies those thresholds so no file is
-    judged against its own local score distribution. Outputs mirror the input
-    subfolder layout.
-    """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Score PSM tables and write medium- (global top 10%%) and high-confidence "
-            "(global top 2%%) parquet subsets, mirroring input subfolder layout."
-        )
-    )
-    parser.add_argument(
-        "--input-dir",
-        required=True,
-        help="Root directory containing one subfolder per dataset with .parquet files",
-    )
-    parser.add_argument(
-        "--medium-output-dir",
-        required=True,
-        help="Output root for the medium-confidence subset (e.g. former MCFM tree)",
-    )
-    parser.add_argument(
-        "--high-output-dir",
-        required=True,
-        help="Output root for the high-confidence subset (e.g. former HCFM tree)",
-    )
-    parser.add_argument(
-        "--hold-back-modified-rows",
-        action="store_true",
-        help=(
-            "Exclude rows with internal modification tokens [IN:<int>] in sequence from "
-            "scoring thresholds and outputs."
+@app.command()
+def main(
+    input_dir: Annotated[
+        Path,
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Root directory with one subfolder per dataset of .parquet files",
         ),
-    )
-    args = parser.parse_args()
-    input_root = args.input_dir
-    folder_mcfm = args.medium_output_dir
-    folder_hcfm = args.high_output_dir
-    hold_back = args.hold_back_modified_rows
+    ],
+    medium_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--medium-output-dir",
+            help="Output root for the medium-confidence subset (e.g. MCFM)",
+        ),
+    ],
+    high_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--high-output-dir",
+            help="Output root for the high-confidence subset (e.g. HCFM)",
+        ),
+    ],
+    hold_back_modified_rows: Annotated[
+        bool,
+        typer.Option(
+            "--hold-back-modified-rows",
+            help="Exclude rows with [IN:<int>] tokens from scoring and outputs",
+        ),
+    ] = False,
+) -> None:
+    """Carve a PSM corpus into medium- and high-confidence subsets with corpus-wide cutoffs."""
+    input_root = str(input_dir)
+    folder_mcfm = str(medium_output_dir)
+    folder_hcfm = str(high_output_dir)
+    hold_back = hold_back_modified_rows
 
     all_files = list(iter_parquet_files(input_root))
     if not all_files:
@@ -286,4 +287,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    app()

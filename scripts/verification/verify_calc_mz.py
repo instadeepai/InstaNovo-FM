@@ -71,12 +71,12 @@ CLI::
     python scripts/verification/verify_calc_mz.py --help
     python scripts/verification/verify_calc_mz.py \
         --input-dir <data-root>/lcfm/ \
-        --output-csv calc_mz_verification.csv \
+        --output-file calc_mz_verification.csv \
         --tolerance 10 \
         --verbose
     python scripts/verification/verify_calc_mz.py \
         --input-dir <data-root>/lcfm/ \
-        --output-csv calc_mz_verification.csv \
+        --output-file calc_mz_verification.csv \
         --search-data search_data_with_new_projects.xlsx \
         --tmt-projects-yaml bad_tmt_projects.yaml \
         --lysine-label-file-csv lysine_label_files.csv
@@ -97,7 +97,11 @@ import typer
 from instanovo.utils.residues import ResidueSet, H2O_MASS, PROTON_MASS_AMU
 
 
-app = typer.Typer()
+app = typer.Typer(
+    help="Verify peptide_calc_mz against sequence-derived m/z",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -107,7 +111,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level constants for CLI options
 INPUT_DIR_OPTION = typer.Option(
-    "<data-root>/lcfm/",
+    ...,
     "--input-dir",
     "-i",
     help="Input directory containing parquet files organised by project subfolders",
@@ -115,18 +119,16 @@ INPUT_DIR_OPTION = typer.Option(
 RESIDUE_MASSES_FILE_OPTION = typer.Option(
     "mod_dicts/residue_masses.yaml",
     "--residue-masses-file",
-    "-r",
-    help="Path to residue masses file",
+    help="Path to residue masses YAML",
 )
 TOLERANCE_OPTION = typer.Option(
     10,
     "--tolerance",
-    "-t",
     help="PPM tolerance for m/z matching",
 )
 OUTPUT_CSV_OPTION = typer.Option(
     ...,
-    "--output-csv",
+    "--output-file",
     "-o",
     help="Path to write the output CSV report",
 )

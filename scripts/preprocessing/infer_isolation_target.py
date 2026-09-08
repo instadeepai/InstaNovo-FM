@@ -2,47 +2,35 @@
 
 Run this after conversion when ``isolation_target`` is absent or NaN. The script
 prefers header-derived values, falls back to precursor m/z, and records files it
-cannot infer; batch mode processes several glob patterns.
+cannot infer.
 
 CLI::
 
     python scripts/preprocessing/infer_isolation_target.py --help
-    python scripts/preprocessing/infer_isolation_target.py infer-targets "<data-root>/acfm/**/*.parquet"
-    python scripts/preprocessing/infer_isolation_target.py batch-infer "<data-root>/acfm/**/*.parquet" "<data-root>/lcfm/**/*.parquet"
+    python scripts/preprocessing/infer_isolation_target.py --input-dir "<data-root>/acfm/**/*.parquet" --output-file modified_files.txt
+    python scripts/preprocessing/infer_isolation_target.py --input-dir "<data-root>/acfm/**/*.parquet" --input-dir "<data-root>/lcfm/**/*.parquet" --output-file modified_files.txt
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
-import polars as pl
+from __future__ import annotations
+
 import glob
 import os
 import re
-from tqdm import tqdm
-from typing import Tuple
 from pathlib import Path
+from typing import Annotated, List, Tuple
+
+import polars as pl
 import typer
+from tqdm import tqdm
 
 from scripts.preprocessing.parquet_io import nan_string_to_null_expr
 
-app = typer.Typer(help="Infer isolation target values in parquet files")
-
-# Module-level constants to avoid B008 errors
-SOURCE_DIR_ARG = typer.Argument(
-    ..., help="Source directory pattern to search for parquet files"
-)
-LOG_FILE_OPTION = typer.Option(
-    "modified_files.txt", "--log", "-l", help="File to log modified files"
-)
-ERROR_LOG_OPTION = typer.Option(
-    "error_files.txt", "--error-log", "-e", help="File to log error files"
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-SOURCE_DIRS_ARG = typer.Argument(..., help="Source directory patterns to search")
-LOG_DIR_OPTION = typer.Option(
-    "outputs", "--log-dir", "-l", help="Directory for log files"
-)
-PREFIX_OPTION = typer.Option(
-    "modified_files", "--prefix", "-p", help="Prefix for log files"
+app = typer.Typer(
+    help="Infer isolation target values in parquet files",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
@@ -279,25 +267,30 @@ def write_log_files(
 
 def infer_isolation_target(
     source_dir: str,
-    log_file: str = "modified_files.txt",
-    error_log_file: str = "error_files.txt",
+    log_file: str | None = "modified_files.txt",
+    error_log_file: str | None = "error_files.txt",
     verbose: bool = False,
-) -> None:
+) -> tuple[list[str], list[str]]:
     """Repair missing isolation metadata before spectra enter later pipeline stages.
 
     Args:
         source_dir: Glob pattern selecting Parquet files.
-        log_file: Destination for modified paths.
-        error_log_file: Destination for unresolved paths.
+        log_file: Destination for modified paths, or None to skip writing.
+        error_log_file: Destination for unresolved paths, or None to skip writing.
         verbose: Whether to print processing details.
+
+    Returns:
+        ``(modified_files, error_files)`` path lists.
     """
     if verbose:
         typer.echo(f"Processing directory pattern: {source_dir}")
-        typer.echo(f"Log file: {log_file}")
-        typer.echo(f"Error log file: {error_log_file}")
+        if log_file:
+            typer.echo(f"Log file: {log_file}")
+        if error_log_file:
+            typer.echo(f"Error log file: {error_log_file}")
 
-    modified_files = []
-    error_files = []
+    modified_files: list[str] = []
+    error_files: list[str] = []
 
     for file_path in tqdm(glob.glob(source_dir), unit="file"):
         was_modified, had_error = process_single_file(file_path, verbose=verbose)
@@ -307,73 +300,55 @@ def infer_isolation_target(
         elif had_error:
             error_files.append(file_path)
 
-    write_log_files(modified_files, error_files, log_file, error_log_file)
+    if log_file is not None and error_log_file is not None:
+        write_log_files(modified_files, error_files, log_file, error_log_file)
+
+    return modified_files, error_files
 
 
 @app.command()
-def infer_targets(
-    source_dir: str = SOURCE_DIR_ARG,
-    log_file: str = LOG_FILE_OPTION,
-    error_log: str = ERROR_LOG_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_dir: Annotated[
+        List[str],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Glob pattern selecting parquet files (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Log of files whose isolation_target was inferred",
+        ),
+    ] = Path("modified_files.txt"),
+    error_log: Annotated[
+        Path,
+        typer.Option("--error-log", help="Log of files that could not be inferred"),
+    ] = Path("error_files.txt"),
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Repair missing isolation targets for one selected dataset pattern.
+    """Repair missing isolation targets for selected parquet globs."""
+    all_modified: list[str] = []
+    all_errors: list[str] = []
 
-    Args:
-        source_dir: Glob pattern selecting Parquet files.
-        log_file: Destination for modified paths.
-        error_log: Destination for unresolved paths.
-        verbose: Whether to print processing details.
-    """
-    infer_isolation_target(
-        source_dir=source_dir,
-        log_file=log_file,
-        error_log_file=error_log,
-        verbose=verbose,
-    )
-
-
-@app.command()
-def batch_infer(
-    source_dirs: list[str] = SOURCE_DIRS_ARG,
-    log_dir: str = LOG_DIR_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Repair several dataset patterns while keeping separate outcome logs.
-
-    Args:
-        source_dirs: Glob patterns selecting Parquet files.
-        log_dir: Directory that receives outcome logs.
-        prefix: Prefix used for modified-file logs.
-    """
-    output_path = Path(log_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for source_dir in source_dirs:
-        log_file = output_path / f"{prefix}_{Path(source_dir).name}.txt"
-        error_log = output_path / f"error_{prefix}_{Path(source_dir).name}.txt"
-        typer.echo(f"Processing directory pattern: {source_dir}")
-        infer_isolation_target(
-            source_dir=source_dir,
-            log_file=str(log_file),
-            error_log_file=str(error_log),
+    for pattern in input_dir:
+        typer.echo(f"Processing directory pattern: {pattern}")
+        modified, errors = infer_isolation_target(
+            source_dir=pattern,
+            log_file=None,
+            error_log_file=None,
+            verbose=verbose,
         )
+        all_modified.extend(modified)
+        all_errors.extend(errors)
 
-
-def main() -> None:
-    """Preserve backwards-compatible inference over historical hardcoded patterns."""
-    # Legacy behaviour for backwards compatibility
-    source_dirs = [
-        "<data-root>/acfm/**/*.parquet",
-        "<data-root>/lcfm/**/*.parquet",
-        "<data-root>/hcfm/**/*.parquet",
-        "<data-root>/mcfm/**/*.parquet",
-    ]
-    for source_dir in source_dirs:
-        infer_isolation_target(
-            source_dir=source_dir,
-            log_file="modified_files_new.txt",
-        )
+    write_log_files(all_modified, all_errors, str(output_file), str(error_log))
 
 
 if __name__ == "__main__":

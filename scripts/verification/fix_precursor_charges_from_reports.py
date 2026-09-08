@@ -40,7 +40,11 @@ from scripts.verification.verify_precursor_charges_and_acq_type import (
     extract_file_name,
 )
 
-app = typer.Typer()
+app = typer.Typer(
+    help="Fix precursor charges from verification CSV reports",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -56,7 +60,6 @@ INPUT_DIR_OPTION = typer.Option(
 REPORT_DIR_OPTION = typer.Option(
     ...,
     "--report-dir",
-    "-r",
     help="Directory containing incorrect_dia_files.csv and incorrect_dda_files.csv",
 )
 DRY_RUN_OPTION = typer.Option(

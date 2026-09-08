@@ -48,7 +48,7 @@ python split_labelled_data.py split \
     --mode split-only
 
 # 5. Shuffle the splits
-python shuffle_2pass.py --base-dir <data-root> --output-dir shuffled_splits
+python shuffle_2pass.py --input-dir <data-root>/lcfm_splits --output-dir shuffled_splits
 ```
 
 ### About the peptide registry
@@ -78,7 +78,9 @@ Creates train/test/validation splits from labelled peptide data using the peptid
 
 ```bash
 # Basic usage (download HF registry, update + split)
-python split_labelled_data.py split
+python split_labelled_data.py split \
+    --input-dir <data-root>/lcfm \
+    --output-dir <data-root>/lcfm_splits
 
 # Custom parameters
 python split_labelled_data.py split \
@@ -187,22 +189,23 @@ High-performance shuffling for large datasets (such as ACFM and LCFM).
 ```bash
 # Basic usage (auto-detects optimal settings)
 python shuffle_2pass.py \
-    --base-dir <data-root> \
+    --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits
 
 # Custom configuration
 python shuffle_2pass.py \
-    --base-dir <data-root> \
+    --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits \
-    --target-chunk-size 100000 \
-    --first-pass-processes 8 \
-    --second-pass-processes 8 \
+    --chunk-size 100000 \
+    --pass1-procs 8 \
+    --pass2-procs 8 \
     --seed 42
 
 # Memory forecasting
 python shuffle_2pass.py \
-    --forecast-chunk-size \
-    --available-ram-gb 32
+    --forecast \
+    --ram-gb 32 \
+    --sample-file train_0.parquet
 ```
 
 **Key features:**
@@ -221,12 +224,13 @@ Simple and fast shuffling for the smallest datasets that fit entirely in RAM.
 ```bash
 # Basic usage
 python shuffle_in_ram.py \
-    --base-dir <data-root> \
-    --output-dir shuffled_splits
+    --input-dir <data-root>/hcfm_splits \
+    --output-dir shuffled_splits \
+    --target-chunk-size 50000
 
 # Custom configuration
 python shuffle_in_ram.py \
-    --base-dir <data-root> \
+    --input-dir <data-root>/hcfm_splits \
     --output-dir shuffled_splits \
     --target-chunk-size 50000 \
     --seed 42
@@ -255,7 +259,7 @@ Slower but simpler shuffling approach for smaller datasets that still do not fit
 ```bash
 # Basic usage
 python shuffle_indices.py \
-    --base-dir <data-root> \
+    --input-dir <data-root> \
     --output-dir shuffled_splits \
     --chunk-size 400000 \
     --seed 42

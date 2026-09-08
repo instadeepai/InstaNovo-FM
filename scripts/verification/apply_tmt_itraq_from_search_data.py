@@ -64,7 +64,11 @@ from scripts.verification.verify_calc_mz import (
     label_unmodified_lysines,
 )
 
-app = typer.Typer(help="Apply TMT or iTRAQ lysine labels using search-data Excel")
+app = typer.Typer(
+    help="Apply TMT or iTRAQ lysine labels using search-data Excel",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

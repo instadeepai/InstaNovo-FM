@@ -105,7 +105,7 @@ This identifies four problems:
 ```bash
 python scripts/verification/verify_calc_mz.py \
     --input-dir <data-root>/lcfm/ \
-    --output-csv calc_mz_verification.csv \
+    --output-file calc_mz_verification.csv \
     --search-data search_data_with_new_projects.xlsx \
     --tmt-projects-yaml bad_tmt_projects.yaml \
     --lysine-label-file-csv lysine_label_files.csv
@@ -123,7 +123,7 @@ It does not walk parquet files, but instead starts from the same gold-standard a
 
 ```bash
 python scripts/verification/build_unimod_mass_dictionary.py \
-    --gold-standard mod_dicts/gold_standard_modifications.xlsx \
+    --gold-standard-mods mod_dicts/gold_standard_modifications.xlsx \
     --ambiguous-mods mod_dicts/PXD009449_ambiguous_mods.xlsx \
     --output-dir mod_dicts
 ```

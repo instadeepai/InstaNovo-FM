@@ -29,24 +29,30 @@ CLI::
         --lsh-assignments splits/updated_lsh_assignments.parquet --mz-max 6000
 """
 
-import argparse
+import logging
 import glob
 import json
-import logging
 import os
 import pickle
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Annotated, Any, Dict, Iterator, List, Optional, Set, Tuple
 
 import numpy as np
 import polars as pl
+import typer
 
 from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+app = typer.Typer(
+    help="Split unlabelled spectra using LSH clustering",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -1247,81 +1253,111 @@ def _load_lsh_to_split(path: str) -> Dict:
     return lsh_to_split
 
 
-def main() -> None:
-    """Split unlabelled spectra into train/val/test with near-duplicates kept in one split.
+@app.command()
+def main(
+    input_dir: Annotated[
+        Path,
+        typer.Option("--input-dir", "-i", help="Directory of unlabelled parquet files"),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Destination for LSH assignments and splits"),
+    ] = Path("./splits"),
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="lsh_only, split_only, or full"),
+    ] = "full",
+    rows_per_file: Annotated[
+        int,
+        typer.Option("--rows-per-file", help="Rows per output shard"),
+    ] = 400_000,
+    mz_max: Annotated[
+        Optional[float],
+        typer.Option("--mz-max", help="Max m/z (required for split_only)"),
+    ] = None,
+    lsh_assignments: Annotated[
+        Optional[Path],
+        typer.Option("--lsh-assignments", help="Precomputed LSH assignments parquet"),
+    ] = None,
+    existing_lsh_assignments: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--existing-lsh-assignments",
+            help="Prior LSH table to extend when computing new hashes",
+        ),
+    ] = None,
+    updated_lsh_assignments: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--updated-lsh-assignments",
+            help="Where to write the updated LSH assignments table",
+        ),
+    ] = None,
+    checkpoint_interval: Annotated[
+        int,
+        typer.Option("--checkpoint-interval", help="Save checkpoint every N files"),
+    ] = 10,
+    no_checkpoint: Annotated[
+        bool,
+        typer.Option("--no-checkpoint", help="Disable checkpointing"),
+    ] = False,
+    clear_checkpoint: Annotated[
+        bool,
+        typer.Option("--clear-checkpoint", help="Delete existing checkpoint and start fresh"),
+    ] = False,
+) -> None:
+    """Split unlabelled spectra into train/val/test with near-duplicates kept in one split."""
+    if mode not in ("lsh_only", "split_only", "full"):
+        raise typer.BadParameter("--mode must be lsh_only, split_only, or full")
 
-    Locality-sensitive hashing puts similar spectra in one split. ``lsh_only`` saves assignments, ``split_only`` writes from a saved table, ``full`` does both; re-run to resume, or ``--clear-checkpoint`` to start over.
-
-    Raises:
-        ValueError: If the input directory holds no parquet files, or if
-            ``split_only`` is requested without ``--lsh-assignments`` and
-            ``--mz-max``, which it cannot reconstruct on its own.
-    """
-    parser = argparse.ArgumentParser(
-        description="Split unlabelled spectra using LSH clustering"
-    )
-    parser.add_argument(
-        "--mode",
-        choices=["lsh_only", "split_only", "full"],
-        default="full",
-    )
-    parser.add_argument("--input-dir", required=True)
-    parser.add_argument("--output-dir", default="./splits")
-    parser.add_argument("--rows-per-file", type=int, default=400_000)
-    parser.add_argument("--mz-max", type=float, default=None)
-    parser.add_argument("--lsh-assignments", default=None)
-    parser.add_argument("--existing-lsh-assignments", default=None)
-    parser.add_argument("--updated-lsh-assignments", default=None)
-    parser.add_argument("--checkpoint-interval", type=int, default=10)
-    parser.add_argument("--no-checkpoint", action="store_true")
-    parser.add_argument("--clear-checkpoint", action="store_true")
-    args = parser.parse_args()
-
-    _checkpoint = CheckpointManager(args.output_dir, interval=args.checkpoint_interval)
-    if args.clear_checkpoint:
+    _checkpoint = CheckpointManager(str(output_dir), interval=checkpoint_interval)
+    if clear_checkpoint:
         _checkpoint.clear_checkpoint()
-    ckpt_mgr: Optional[CheckpointManager] = None if args.no_checkpoint else _checkpoint
+    ckpt_mgr: Optional[CheckpointManager] = None if no_checkpoint else _checkpoint
 
-    parquet_files = find_files(args.input_dir)
+    parquet_files = find_files(str(input_dir))
     if not parquet_files:
-        raise ValueError(f"No parquet files in {args.input_dir}")
+        raise ValueError(f"No parquet files in {input_dir}")
 
     lsh_to_split: Optional[Dict] = None
     overall_mz_max: Optional[float] = None
 
-    if args.mode in ("lsh_only", "full"):
+    if mode in ("lsh_only", "full"):
         split_df, overall_mz_max = compute_lsh_assignments(
             parquet_files,
-            args.output_dir,
-            overall_mz_max=args.mz_max,
+            str(output_dir),
+            overall_mz_max=mz_max,
             checkpoint_manager=ckpt_mgr,
-            existing_lsh_assignments_path=args.existing_lsh_assignments,
-            updated_lsh_assignments_path=args.updated_lsh_assignments,
+            existing_lsh_assignments_path=(
+                str(existing_lsh_assignments) if existing_lsh_assignments else None
+            ),
+            updated_lsh_assignments_path=(
+                str(updated_lsh_assignments) if updated_lsh_assignments else None
+            ),
         )
-        if args.mode == "lsh_only":
+        if mode == "lsh_only":
             logger.info("LSH assignment complete!")
             return
-        # ``full`` mode splits the data next, which needs a hash→split lookup.
         lsh_to_split = dict(
             zip(split_df["lsh_hash"].to_list(), split_df["split"].to_list())
         )
 
-    if args.mode in ("split_only", "full"):
-        if args.mode == "split_only":
-            if not args.lsh_assignments:
+    if mode in ("split_only", "full"):
+        if mode == "split_only":
+            if not lsh_assignments:
                 raise ValueError("--lsh-assignments required for split_only")
-            if args.mz_max is None:
+            if mz_max is None:
                 raise ValueError("--mz-max required for split_only")
-            overall_mz_max = args.mz_max
-            lsh_to_split = _load_lsh_to_split(args.lsh_assignments)
+            overall_mz_max = mz_max
+            lsh_to_split = _load_lsh_to_split(str(lsh_assignments))
 
         assert lsh_to_split is not None
         assert overall_mz_max is not None
 
         process_and_write_files(
             parquet_files,
-            args.output_dir,
-            args.rows_per_file,
+            str(output_dir),
+            rows_per_file,
             overall_mz_max,
             lsh_to_split,
             checkpoint_manager=ckpt_mgr,
@@ -1332,5 +1368,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     t0 = time.perf_counter()
-    main()
+    app()
     print(f"Total wall time: {time.perf_counter() - t0:.1f}s")

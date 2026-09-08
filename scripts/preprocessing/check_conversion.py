@@ -6,52 +6,46 @@ before downstream preprocessing consumes them.
 CLI::
 
     python scripts/preprocessing/check_conversion.py --help
-    python scripts/preprocessing/check_conversion.py check-conversion <data-root>/acfm
-    python scripts/preprocessing/check_conversion.py batch-check <data-root>/acfm <data-root>/lcfm
+    python scripts/preprocessing/check_conversion.py --input-dir <data-root>/acfm --output-file missing_files.txt
+    python scripts/preprocessing/check_conversion.py --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file missing_files.txt
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
+from __future__ import annotations
+
 import os
-from tqdm import tqdm
 import re
-from typing import List, Tuple
 from pathlib import Path
+from typing import Annotated, List, Tuple
+
 import typer
+from tqdm import tqdm
 
-app = typer.Typer(help="Check IPC to Parquet conversion completeness")
-
-# Module-level constants to avoid B008 errors
-SOURCE_DIR_ARG = typer.Argument(..., help="Source directory to check")
-OUTPUT_FILE_OPTION = typer.Option(
-    "missing_files.txt", "--output", "-o", help="Output file for missing files"
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-DIRECTORIES_ARG = typer.Argument(..., help="Directories to check")
-OUTPUT_DIR_OPTION = typer.Option(
-    "outputs", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "missing_files", "--prefix", "-p", help="Prefix for output files"
+app = typer.Typer(
+    help="Check IPC to Parquet conversion completeness",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
 def check_missing_parquet_variants(
     source_dir: str,
-    output_file: str = "missing_files.txt",
+    output_file: str | None = None,
 ) -> List[Tuple[str, str]]:
     """Reveal conversion gaps so callers can rerun only incomplete IPC inputs.
 
     Args:
         source_dir: Directory whose IPC inputs and Parquet outputs should be compared.
-        output_file: Report destination for missing or inconsistent conversions.
+        output_file: Optional report destination; when None, only returns the list.
 
     Returns:
         IPC paths paired with reasons that their Parquet output is incomplete.
     """
     ipc_files = find_ipc_files(source_dir)
     missing_files = find_missing_parquet_files(ipc_files)
-    save_missing_files(output_file, missing_files)
+    if output_file is not None:
+        save_missing_files(output_file, missing_files)
     return missing_files
 
 
@@ -148,7 +142,6 @@ def save_missing_files(output_file: str, missing_files: List[Tuple[str, str]]) -
         missing_files: IPC paths and reasons to record.
     """
     if missing_files:
-        # Ensure output directory exists
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -161,93 +154,52 @@ def save_missing_files(output_file: str, missing_files: List[Tuple[str, str]]) -
 
 
 @app.command()
-def check_conversion(
-    source_dir: str = SOURCE_DIR_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Directory containing IPC inputs and Parquet outputs (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Output file for missing conversion paths",
+        ),
+    ] = Path("missing_files.txt"),
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Verify one directory before allowing its converted data downstream.
-
-    Args:
-        source_dir: Directory containing IPC inputs and expected Parquet outputs.
-        output_file: Report destination for incomplete conversions.
-        verbose: Whether to print input and output details.
-    """
+    """Verify IPC to Parquet conversion completeness."""
     if verbose:
-        typer.echo(f"Checking directory: {source_dir}")
+        typer.echo(f"Input dirs: {input_dir}")
         typer.echo(f"Output file: {output_file}")
 
-    if not os.path.exists(source_dir):
-        typer.echo(f"Error: Source directory '{source_dir}' does not exist", err=True)
-        raise typer.Exit(1)
-
-    missing = check_missing_parquet_variants(source_dir, output_file=output_file)
-
-    if missing:
-        typer.echo(f"Found {len(missing)} files with missing Parquet variants:")
-        for file, reason in missing:
-            typer.echo(f"  {file}: {reason}")
-    else:
-        typer.echo("All IPC files have complete Parquet variants.")
-
-
-@app.command()
-def batch_check(
-    directories: List[str] = DIRECTORIES_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Verify several dataset directories in one preprocessing run.
-
-    Args:
-        directories: Dataset directories to check.
-        output_dir: Directory that receives one report per dataset.
-        prefix: Prefix used to distinguish generated reports.
-    """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for directory in directories:
-        if not os.path.exists(directory):
+    all_missing: List[Tuple[str, str]] = []
+    for directory in input_dir:
+        if not directory.exists():
             typer.echo(
                 f"Warning: Directory '{directory}' does not exist, skipping...",
                 err=True,
             )
             continue
-
-        output_file = output_path / f"{prefix}_{Path(directory).name}.txt"
         typer.echo(f"Checking directory: {directory}")
-        check_missing_parquet_variants(directory, str(output_file))
+        all_missing.extend(check_missing_parquet_variants(str(directory)))
 
+    save_missing_files(str(output_file), all_missing)
 
-def main() -> None:
-    """Preserve backwards-compatible checks against the historical hardcoded paths."""
-    # Legacy behaviour for backwards compatibility
-    directories_to_check = [
-        "<data-root>/acfm",
-        "<data-root>/lcfm",
-        "<data-root>/mcfm",
-        "<data-root>/hcfm",
-    ]
-
-    for directory in directories_to_check:
-        if os.path.exists(directory):
-            typer.echo(f"Checking directory: {directory}")
-            output_file = (
-                f"preprocessing/outputs/missing_files_{os.path.basename(directory)}.txt"
-            )
-            missing = check_missing_parquet_variants(directory, output_file=output_file)
-
-            if missing:
-                typer.echo(
-                    f"Found {len(missing)} files with missing Parquet variants in {directory}"
-                )
-            else:
-                typer.echo(
-                    f"All IPC files in {directory} have complete Parquet variants."
-                )
-        else:
-            typer.echo(f"Warning: Directory '{directory}' does not exist", err=True)
+    if all_missing:
+        typer.echo(f"Found {len(all_missing)} files with missing Parquet variants:")
+        for file, reason in all_missing:
+            typer.echo(f"  {file}: {reason}")
+    else:
+        typer.echo("All IPC files have complete Parquet variants.")
 
 
 if __name__ == "__main__":

@@ -2,50 +2,38 @@
 
 Run this before validating or translating modification mappings so observed
 labels and representative spectrum metadata are available in an Excel report.
-Batch mode keeps reports separate across dataset roots.
 
 CLI::
 
     python scripts/preprocessing/find_modifications.py --help
-    python scripts/preprocessing/find_modifications.py find-mods <data-root>/lcfm
-    python scripts/preprocessing/find_modifications.py batch-find-mods <data-root>/lcfm <data-root>/hcfm
+    python scripts/preprocessing/find_modifications.py --input-dir <data-root>/lcfm --output-file modifications.xlsx
+    python scripts/preprocessing/find_modifications.py --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file modifications.xlsx
 
-Use ``python script.py command --help`` for flags.
+Use ``python script.py --help`` for flags.
 """
 
-import polars as pl
+from __future__ import annotations
+
+import glob
+import logging
 import os
 import re
-from tqdm import tqdm
-from typing import Union, List
-import logging
-import glob
 from pathlib import Path
-import typer
+from typing import Annotated, List, Union
 
-# Configure logging
+import polars as pl
+import typer
+from tqdm import tqdm
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="Find modifications in parquet files")
-
-# Module-level constants to avoid B008 errors
-INPUT_DIR_ARG = typer.Argument(..., help="Input directory to process")
-OUTPUT_FILE_OPTION = typer.Option(
-    "modifications.xlsx", "--output", "-o", help="Output file for modifications"
-)
-FILE_PATTERN_OPTION = typer.Option(
-    "**/*.parquet", "--pattern", "-p", help="File pattern to match"
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-INPUT_DIRS_ARG = typer.Argument(..., help="Input directories to process")
-OUTPUT_DIR_OPTION = typer.Option(
-    "output_files", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "modifications", "--prefix", "-p", help="Prefix for output files"
+app = typer.Typer(
+    help="Find modifications in parquet files",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
@@ -229,63 +217,91 @@ def find_modifications(
 
 
 @app.command()
-def find_mods(
-    input_dir: str = INPUT_DIR_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    file_pattern: str = FILE_PATTERN_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Dataset directory to inspect (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Excel destination for the modification inventory",
+        ),
+    ] = Path("modifications.xlsx"),
+    pattern: Annotated[
+        str,
+        typer.Option("--pattern", help="File pattern to match"),
+    ] = "**/*.parquet",
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Inventory observed labels before checking or applying modification mappings.
-
-    Args:
-        input_dir: Dataset directory to inspect.
-        output_file: Excel destination for the inventory.
-        file_pattern: Glob selecting Parquet files.
-        verbose: Whether to print scan details.
-    """
-    find_modifications(
-        input_dir=input_dir,
-        output_path=output_file,
-        file_pattern=file_pattern,
-        verbose=verbose,
-    )
-
-
-@app.command()
-def batch_find_mods(
-    input_dirs: List[str] = INPUT_DIRS_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    file_pattern: str = FILE_PATTERN_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Create separate modification inventories for several datasets.
-
-    Args:
-        input_dirs: Dataset directories to inspect.
-        output_dir: Directory that receives Excel reports.
-        file_pattern: Glob selecting Parquet files.
-        prefix: Prefix used for each report filename.
-    """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for input_dir in input_dirs:
-        output_file = output_path / f"{prefix}_{Path(input_dir).name}.xlsx"
-        typer.echo(f"Processing directory: {input_dir}")
+    """Inventory observed modification labels in parquet datasets."""
+    # Multiple trees: run find_modifications once per tree into temp frames via
+    # sequential calls that overwrite; better to concatenate by calling once on
+    # a combined walk. For simplicity, process dirs sequentially and merge by
+    # writing the last combined pass — call find_modifications for each and
+    # concat Excel is awkward; process all files through one path.
+    if len(input_dir) == 1:
         find_modifications(
-            input_dir=input_dir,
+            input_dir=str(input_dir[0]),
             output_path=str(output_file),
-            file_pattern=file_pattern,
+            file_pattern=pattern,
+            verbose=verbose,
         )
+        return
 
+    # Multiple dirs: inventary each into memory by temporarily writing then
+    # merging Excel sheets is heavy; instead concatenate by scanning all dirs
+    # through repeated find_modifications into a shared unique set via Excel
+    # rewrite. Use a temp approach: collect via find_modifications helpers.
+    frames: list[pl.DataFrame] = []
+    for directory in input_dir:
+        if not directory.exists():
+            typer.echo(
+                f"Warning: Directory '{directory}' does not exist, skipping...",
+                err=True,
+            )
+            continue
+        typer.echo(f"Processing directory: {directory}")
+        tmp = output_file.with_name(f".tmp_{directory.name}_{output_file.name}")
+        find_modifications(
+            input_dir=str(directory),
+            output_path=str(tmp),
+            file_pattern=pattern,
+            verbose=verbose,
+        )
+        if tmp.exists():
+            frames.append(pl.read_excel(tmp))
+            tmp.unlink()
 
-def main() -> None:
-    """Preserve backwards-compatible inventory of the historical hardcoded path."""
-    # Legacy behaviour for backwards compatibility
-    input_dir = "<data-root>/lcfm"  # Local mounted filesystem path
-    output_path = "output_files/modifications.xlsx"
+    if not frames:
+        typer.echo("No modifications found.")
+        return
 
-    find_modifications(input_dir, output_path)
+    merged = pl.concat(frames).unique(subset="modification")
+    if "mod_number" not in merged.columns:
+        merged = (
+            merged.with_columns(
+                pl.col("modification")
+                .str.extract(r"\[(\d+)\]")
+                .cast(pl.Int64)
+                .alias("mod_number"),
+                pl.col("modification").str.extract(r"^([A-Za-z])").alias("mod_letter"),
+            )
+            .sort(["mod_number", "mod_letter"])
+            .drop(["mod_letter"])
+        )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    merged.write_excel(output_file)
+    typer.echo(f"Modifications saved to {output_file}")
 
 
 if __name__ == "__main__":

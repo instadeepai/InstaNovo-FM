@@ -20,14 +20,14 @@ CLI::
 
 from __future__ import annotations
 
-import argparse
 import glob
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import polars as pl
+import typer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,6 +35,12 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+app = typer.Typer(
+    help="Shuffle split_labelled_data-style parquet shards entirely in RAM",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 
 def get_parquet_files(split_dir: str, split_type: str) -> List[str]:
@@ -202,57 +208,40 @@ def shuffle_split_labelled_output_folder(
         ram_shuffle_split(str(input_path), split_type, output_dir, chunk_size, seed)
 
 
-def main() -> None:
-    """Globally shuffle train/valid/test parquet shards that fit in RAM.
-
-    Run this after ``split_labelled_data.py`` to break up the file-order
-    correlation in its output, writing freshly-shuffled shards of
-    ``--target-chunk-size`` rows into a new directory. Reach for
-    ``shuffle_2pass.py`` instead when a single split is larger than memory.
-    """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Shuffle in RAM for split_labelled_data-style train_/valid_/test_ parquet shards "
-            "into a new directory with the same naming pattern."
-        )
-    )
-    parser.add_argument(
-        "--input-dir",
-        "-i",
-        required=True,
-        help="Directory containing train_*.parquet, valid_*.parquet, test_*.parquet",
-    )
-    parser.add_argument(
-        "--output-dir",
-        "-o",
-        required=True,
-        help="Directory for shuffled train_*.parquet, valid_*.parquet, test_*.parquet",
-    )
-    parser.add_argument(
-        "--target-chunk-size",
-        "-r",
-        type=int,
-        required=True,
-        help="Number of rows per output shard file",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Random seed for reproducibility (default: None)",
-    )
-
-    args = parser.parse_args()
+@app.command()
+def main(
+    input_dir: Annotated[
+        Path,
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Directory with train_/valid_/test_ parquet shards",
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory for shuffled shards"),
+    ],
+    target_chunk_size: Annotated[
+        int,
+        typer.Option("--target-chunk-size", help="Rows per output shard file"),
+    ],
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="Random seed for reproducibility"),
+    ] = None,
+) -> None:
+    """Globally shuffle train/valid/test parquet shards that fit in RAM."""
     logging.getLogger().setLevel(logging.INFO)
 
     shuffle_split_labelled_output_folder(
-        args.input_dir,
-        args.output_dir,
-        args.target_chunk_size,
-        args.seed,
+        str(input_dir),
+        str(output_dir),
+        target_chunk_size,
+        seed,
     )
     logger.info("\nShuffling complete!")
 
 
 if __name__ == "__main__":
-    main()
+    app()

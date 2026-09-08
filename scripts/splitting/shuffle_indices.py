@@ -18,22 +18,23 @@ CLI::
 
     python scripts/splitting/shuffle_indices.py --help
     python scripts/splitting/shuffle_indices.py \
-        --base-dir /data/root \
-        --output-dir test_output \
+        --input-dir /data/root \
+        --output-dir shuffled_splits \
         --chunk-size 400000 \
         --seed 42
 """
 
-import polars as pl
 import glob
 import os
 import random
-from pathlib import Path
-from typing import List, Dict, Optional
-import argparse
-from tqdm import tqdm
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated, Dict, List, Optional
+
+import polars as pl
+import typer
+from tqdm import tqdm
 
 
 @dataclass
@@ -479,60 +480,51 @@ def shuffle_all_splits(
                 continue
 
 
-def main() -> None:
-    """Shuffle every dataset's train/valid/test shards by permuting row addresses.
+app = typer.Typer(
+    help="Index-based shuffle of parquet files across splits",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
-    Run this when a split is too large to load but you want a simple,
-    dependency-free shuffle: only the index list is kept in memory. It re-reads
-    source files once per contributing chunk, so ``shuffle_2pass.py`` is the
-    faster choice at scale.
-    """
-    parser = argparse.ArgumentParser(
-        description="Index-based shuffle of parquet files across splits"
-    )
-    parser.add_argument(
-        "--base-dir",
-        default="<data-root>",
-        help="Base directory containing split folders (default: <data-root>)",
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=400000,
-        help="Target number of rows per chunk (default: 400000)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility (default: None)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="test_output",
-        help="Output directory for shuffled files (if None, overwrites original files)",
-    )
 
-    args = parser.parse_args()
-
-    print(f"Index-based shuffle of parquet files in {args.base_dir}")
-    print(f"Target chunk size: {args.chunk_size:,} rows")
-    if args.seed is not None:
-        print(f"Random seed: {args.seed}")
-    if args.output_dir is not None:
-        print(f"Output directory: {args.output_dir}")
-    else:
-        print("WARNING: Will overwrite original files!")
-
-    shuffle_all_splits(args.base_dir, args.chunk_size, args.seed, args.output_dir)
+@app.command()
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Root containing *_splits folders (repeatable)",
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Root for shuffled output"),
+    ],
+    chunk_size: Annotated[
+        int,
+        typer.Option("--chunk-size", help="Target rows per output chunk"),
+    ] = 400000,
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="Random seed for reproducibility"),
+    ] = 42,
+) -> None:
+    """Shuffle every dataset's train/valid/test shards by permuting row addresses."""
+    for base in input_dir:
+        print(f"Index-based shuffle of parquet files in {base}")
+        print(f"Target chunk size: {chunk_size:,} rows")
+        if seed is not None:
+            print(f"Random seed: {seed}")
+        print(f"Output directory: {output_dir}")
+        shuffle_all_splits(str(base), chunk_size, seed, str(output_dir))
 
     print("\nShuffling complete!")
 
 
 if __name__ == "__main__":
     start_time = time.time()
-    main()
+    app()
     end_time = time.time()
     print(
         f"Time taken for index-based shuffling: {(end_time - start_time) / 3600:.2f} hours"

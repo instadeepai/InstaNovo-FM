@@ -36,9 +36,33 @@ Steps 7 to 9 are documented in [`splitting/README.md`](splitting/README.md).
 
 ## CLI
 
-Most scripts use Typer, so every script and subcommand documents itself:
+Scripts use Typer. Most expose a single command (no subcommand), so:
 
 ```bash
-python script.py --help
-python script.py command --help
+python scripts/<stage>/<script>.py --help
+python scripts/<stage>/<script>.py --input-dir ...
 ```
+
+`split_labelled_data.py` is the exception: it keeps `split` and `batch` because `batch` is one combined registry pass, not a for-loop over independent runs.
+
+### Shared flags
+
+Use these names when a script needs the concept. Not every script takes every flag.
+
+| Role | Flag | Short | Notes |
+| --- | --- | --- | --- |
+| Data tree | `--input-dir` | `-i` | Repeatable. |
+| Path list / report in | `--input-file` | — | Repeatable. `-i` is reserved for `--input-dir`. |
+| Single parquet/ipc | `--input` | — | Intensity verify only; mutually exclusive with `--input-dir`. |
+| Output tree | `--output-dir` | — | Avoid `-o` so it cannot mean a file. |
+| Output file / report | `--output-file` | `-o` | |
+| Search Excel | `--search-data` | — | Required when the script uses it; no default filename. |
+| Gold / ambiguous mods | `--gold-standard-mods`, `--ambiguous-mods` | — | Options, not positionals. |
+| Project filter | `--project` | `-p` | Only use of `-p`. |
+| Dry run | `--dry-run` | `-n` | |
+| Verbose | `--verbose` | `-v` | |
+| Force (skip confirm) | `--force` | — | |
+| AWS | `--aws-profile` | — | |
+| Error log | `--error-log` | — | |
+
+Keep long, specific names with no short flag when two path-like things could be confused: `--registry-dir`, `--report-dir`, `--verification-csv`, `--residue-masses-file`, `--spec` / `--spec-file`, `--medium-output-dir` / `--high-output-dir`, `--lsh-assignments`, `--target-dir`.

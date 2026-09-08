@@ -41,7 +41,11 @@ from scripts.verification.verify_calc_mz import (
     find_parquet_files_in_project,
 )
 
-app = typer.Typer(help="Apply implicit carbamidomethylation from verify_calc_mz report")
+app = typer.Typer(
+    help="Apply implicit carbamidomethylation from verify_calc_mz report",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -57,7 +61,6 @@ INPUT_DIR_OPTION = typer.Option(
 VERIFICATION_CSV_OPTION = typer.Option(
     ...,
     "--verification-csv",
-    "-v",
     help="CSV report from verify_calc_mz.py",
 )
 DRY_RUN_OPTION = typer.Option(

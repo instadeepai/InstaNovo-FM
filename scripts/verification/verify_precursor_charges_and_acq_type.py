@@ -40,7 +40,11 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 import typer
 
-app = typer.Typer()
+app = typer.Typer(
+    help="Verify precursor charges against acquisition type",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -50,27 +54,24 @@ logger = logging.getLogger(__name__)
 
 # Module-level constants for CLI options
 INPUT_DIR_OPTION = typer.Option(
-    "<data-root>/lcfm/",
+    ...,
     "--input-dir",
     "-i",
     help="Input directory containing parquet files organised by project subfolders",
 )
 SEARCH_DATA_OPTION = typer.Option(
-    "search_data_with_new_projects.xlsx",
+    ...,
     "--search-data",
-    "-s",
-    help="Path to search data Excel file with project and acquisition columns",
+    help="Search-data Excel with project and acquisition columns",
 )
 OUTPUT_DIR_OPTION = typer.Option(
     ...,
     "--output-dir",
-    "-o",
-    help="Directory to write the output CSV reports to (one for each acquisition type)",
+    help="Directory for incorrect_dia/dda CSV reports",
 )
 AWS_PROFILE_OPTION = typer.Option(
     None,
     "--aws-profile",
-    "-p",
     help="AWS profile name for S3 access (read from ~/.aws/)",
 )
 

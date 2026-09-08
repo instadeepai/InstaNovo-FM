@@ -38,25 +38,24 @@ CLI::
 
     # Basic run: single directory
     python scripts/splitting/shuffle_2pass.py \
-        --base-dir /data/shards --output-dir /data/shuffled
+        --input-dir /data/shards --output-dir /data/shuffled
 
     # Combine multiple dataset directories into a single shuffled output
     python scripts/splitting/shuffle_2pass.py \
-        --base-dirs /data/dataset1 /data/dataset2 /data/dataset3 \
-        --output-dir /data/shuffled
+        --input-dir /data/dataset1 --input-dir /data/dataset2 \
+        --input-dir /data/dataset3 --output-dir /data/shuffled
 
     # Custom chunk size + seed for reproducibility
     python scripts/splitting/shuffle_2pass.py \
-        --base-dir /data/shards --output-dir /data/shuffled \
+        --input-dir /data/shards --output-dir /data/shuffled \
         --chunk-size 200000 --seed 42
 
     # Different parallelism per stage
     python scripts/splitting/shuffle_2pass.py \
-        --base-dir /data/shards --output-dir /data/shuffled \
+        --input-dir /data/shards --output-dir /data/shuffled \
         --pass1-procs 4 --pass2-procs 8
 """
 
-import argparse
 import glob
 import hashlib
 import logging
@@ -68,13 +67,19 @@ import tempfile
 import time
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Annotated, Any, Callable, List, Optional, Union
 
 import numpy as np
 import polars as pl
+import typer
 
 logger = logging.getLogger(__name__)
 
+app = typer.Typer(
+    help="2-pass out-of-core shuffle for large parquet splits",
+    no_args_is_help=True,
+    add_completion=False,
+)
 # ── Forecasting ──────────────────────────────────────────────────────────────
 
 
@@ -514,26 +519,34 @@ def shuffle_all(
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
-def _handle_forecast(args: argparse.Namespace) -> None:
+def _handle_forecast(
+    ram_gb: Optional[float],
+    bytes_per_row: float,
+    sample_file: Optional[str],
+    pass1_procs: Optional[int],
+    pass2_procs: Optional[int],
+    num_procs: Optional[int],
+    safety: float,
+) -> None:
     """Render the ``--forecast`` report so a chunk size can be chosen before committing hours."""
-    ram = args.ram_gb or detect_ram_gb()
-    bpr = args.bytes_per_row
-    if args.sample_file and os.path.exists(args.sample_file):
-        bpr = estimate_bytes_per_row(args.sample_file)
+    ram = ram_gb or detect_ram_gb()
+    bpr = bytes_per_row
+    if sample_file and os.path.exists(sample_file):
+        bpr = estimate_bytes_per_row(sample_file)
 
-    p1 = args.pass1_procs or args.num_procs or mp.cpu_count()
-    p2 = args.pass2_procs or args.num_procs or mp.cpu_count()
+    p1 = pass1_procs or num_procs or mp.cpu_count()
+    p2 = pass2_procs or num_procs or mp.cpu_count()
 
     print(f"\n{'=' * 60}")
     print("CHUNK-SIZE FORECAST")
     print(f"{'=' * 60}")
-    print(f"RAM: {ram:.1f} GB  |  bytes/row: {bpr:.0f}  |  safety: {args.safety:.0%}")
+    print(f"RAM: {ram:.1f} GB  |  bytes/row: {bpr:.0f}  |  safety: {safety:.0%}")
 
     for label, procs, is_p2 in [
         ("Pass 1 (scatter)", p1, False),
         ("Pass 2 (shuffle, 2× mem)", p2, True),
     ]:
-        f = forecast_chunk_size(ram, procs, bpr, args.safety, pass2=is_p2)
+        f = forecast_chunk_size(ram, procs, bpr, safety, pass2=is_p2)
         print(f"\n{label}  ({procs} procs):")
         print(f"  Max chunk size : {f['max_chunk_size']:>12,} rows")
         print(f"  Mem / process  : {f['data_memory_per_process_gb']:>8.2f} GB")
@@ -541,152 +554,113 @@ def _handle_forecast(args: argparse.Namespace) -> None:
         print(f"  RAM utilisation : {f['ram_utilization_pct']:>7.1f}%")
 
     rec = min(
-        forecast_chunk_size(ram, p1, bpr, args.safety, pass2=False)["max_chunk_size"],
-        forecast_chunk_size(ram, p2, bpr, args.safety, pass2=True)["max_chunk_size"],
+        forecast_chunk_size(ram, p1, bpr, safety, pass2=False)["max_chunk_size"],
+        forecast_chunk_size(ram, p2, bpr, safety, pass2=True)["max_chunk_size"],
     )
     print(f"\n{'=' * 60}")
     print(f"Recommended --chunk-size: {rec:,}")
     print(f"{'=' * 60}\n")
 
 
-def main() -> None:
-    """Shuffle sharded parquet splits that do not fit in RAM, using a 2-pass scatter/shuffle.
-
-    Run this to randomise training order over a corpus too large to load, or to
-    merge several dataset directories into one shuffled output. Pass
-    ``--forecast`` first to size ``--chunk-size`` against this machine's RAM
-    instead of discovering the limit by OOMing part-way through.
-
-    Raises:
-        SystemExit: Via argparse when neither ``--base-dir`` nor ``--base-dirs``
-            is given together with ``--output-dir`` (outside ``--forecast``).
-    """
-    parser = argparse.ArgumentParser(
-        description="2-pass out-of-core shuffle for large parquet splits.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--base-dir",
-        help="Single directory containing sharded parquet files (backwards-compatible).",
-    )
-    parser.add_argument(
-        "--base-dirs",
-        nargs="+",
-        default=None,
-        metavar="DIR",
-        help=(
-            "One or more directories containing train_*.parquet, valid_*.parquet, "
-            "test_*.parquet shards.  Files from all directories are combined into "
-            "a single shuffled output.  Can be used together with --base-dir."
+@app.command()
+def main(
+    input_dir: Annotated[
+        Optional[List[Path]],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Directory with train_/valid_/test_ shards (repeatable)",
         ),
-    )
-    parser.add_argument("--output-dir", help="Output directory for shuffled files.")
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=None,
-        help="Target rows per pile.  Auto-derived from RAM if omitted.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Random seed for reproducibility.",
-    )
-    parser.add_argument(
-        "--num-procs",
-        type=int,
-        default=None,
-        help="Default process count (fallback for --pass1/2-procs).",
-    )
-    parser.add_argument(
-        "--pass1-procs",
-        type=int,
-        default=None,
-        help="Processes for pass 1 (scatter).",
-    )
-    parser.add_argument(
-        "--pass2-procs",
-        type=int,
-        default=None,
-        help="Processes for pass 2 (shuffle).",
-    )
-    parser.add_argument(
-        "--ram-gb",
-        type=float,
-        default=None,
-        help="Total system RAM in GB (auto-detected if omitted).",
-    )
-    parser.add_argument(
-        "--bytes-per-row",
-        type=float,
-        default=1000.0,
-        help="Estimated bytes per row (default: 1000).",
-    )
-    parser.add_argument(
-        "--safety",
-        type=float,
-        default=0.7,
-        help="RAM safety factor 0–1 (default: 0.7).",
-    )
-    parser.add_argument(
-        "--sample-file",
-        help="Parquet file to auto-estimate bytes/row from.",
-    )
-    parser.add_argument(
-        "--forecast",
-        action="store_true",
-        help="Print chunk-size forecast and exit.",
-    )
-    parser.add_argument(
-        "--temp-dir",
-        default=None,
-        metavar="DIR",
-        help=(
-            "Parent directory for pass-1 temporary pile files (unique subdir per split). "
-            "Default: system temp (TMPDIR or /tmp)."
-        ),
-    )
-
-    args = parser.parse_args()
-
+    ] = None,
+    output_dir: Annotated[
+        Optional[Path],
+        typer.Option("--output-dir", help="Output directory for shuffled files"),
+    ] = None,
+    chunk_size: Annotated[
+        Optional[int],
+        typer.Option("--chunk-size", help="Target rows per pile (auto from RAM if omitted)"),
+    ] = None,
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="Random seed for reproducibility"),
+    ] = None,
+    num_procs: Annotated[
+        Optional[int],
+        typer.Option("--num-procs", help="Default process count for both passes"),
+    ] = None,
+    pass1_procs: Annotated[
+        Optional[int],
+        typer.Option("--pass1-procs", help="Processes for pass 1 (scatter)"),
+    ] = None,
+    pass2_procs: Annotated[
+        Optional[int],
+        typer.Option("--pass2-procs", help="Processes for pass 2 (shuffle)"),
+    ] = None,
+    ram_gb: Annotated[
+        Optional[float],
+        typer.Option("--ram-gb", help="Total system RAM in GB (auto-detected if omitted)"),
+    ] = None,
+    bytes_per_row: Annotated[
+        float,
+        typer.Option("--bytes-per-row", help="Estimated bytes per row"),
+    ] = 1000.0,
+    safety: Annotated[
+        float,
+        typer.Option("--safety", help="RAM safety factor 0–1"),
+    ] = 0.7,
+    sample_file: Annotated[
+        Optional[Path],
+        typer.Option("--sample-file", help="Parquet file to estimate bytes/row from"),
+    ] = None,
+    forecast: Annotated[
+        bool,
+        typer.Option("--forecast", help="Print chunk-size forecast and exit"),
+    ] = False,
+    temp_dir: Annotated[
+        Optional[Path],
+        typer.Option("--temp-dir", help="Parent directory for pass-1 temporary piles"),
+    ] = None,
+) -> None:
+    """Shuffle sharded parquet splits that do not fit in RAM, using a 2-pass scatter/shuffle."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
         datefmt="%H:%M:%S",
     )
 
-    if args.forecast:
-        _handle_forecast(args)
+    if forecast:
+        _handle_forecast(
+            ram_gb=ram_gb,
+            bytes_per_row=bytes_per_row,
+            sample_file=str(sample_file) if sample_file else None,
+            pass1_procs=pass1_procs,
+            pass2_procs=pass2_procs,
+            num_procs=num_procs,
+            safety=safety,
+        )
         return
 
-    dirs: list[str] = []
-    if args.base_dir:
-        dirs.append(args.base_dir)
-    if args.base_dirs:
-        dirs.extend(args.base_dirs)
-
-    if not dirs or not args.output_dir:
-        parser.error(
-            "--output-dir and at least one of --base-dir / --base-dirs "
-            "are required (unless --forecast)"
+    dirs = [str(d) for d in (input_dir or [])]
+    if not dirs or output_dir is None:
+        raise typer.BadParameter(
+            "--output-dir and at least one --input-dir are required (unless --forecast)"
         )
 
     shuffle_all(
         dirs,
-        args.output_dir,
-        chunk_size=args.chunk_size,
-        seed=args.seed,
-        pass1_procs=args.pass1_procs or args.num_procs,
-        pass2_procs=args.pass2_procs or args.num_procs,
-        ram_gb=args.ram_gb,
-        bytes_per_row=args.bytes_per_row,
-        safety=args.safety,
-        temp_dir=args.temp_dir,
+        str(output_dir),
+        chunk_size=chunk_size,
+        seed=seed,
+        pass1_procs=pass1_procs or num_procs,
+        pass2_procs=pass2_procs or num_procs,
+        ram_gb=ram_gb,
+        bytes_per_row=bytes_per_row,
+        safety=safety,
+        temp_dir=str(temp_dir) if temp_dir else None,
     )
 
 
 if __name__ == "__main__":
     t0 = time.perf_counter()
-    main()
+    app()
     print(f"\nTotal wall time: {time.perf_counter() - t0:.1f}s")

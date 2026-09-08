@@ -12,7 +12,7 @@ CLI::
 
     python scripts/verification/build_unimod_mass_dictionary.py --help
     python scripts/verification/build_unimod_mass_dictionary.py \
-        --gold-standard mod_dicts/gold_standard_modifications.xlsx \
+        --gold-standard-mods mod_dicts/gold_standard_modifications.xlsx \
         --ambiguous-mods mod_dicts/PXD009449_ambiguous_mods.xlsx \
         --output-dir mod_dicts
 """
@@ -52,7 +52,11 @@ POSITION_MAP = {
     "6": "Protein C-term",
 }
 
-app = typer.Typer(help="Build UNIMOD mass dictionary from Excel modification files.")
+app = typer.Typer(
+    help="Build UNIMOD mass dictionary from Excel modification files.",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 
 def read_excel_files(
@@ -895,11 +899,10 @@ def run_pipeline(
 
 @app.command()
 def main(
-    gold_standard: Annotated[
+    gold_standard_mods: Annotated[
         Path,
         typer.Option(
-            "--gold-standard",
-            "-g",
+            "--gold-standard-mods",
             help="Path to gold standard modifications Excel file.",
             exists=True,
             dir_okay=False,
@@ -909,7 +912,6 @@ def main(
         Path,
         typer.Option(
             "--ambiguous-mods",
-            "-a",
             help="Path to ambiguous modifications Excel file.",
             exists=True,
             dir_okay=False,
@@ -919,7 +921,6 @@ def main(
         Path,
         typer.Option(
             "--output-dir",
-            "-o",
             help="Output directory for generated files.",
             file_okay=False,
         ),
@@ -928,11 +929,11 @@ def main(
     """Build a UNIMOD mass dictionary from Excel annotation files for calc_mz and training.
 
     Args:
-        gold_standard: Path to gold standard modifications Excel file.
+        gold_standard_mods: Path to gold standard modifications Excel file.
         ambiguous_mods: Path to ambiguous modifications Excel file.
         output_dir: Output directory for generated files.
     """
-    run_pipeline(gold_standard, ambiguous_mods, output_dir)
+    run_pipeline(gold_standard_mods, ambiguous_mods, output_dir)
 
 
 if __name__ == "__main__":

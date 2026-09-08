@@ -18,8 +18,8 @@ CLI::
 
     python scripts/splitting/split_labelled_data.py --help
     python scripts/splitting/split_labelled_data.py split --input-dir lcfm --output-dir splits
-    python scripts/splitting/split_labelled_data.py split -i lcfm -o splits --mode split-only
-    python scripts/splitting/split_labelled_data.py split -i data -o splits \\
+    python scripts/splitting/split_labelled_data.py split -i lcfm --output-dir splits --mode split-only
+    python scripts/splitting/split_labelled_data.py split -i data --output-dir splits \\
         --column-remap '{"legacy_peptide":"unmodified_peptide"}'
     python scripts/splitting/split_labelled_data.py batch dir1 dir2 --output-dir splits/
 """
@@ -43,7 +43,11 @@ import polars as pl
 import typer
 from huggingface_hub import HfApi, hf_hub_download
 
-app = typer.Typer()
+app = typer.Typer(
+    help="Split labelled parquet into peptide-disjoint train/test/valid",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -148,14 +152,40 @@ class Mode(str, Enum):
     BOTH = "both"
 
 
-INPUT_DIR_OPTION = typer.Option("lcfm", "--input-dir", "-i")
-OUTPUT_DIR_OPTION = typer.Option("lcfm_splits", "--output-dir", "-o")
-ROWS_PER_FILE_OPTION = typer.Option(400_000, "--rows-per-file", "-r")
-REGISTRY_DIR_OPTION = typer.Option(None, "--registry-dir")
-MODE_OPTION = typer.Option(Mode.BOTH, "--mode", "-m")
-UPLOAD_REGISTRY_OPTION = typer.Option(False, "--upload-registry-to-hf")
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v")
-INPUT_DIRS_ARG = typer.Argument(..., help="Input directories to process")
+INPUT_DIR_OPTION = typer.Option(
+    ...,
+    "--input-dir",
+    "-i",
+    help="Directory of labelled parquet files to split",
+)
+OUTPUT_DIR_OPTION = typer.Option(
+    ...,
+    "--output-dir",
+    help="Destination for the registry and split shards",
+)
+ROWS_PER_FILE_OPTION = typer.Option(
+    400_000,
+    "--rows-per-file",
+    help="Rows per output shard",
+)
+REGISTRY_DIR_OPTION = typer.Option(
+    None,
+    "--registry-dir",
+    help="Local registry directory; omit to download from HuggingFace",
+)
+MODE_OPTION = typer.Option(
+    Mode.BOTH,
+    "--mode",
+    "-m",
+    help="update-splits, split-only, or both",
+)
+UPLOAD_REGISTRY_OPTION = typer.Option(
+    False,
+    "--upload-registry-to-hf",
+    help="Publish the updated registry to the shared HuggingFace repo",
+)
+VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable DEBUG logging")
+INPUT_DIRS_ARG = typer.Argument(..., help="Input directories to process as one corpus")
 COLUMN_REMAP_OPTION = typer.Option(
     None,
     "--column-remap",

@@ -196,7 +196,6 @@ def denovo_predict(
             "`instanovo-fm denovo predict --denovo-model=path/to/model.ckpt`."
         )
 
-    logger.info("Initializing InstaNovo downstream de novo inference.")
     from instanovo_fm.downstream.de_novo_sequencing.predict import DownstreamDeNovoPredictor
 
     predictor = DownstreamDeNovoPredictor(config)

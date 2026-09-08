@@ -3,11 +3,9 @@
 Two things are checked:
 
 1. The file carries no internal filesystem paths. The upstream copy has a
-   ``file path`` column holding ~25.8k Windows UNC paths under an internal
-   host, which exposes an internal hostname, a team's folder tree and a
-   colleague's name. This repository is public, so our copy is a deliberate
-   sanitised derivative: the column is dropped. It is therefore *not*
-   byte-identical to the Figshare original, by design.
+   ``file path`` column holding Windows UNC paths under an internal host.  Our
+   copy retains that column only as a raw-file-name lookup key: each value is
+   the basename of the upstream path, with no directory information.
 
 2. The analysis-relevant content still matches the Figshare original. Run with
    ``--figshare-search-data=<path>`` (or set FIGSHARE_SEARCH_DATA) pointing at
@@ -19,6 +17,7 @@ Two things are checked:
 from __future__ import annotations
 
 import os
+import ntpath
 import pathlib
 import re
 
@@ -41,8 +40,7 @@ USED_COLUMNS = [
     "organism",
 ]
 
-# Dropped from our copy because it leaks internal infrastructure.
-FORBIDDEN_COLUMNS = ["file path"]
+RAW_FILENAME_COLUMN = "file path"
 
 PATH_PATTERNS = [
     re.compile(r"\\\\[A-Za-z0-9._-]+\\"),  # \\host\share
@@ -62,12 +60,14 @@ def test_expected_columns_present(local: pd.DataFrame) -> None:
     assert not missing, f"columns the notebooks read are missing: {missing}"
 
 
-def test_no_forbidden_columns(local: pd.DataFrame) -> None:
-    present = [c for c in FORBIDDEN_COLUMNS if c in local.columns]
-    assert not present, (
-        f"{present} must not be committed: it holds internal filesystem paths "
-        "and this repository is public"
+def test_raw_filename_column_is_present_and_sanitised(local: pd.DataFrame) -> None:
+    assert RAW_FILENAME_COLUMN in local.columns
+    filenames = local[RAW_FILENAME_COLUMN].dropna().astype(str)
+    assert not filenames.empty
+    assert filenames.map(ntpath.basename).eq(filenames).all(), (
+        "file path must contain only raw file names, never directory paths"
     )
+    assert not filenames.str.contains(r"[\\\\/]", regex=True).any()
 
 
 def test_no_internal_paths_in_any_cell(local: pd.DataFrame) -> None:
@@ -113,9 +113,8 @@ def test_matches_figshare_original(request: pytest.FixtureRequest, local: pd.Dat
     b = other[shared].sort_values(shared).reset_index(drop=True).astype(str)
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
 
-    # The only intended difference is the removal of the path column.
-    extra = sorted(set(other.columns) - set(local.columns))
-    assert extra == FORBIDDEN_COLUMNS, (
-        f"unexpected columns present upstream but not locally: "
-        f"{[c for c in extra if c not in FORBIDDEN_COLUMNS]}"
+    assert set(other.columns) == set(local.columns)
+    expected_filenames = other[RAW_FILENAME_COLUMN].map(ntpath.basename)
+    pd.testing.assert_series_equal(
+        local[RAW_FILENAME_COLUMN], expected_filenames, check_names=False
     )

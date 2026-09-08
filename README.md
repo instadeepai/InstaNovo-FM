@@ -81,6 +81,30 @@ uv sync --extra interpret  # for UMAP visualization
 Everything is driven by module entry points and Hydra configs from
 `src/instanovo_fm/configs/`.
 
+### Load a pretrained checkpoint
+
+```python
+from instanovo_fm.model.encoder import FoundationModel
+
+FoundationModel.get_pretrained()
+# ['instanovo-fm-v0.1.0', 'instanovo-fm-lcfm-ts-pa-v0.1.0', ...]
+
+model, config = FoundationModel.from_pretrained("instanovo-fm-v0.1.0")
+```
+
+By id, the checkpoint is downloaded from this repository's
+[Releases](https://github.com/instadeepai/InstaNovo-FM/releases) and cached under
+`~/.cache/instanovo-fm/`. A path or a `.ckpt` filename loads from disk instead:
+
+```python
+model, config = FoundationModel.from_pretrained("checkpoints/model_best.ckpt")
+```
+
+The registry is [`src/instanovo_fm/models.json`](src/instanovo_fm/models.json) and covers
+the published model, the four cells of the masking/attention-bias factorial, and the MCFM
+scaling baseline. **By id needs the release to exist** — until then use a local path; see
+[Pretrained weights & data](#pretrained-weights--data).
+
 ### Extract embeddings and run the evaluation tasks
 
 ```bash
@@ -129,9 +153,13 @@ the paper:
   and `by_project/` holds the tier before filtering and splitting, one directory per accession,
   so alternative partitions can be derived. The central peptide registry of split assignments
   ships alongside, so the partitions can be reproduced and extended. ACFM itself is not released.
-- **Model checkpoints:** *Not yet available.* Will be published from this repository's
-  [Releases](https://github.com/instadeepai/InstaNovo-FM/releases) under CC BY-NC-SA 4.0
-  (see [License](#license))._
+- **Model checkpoints:** *Not yet released.* They will be attached to a
+  [Release](https://github.com/instadeepai/InstaNovo-FM/releases) under CC BY-NC-SA 4.0
+  (see [License](#license)). The loader is already wired for them:
+  [`models.json`](src/instanovo_fm/models.json) registers the five checkpoints against
+  their release-asset URLs, so `FoundationModel.from_pretrained("instanovo-fm-v0.1.0")`
+  starts working the moment the release is cut with those asset names. Until then it
+  reports the 404 and the URL it tried.
 - **Embeddings:** *Not yet available.* An interactive explorer for the frozen embedding space
   is hosted at [instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM)
   (goes live with the repository).

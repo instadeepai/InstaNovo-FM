@@ -1,0 +1,59 @@
+{
+  "foundational": {
+    "instanovo-fm-v0.1.0": {
+      "remote": "https://github.com/instadeepai/InstaNovo-FM/releases/download/0.1.0/instanovo-fm-v0.1.0.ckpt",
+      "description": "The published foundation model. Every TS-noPA number in the paper comes from this checkpoint.",
+      "corpus": "LCFM",
+      "masking": "thompson_span with isotope co-masking",
+      "pairwise_bias": false,
+      "layers": 12,
+      "model_dimension": 768,
+      "attention_heads": 12,
+      "feedforward_dimension": 3072,
+      "parameters": "89.5M",
+      "training_steps": 230000
+    },
+    "instanovo-fm-lcfm-ts-pa-v0.1.0": {
+      "remote": "https://github.com/instadeepai/InstaNovo-FM/releases/download/0.1.0/instanovo-fm-lcfm-ts-pa-v0.1.0.ckpt",
+      "description": "Factorial ablation TS-PA: Thompson-span masking with the pairwise attention bias.",
+      "corpus": "LCFM",
+      "masking": "thompson_span with isotope co-masking",
+      "pairwise_bias": true,
+      "layers": 12,
+      "feedforward_dimension": 3072,
+      "training_steps": 230000
+    },
+    "instanovo-fm-lcfm-sa-nopa-v0.1.0": {
+      "remote": "https://github.com/instadeepai/InstaNovo-FM/releases/download/0.1.0/instanovo-fm-lcfm-sa-nopa-v0.1.0.ckpt",
+      "description": "Factorial ablation SA-noPA: signal-aware fragment masking, no pairwise attention bias.",
+      "corpus": "LCFM",
+      "masking": "signal_aware_fragment",
+      "pairwise_bias": false,
+      "layers": 12,
+      "feedforward_dimension": 3072,
+      "training_steps": 230000
+    },
+    "instanovo-fm-lcfm-sa-pa-v0.1.0": {
+      "remote": "https://github.com/instadeepai/InstaNovo-FM/releases/download/0.1.0/instanovo-fm-lcfm-sa-pa-v0.1.0.ckpt",
+      "description": "Factorial ablation SA-PA: signal-aware fragment masking with the pairwise attention bias.",
+      "corpus": "LCFM",
+      "masking": "signal_aware_fragment",
+      "pairwise_bias": true,
+      "layers": 12,
+      "feedforward_dimension": 3072,
+      "training_steps": 230000
+    },
+    "instanovo-fm-mcfm-90k-v0.1.0": {
+      "remote": "https://github.com/instadeepai/InstaNovo-FM/releases/download/0.1.0/instanovo-fm-mcfm-90k-v0.1.0.ckpt",
+      "description": "The corpus-scale comparison baseline: a smaller model trained on the curated MCFM subset.",
+      "corpus": "MCFM",
+      "masking": "thompson_span with isotope co-masking",
+      "pairwise_bias": false,
+      "layers": 9,
+      "feedforward_dimension": 1024,
+      "parameters": "40M",
+      "training_steps": 90000
+    }
+  },
+  "downstream_denovo": {}
+}

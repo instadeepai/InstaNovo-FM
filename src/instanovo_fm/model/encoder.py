@@ -1328,7 +1328,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
             List of available pretrained model IDs
         """
         try:
-            with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+            with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
                 models_config = json.load(f)
 
             if MODEL_TYPE not in models_config:
@@ -1507,8 +1507,10 @@ class FoundationModel(nn.Module, PadTokenMixin):
             else:
                 raise FileNotFoundError(f"No file found at path: {model_id}")
 
-        # Load models.json
-        with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+        # This package's own registry. It used to read the one inside the
+        # installed `instanovo` package, which has only `transformer` and
+        # `diffusion` keys, so every by-id lookup here reported no models at all.
+        with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 
         # Find model in config
@@ -1520,7 +1522,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
         url = model_info["remote"]
 
         # Create cache directory
-        cache_dir = Path.home() / ".cache" / "instanovo"
+        cache_dir = Path.home() / ".cache" / "instanovo-fm"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename

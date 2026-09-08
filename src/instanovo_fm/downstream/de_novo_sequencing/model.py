@@ -42,7 +42,10 @@ from instanovo.utils.colorlogging import ColorLog
 from instanovo.utils.file_downloader import download_file
 from instanovo.utils.residues import ResidueSet
 
-MODEL_TYPE = "transformer"
+# This model has its own checkpoint family. It was "transformer", inherited from
+# the class this was derived from, which made from_pretrained offer InstaNovo's
+# checkpoints -- a different architecture from the one load() builds.
+MODEL_TYPE = "downstream_denovo"
 
 
 logger = ColorLog(console, __name__).logger
@@ -214,7 +217,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
     def get_pretrained() -> list[str]:
         """Get a list of pretrained model ids."""
         # Load the models.json file
-        with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+        with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 
         if MODEL_TYPE not in models_config:
@@ -226,7 +229,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
     def load(
         cls, path: str, update_residues_to_unimod: bool = True, override_config: DictConfig | dict | None = None
     ) -> tuple["DownstreamDeNovo", "DictConfig"]:
-        """Load InstaNovo model from checkpoint path.
+        """Load a DownstreamDeNovo model from a checkpoint path.
 
         Args:
             path (str): Path to checkpoint file.
@@ -234,7 +237,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
             override_config (DictConfig | dict | None): Optional override config values with a DictConfig or dict, defaults to None.
 
         Returns:
-            tuple[InstaNovo, DictConfig]: Tuple of model and config.
+            tuple[DownstreamDeNovo, DictConfig]: Tuple of model and config.
         """
         # Add to allow list
         _whitelist_torch_omegaconf()
@@ -301,7 +304,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
             override_config (DictConfig | dict | None): Optional override config values with a DictConfig or dict, defaults to None.
 
         Returns:
-            tuple[InstaNovo, DictConfig]: Tuple of model and config.
+            tuple[DownstreamDeNovo, DictConfig]: Tuple of model and config.
         """
         # TODO Refactor to use across methods
         # Check if model_id is a local file path
@@ -312,7 +315,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
                 raise FileNotFoundError(f"No file found at path: {model_id}")
 
         # Load the models.json file
-        with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+        with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 
         # Find the model in the config
@@ -323,7 +326,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
         url = model_info["remote"]
 
         # Create cache directory if it doesn't exist
-        cache_dir = Path.home() / ".cache" / "instanovo"
+        cache_dir = Path.home() / ".cache" / "instanovo-fm"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate a filename for the cached model

@@ -129,6 +129,9 @@ packages = ["src/instanovo_fm"]
 [tool.hatch.build.targets.wheel.force-include]
 # Hydra configs ship with the package so a pip install is usable.
 "src/instanovo_fm/configs" = "instanovo_fm/configs"
+# The pretrained-checkpoint registry, which from_pretrained reads through
+# importlib.resources, so it has to be inside the installed package.
+"src/instanovo_fm/models.json" = "instanovo_fm/models.json"
 
 [tool.ruff]
 line-length = 100

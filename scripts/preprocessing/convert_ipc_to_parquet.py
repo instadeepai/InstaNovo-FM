@@ -16,6 +16,7 @@ Use ``python script.py --help`` for flags.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Annotated, Dict, List, Optional
@@ -26,6 +27,7 @@ from tqdm import tqdm
 
 from instanovo.constants import ANNOTATED_COLUMN
 from instanovo.utils.data_handler import SpectrumDataFrame
+from scripts.logging_setup import configure_script_logging
 from scripts.preprocessing.add_acquisition_column import (
     extract_file_name,
     load_acquisitions_from_search_data,
@@ -36,6 +38,8 @@ from scripts.preprocessing.parquet_io import (
     experiment_name_from_path,
 )
 from scripts.verification.add_usi_column import build_usi_string
+
+logger = logging.getLogger(__name__)
 
 # Unlabelled ACFM columns, plus the pre-inference isolation column kept by
 # ``infer_isolation_target.py``.
@@ -196,7 +200,7 @@ def convert_ipc_with_metadata(
         1, (original_file_length + max_shard_size - 1) // max_shard_size
     )
     if verbose:
-        typer.echo(
+        logger.debug(
             f"{ipc_path}: {original_file_length:,} rows -> {n_shards_to_write} shard(s)"
         )
 
@@ -250,19 +254,17 @@ def convert_ipc_to_parquet(
             "peptide": "unmodified_peptide",
         }
 
-    if verbose:
-        typer.echo(f"Source directory: {source_dir}")
-        typer.echo(f"Input file: {input_file}")
-        typer.echo(f"Output error file: {output_file}")
-        typer.echo(f"Max shard size: {max_shard_size}")
-        typer.echo(f"Lazy loading: {lazy}")
-        typer.echo(f"Search data: {search_data_path}")
-        typer.echo(f"Add USI: {add_usi}")
+    logger.debug(f"Source directory: {source_dir}")
+    logger.debug(f"Input file: {input_file}")
+    logger.debug(f"Output error file: {output_file}")
+    logger.debug(f"Max shard size: {max_shard_size}")
+    logger.debug(f"Lazy loading: {lazy}")
+    logger.debug(f"Search data: {search_data_path}")
+    logger.debug(f"Add USI: {add_usi}")
 
     ipc_files = collect_ipc_files(source_dir, input_file)
 
-    if verbose:
-        typer.echo(f"Found {len(ipc_files)} IPC files to convert")
+    logger.debug(f"Found {len(ipc_files)} IPC files to convert")
 
     acquisition_map: Optional[Dict[tuple[str, str], str]] = None
     if search_data_path is not None:
@@ -375,7 +377,7 @@ def process_ipc_files(
         for ipc_path in ipc_files:
             try:
                 if verbose:
-                    typer.echo(f"Converting: {ipc_path}")
+                    logger.debug(f"Converting: {ipc_path}")
 
                 if acquisition_map is not None:
                     convert_ipc_with_metadata(
@@ -398,7 +400,7 @@ def process_ipc_files(
             except Exception as e:
                 log_error(output_file, ipc_path, e)
                 if verbose:
-                    typer.echo(f"Error converting {ipc_path}: {e}", err=True)
+                    logger.error(f"Error converting {ipc_path}: {e}")
 
 
 def log_error(output_file: str, ipc_path: str, error: Exception) -> None:
@@ -470,6 +472,8 @@ def main(
     ] = True,
 ) -> None:
     """Convert IPC files to Parquet from a directory and/or path lists."""
+    configure_script_logging(verbose=verbose)
+
     parsed_column_mapping = None
     if column_mapping:
         try:
@@ -505,12 +509,9 @@ def main(
 
     for path in input_files:
         if not path.exists():
-            typer.echo(
-                f"Warning: Input file '{path}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Input file '{path}' does not exist, skipping...")
             continue
-        typer.echo(f"Processing input file: {path}")
+        logger.info(f"Processing input file: {path}")
         convert_ipc_to_parquet(
             source_dir=None,
             input_file=str(path),

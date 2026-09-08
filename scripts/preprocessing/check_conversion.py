@@ -14,6 +14,7 @@ Use ``python script.py --help`` for flags.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -21,6 +22,10 @@ from typing import Annotated, List, Tuple
 
 import typer
 from tqdm import tqdm
+
+from scripts.logging_setup import configure_script_logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Check IPC to Parquet conversion completeness",
@@ -148,9 +153,9 @@ def save_missing_files(output_file: str, missing_files: List[Tuple[str, str]]) -
         with open(output_file, "w") as f:
             for file, reason in missing_files:
                 f.write(f"{file}: {reason}\n")
-        typer.echo(f"Missing files have been saved to {output_file}")
+        logger.info(f"Missing files have been saved to {output_file}")
     else:
-        typer.echo("No missing files found.")
+        logger.info("No missing files found.")
 
 
 @app.command()
@@ -177,29 +182,27 @@ def main(
     ] = False,
 ) -> None:
     """Verify IPC to Parquet conversion completeness."""
-    if verbose:
-        typer.echo(f"Input dirs: {input_dir}")
-        typer.echo(f"Output file: {output_file}")
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Input dirs: {input_dir}")
+    logger.debug(f"Output file: {output_file}")
 
     all_missing: List[Tuple[str, str]] = []
     for directory in input_dir:
         if not directory.exists():
-            typer.echo(
-                f"Warning: Directory '{directory}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Directory '{directory}' does not exist, skipping...")
             continue
-        typer.echo(f"Checking directory: {directory}")
+        logger.info(f"Checking directory: {directory}")
         all_missing.extend(check_missing_parquet_variants(str(directory)))
 
     save_missing_files(str(output_file), all_missing)
 
     if all_missing:
-        typer.echo(f"Found {len(all_missing)} files with missing Parquet variants:")
+        logger.warning(f"Found {len(all_missing)} files with missing Parquet variants:")
         for file, reason in all_missing:
-            typer.echo(f"  {file}: {reason}")
+            logger.warning(f"  {file}: {reason}")
     else:
-        typer.echo("All IPC files have complete Parquet variants.")
+        logger.info("All IPC files have complete Parquet variants.")
 
 
 if __name__ == "__main__":

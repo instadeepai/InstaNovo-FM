@@ -23,9 +23,8 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -87,24 +86,22 @@ def flag_small_files_in_dir(
         typer.echo(f"Error: Directory '{source_dir}' does not exist", err=True)
         raise typer.Exit(1)
 
-    if verbose:
-        typer.echo(f"Searching for files in: {source_dir}")
-        typer.echo(f"File pattern: {file_pattern}")
-        typer.echo(f"Minimum size: {min_size_bytes} bytes")
+    logger.debug(f"Searching for files in: {source_dir}")
+    logger.debug(f"File pattern: {file_pattern}")
+    logger.debug(f"Minimum size: {min_size_bytes} bytes")
 
     matched_files = find_files(input_dir=source_dir, file_pattern=file_pattern)
 
-    if verbose:
-        typer.echo(f"Found {len(matched_files)} files to check")
+    logger.debug(f"Found {len(matched_files)} files to check")
 
     flagged_files: list[str] = []
     for file in tqdm(matched_files, unit="file"):
         if verbose:
-            logger.info(f"Processing file: {file}")
+            logger.debug(f"Processing file: {file}")
         try:
             flagged_files = check_if_empty(file, flagged_files)
         except Exception as e:
-            typer.echo(f"Error checking file {file}: {e}", err=True)
+            logger.error(f"Error checking file {file}: {e}")
 
     return flagged_files
 
@@ -141,18 +138,16 @@ def main(
     ] = False,
 ) -> None:
     """Report unusable IPC files before conversion."""
-    if verbose:
-        typer.echo(f"Output file: {output_file}")
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Output file: {output_file}")
 
     all_flagged: list[str] = []
     for directory in input_dir:
         if not directory.exists():
-            typer.echo(
-                f"Warning: Directory '{directory}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Directory '{directory}' does not exist, skipping...")
             continue
-        typer.echo(f"Checking empty files in: {directory}")
+        logger.info(f"Checking empty files in: {directory}")
         all_flagged.extend(
             flag_small_files_in_dir(
                 source_dir=str(directory),
@@ -166,9 +161,9 @@ def main(
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "w") as f:
             f.writelines(path + "\n" for path in all_flagged)
-        typer.echo(f"Flagged {len(all_flagged)} files have been saved to {output_file}")
+        logger.info(f"Flagged {len(all_flagged)} files have been saved to {output_file}")
     else:
-        typer.echo("No empty files found.")
+        logger.info("No empty files found.")
 
 
 if __name__ == "__main__":

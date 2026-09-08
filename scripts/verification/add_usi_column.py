@@ -38,15 +38,14 @@ from scripts.verification.verify_calc_mz import (
 )
 from scripts.preprocessing.parquet_io import search_data_lookup_key
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Add USI column to labelled parquet datasets",
     no_args_is_help=True,
     add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 INPUT_DIR_OPTION = typer.Option(
@@ -373,8 +372,7 @@ def main(
             "scan_type must be one of: scan, index, nativeId, trace"
         )
 
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     run_add_usi(
         input_dir=input_dir,

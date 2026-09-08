@@ -226,8 +226,7 @@ class TestDataConversionScripts:
             df = pl.read_csv(self.output_dir / "enforced.csv")
             assert "files" in df.columns
         else:
-            # Check output message
-            assert "No files were updated." in result.stdout
+            assert "No files were updated." in result.output
 
     def test_infer_isolation_target(self) -> None:
         """Test infer_isolation_target script."""
@@ -497,9 +496,9 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 0
-        assert "SUCCESS" in result.stdout
+        assert "SUCCESS" in result.output
         assert (
-            "All modifications from Excel file are present in mod_dict" in result.stdout
+            "All modifications from Excel file are present in mod_dict" in result.output
         )
 
     def test_check_modifications_missing(self) -> None:
@@ -529,10 +528,10 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 1  # Should fail with missing modifications
-        assert "MISSING MODIFICATIONS" in result.stdout
-        assert "[9999]" in result.stdout
-        assert "[INVALID]" in result.stdout
-        assert "[MISSING]" in result.stdout
+        assert "MISSING MODIFICATIONS" in result.output
+        assert "[9999]" in result.output
+        assert "[INVALID]" in result.output
+        assert "[MISSING]" in result.output
 
     def test_check_modifications_pxd009449_overrides(self) -> None:
         """Test check_modifications script handles PXD009449 override modifications."""
@@ -568,10 +567,10 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 0
-        assert "SUCCESS" in result.stdout
-        assert "PXD009449 OVERRIDE MODIFICATIONS" in result.stdout
+        assert "SUCCESS" in result.output
+        assert "PXD009449 OVERRIDE MODIFICATIONS" in result.output
         for mod in override_mods:
-            assert mod in result.stdout
+            assert mod in result.output
 
     def test_check_modifications_batch_success(self) -> None:
         """Test batch_check_mods command with multiple files."""
@@ -605,8 +604,8 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 0
-        assert "BATCH CHECK SUMMARY" in result.stdout
-        assert "SUCCESS" in result.stdout
+        assert "BATCH CHECK SUMMARY" in result.output
+        assert "SUCCESS" in result.output
 
     def test_check_modifications_batch_with_missing(self) -> None:
         """Test batch_check_mods detects missing modifications across files."""
@@ -640,10 +639,10 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 1  # Should fail
-        assert "BATCH CHECK SUMMARY" in result.stdout
-        assert "TOTAL MISSING MODIFICATIONS" in result.stdout
-        assert "[MISSING1]" in result.stdout
-        assert "[MISSING2]" in result.stdout
+        assert "BATCH CHECK SUMMARY" in result.output
+        assert "TOTAL MISSING MODIFICATIONS" in result.output
+        assert "[MISSING1]" in result.output
+        assert "[MISSING2]" in result.output
 
     def test_check_modifications_empty_file(self) -> None:
         """Test check_modifications handles empty Excel file gracefully."""
@@ -672,7 +671,7 @@ class TestDataConversionScripts:
         )
 
         assert result.exit_code == 0
-        assert "Total modifications found in Excel file: 0" in result.stdout
+        assert "Total modifications found in Excel file: 0" in result.output
 
     def test_check_modifications_invalid_column(self) -> None:
         """Test check_modifications handles Excel file without modification column."""

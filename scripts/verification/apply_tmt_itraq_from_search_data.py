@@ -57,6 +57,7 @@ import polars as pl
 import typer
 import yaml
 
+from scripts.logging_setup import configure_script_logging
 from scripts.verification.verify_calc_mz import (
     extract_file_name,
     find_parquet_files_in_project,
@@ -70,9 +71,6 @@ app = typer.Typer(
     add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 REQUIRED_SEARCH_COLUMNS = [
@@ -753,6 +751,10 @@ def main(
             help="Project id (repeat) to allow quant-only fallback without prompt",
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Label unmodified lysines with TMT or iTRAQ UNIMOD accessions using search-data multiplex rules (and optional quant fallback).
 
@@ -763,7 +765,9 @@ def main(
         spec_file: YAML mapping project id to tag kind (one entry per project).
         dry_run: Log actions without writing files.
         confirm_project_wide: Project ids that may use quant-only fallback without a prompt.
+        verbose: Enable DEBUG logging.
     """
+    configure_script_logging(verbose=verbose)
     spec_list = spec or []
     confirm_list = confirm_project_wide or []
 

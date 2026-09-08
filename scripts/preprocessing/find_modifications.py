@@ -25,9 +25,8 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -132,10 +131,9 @@ def find_modifications(
         file_pattern: Glob selecting Parquet files.
         verbose: Whether to print scan details.
     """
-    if verbose:
-        typer.echo(f"Processing directory: {input_dir}")
-        typer.echo(f"File pattern: {file_pattern}")
-        typer.echo(f"Output file: {output_path}")
+    logger.debug(f"Processing directory: {input_dir}")
+    logger.debug(f"File pattern: {file_pattern}")
+    logger.debug(f"Output file: {output_path}")
 
     # Find files in the local filesystem
     matched_files = find_files(
@@ -143,8 +141,7 @@ def find_modifications(
         file_pattern=file_pattern,
     )
 
-    if verbose:
-        typer.echo(f"Found {len(matched_files)} files to process")
+    logger.debug(f"Found {len(matched_files)} files to process")
 
     # Regex pattern to find modifications in three cases:
     # 1. Uppercase letter followed by modification: A[123]
@@ -183,7 +180,7 @@ def find_modifications(
     # Process each file
     for file in tqdm(matched_files, unit="file"):
         if verbose:
-            logger.info(f"Processing file: {file}")
+            logger.debug(f"Processing file: {file}")
         current_modifications_df = extract_modifications(file, mod_pattern)
 
         # Skip the current file if the returned df is empty
@@ -213,7 +210,7 @@ def find_modifications(
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     global_modifications.write_excel(output_path)
-    typer.echo(f"Modifications saved to {output_path}")
+    logger.info(f"Modifications saved to {output_path}")
 
 
 @app.command()
@@ -244,6 +241,8 @@ def main(
     ] = False,
 ) -> None:
     """Inventory observed modification labels in parquet datasets."""
+    configure_script_logging(verbose=verbose)
+
     # Multiple trees: run find_modifications once per tree into temp frames via
     # sequential calls that overwrite; better to concatenate by calling once on
     # a combined walk. For simplicity, process dirs sequentially and merge by
@@ -265,12 +264,9 @@ def main(
     frames: list[pl.DataFrame] = []
     for directory in input_dir:
         if not directory.exists():
-            typer.echo(
-                f"Warning: Directory '{directory}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Directory '{directory}' does not exist, skipping...")
             continue
-        typer.echo(f"Processing directory: {directory}")
+        logger.info(f"Processing directory: {directory}")
         tmp = output_file.with_name(f".tmp_{directory.name}_{output_file.name}")
         find_modifications(
             input_dir=str(directory),
@@ -283,7 +279,7 @@ def main(
             tmp.unlink()
 
     if not frames:
-        typer.echo("No modifications found.")
+        logger.info("No modifications found.")
         return
 
     merged = pl.concat(frames).unique(subset="modification")
@@ -301,7 +297,7 @@ def main(
         )
     output_file.parent.mkdir(parents=True, exist_ok=True)
     merged.write_excel(output_file)
-    typer.echo(f"Modifications saved to {output_file}")
+    logger.info(f"Modifications saved to {output_file}")
 
 
 if __name__ == "__main__":

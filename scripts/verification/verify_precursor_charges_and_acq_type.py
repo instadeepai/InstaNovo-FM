@@ -40,16 +40,14 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 import typer
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Verify precursor charges against acquisition type",
     no_args_is_help=True,
     add_completion=False,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # Module-level constants for CLI options
@@ -782,6 +780,7 @@ def main(
     search_data: str = SEARCH_DATA_OPTION,
     output_dir: str = OUTPUT_DIR_OPTION,
     aws_profile: Optional[str] = AWS_PROFILE_OPTION,
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable DEBUG logging"),
 ) -> None:
     """Report DIA files with known charges and DDA files with unknown/zero charges.
 
@@ -790,7 +789,9 @@ def main(
         search_data: Path to search data Excel file with project and acquisition columns.
         output_dir: Directory to write the output CSV reports to (one for each acquisition type).
         aws_profile: AWS profile name for S3 access (read from ~/.aws/).
+        verbose: Enable DEBUG logging.
     """
+    configure_script_logging(verbose=verbose)
     run_verification(
         input_dir=input_dir,
         search_data_path=search_data,

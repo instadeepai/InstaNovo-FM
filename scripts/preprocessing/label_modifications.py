@@ -63,9 +63,8 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -490,8 +489,14 @@ def main(
             help="Drop the source modified-sequence column after labelling",
         ),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Translate EncyclopeDIA modifications to UNIMOD in parquet datasets."""
+    configure_script_logging(verbose=verbose)
+
     gold_standard_modifications_df = read_gold_standard_modifications(
         str(gold_standard_mods)
     )
@@ -504,7 +509,7 @@ def main(
     c_term_mod_dict = create_c_term_mod_dict(gold_standard_modifications_df)
 
     for subfolder in input_dir:
-        typer.echo(f"Processing subfolder: {subfolder}")
+        logger.info(f"Processing subfolder: {subfolder}")
         create_unimod_column(
             subfolder=str(subfolder),
             mod_dict=mod_dict,

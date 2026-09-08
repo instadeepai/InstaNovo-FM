@@ -44,9 +44,9 @@ import polars as pl
 import typer
 
 from instanovo_fm.utils.lsh import BatchedPeakListRandomProjection
+from scripts.logging_setup import configure_script_logging
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 app = typer.Typer(
     help="Split unlabelled spectra using LSH clustering",
@@ -1305,8 +1305,13 @@ def main(
         bool,
         typer.Option("--clear-checkpoint", help="Delete existing checkpoint and start fresh"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Split unlabelled spectra into train/val/test with near-duplicates kept in one split."""
+    configure_script_logging(verbose=verbose)
     if mode not in ("lsh_only", "split_only", "full"):
         raise typer.BadParameter("--mode must be lsh_only, split_only, or full")
 
@@ -1369,4 +1374,4 @@ def main(
 if __name__ == "__main__":
     t0 = time.perf_counter()
     app()
-    print(f"Total wall time: {time.perf_counter() - t0:.1f}s")
+    logger.info(f"Total wall time: {time.perf_counter() - t0:.1f}s")

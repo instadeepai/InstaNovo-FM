@@ -45,13 +45,12 @@ from scripts.verification.verify_calc_mz import (
     find_project_folders,
 )
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Verify intensity max-normalisation and optional fix-in-place",
     no_args_is_help=True,
     add_completion=False,
-)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -387,8 +386,7 @@ def main(
         logger.warning("No files to process")
         raise typer.Exit(code=1)
 
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     total_bad = 0
     post_fix_issues = 0

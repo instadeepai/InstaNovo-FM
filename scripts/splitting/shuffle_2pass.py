@@ -73,6 +73,8 @@ import numpy as np
 import polars as pl
 import typer
 
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -274,11 +276,7 @@ def _shuffle_pile(
 
 def _init_worker() -> None:
     """Restore logging in spawned workers, which start without the parent's configuration."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s  %(levelname)-8s  %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_script_logging(verbose=False)
 
 
 def _spawn_pool(num_procs: int) -> ProcessPool:
@@ -537,29 +535,32 @@ def _handle_forecast(
     p1 = pass1_procs or num_procs or mp.cpu_count()
     p2 = pass2_procs or num_procs or mp.cpu_count()
 
-    print(f"\n{'=' * 60}")
-    print("CHUNK-SIZE FORECAST")
-    print(f"{'=' * 60}")
-    print(f"RAM: {ram:.1f} GB  |  bytes/row: {bpr:.0f}  |  safety: {safety:.0%}")
+    lines = [
+        f"\n{'=' * 60}",
+        "CHUNK-SIZE FORECAST",
+        f"{'=' * 60}",
+        f"RAM: {ram:.1f} GB  |  bytes/row: {bpr:.0f}  |  safety: {safety:.0%}",
+    ]
 
     for label, procs, is_p2 in [
         ("Pass 1 (scatter)", p1, False),
         ("Pass 2 (shuffle, 2× mem)", p2, True),
     ]:
         f = forecast_chunk_size(ram, procs, bpr, safety, pass2=is_p2)
-        print(f"\n{label}  ({procs} procs):")
-        print(f"  Max chunk size : {f['max_chunk_size']:>12,} rows")
-        print(f"  Mem / process  : {f['data_memory_per_process_gb']:>8.2f} GB")
-        print(f"  Mem total      : {f['total_memory_all_procs_gb']:>8.2f} GB")
-        print(f"  RAM utilisation : {f['ram_utilization_pct']:>7.1f}%")
+        lines.append(f"\n{label}  ({procs} procs):")
+        lines.append(f"  Max chunk size : {f['max_chunk_size']:>12,} rows")
+        lines.append(f"  Mem / process  : {f['data_memory_per_process_gb']:>8.2f} GB")
+        lines.append(f"  Mem total      : {f['total_memory_all_procs_gb']:>8.2f} GB")
+        lines.append(f"  RAM utilisation : {f['ram_utilization_pct']:>7.1f}%")
 
     rec = min(
         forecast_chunk_size(ram, p1, bpr, safety, pass2=False)["max_chunk_size"],
         forecast_chunk_size(ram, p2, bpr, safety, pass2=True)["max_chunk_size"],
     )
-    print(f"\n{'=' * 60}")
-    print(f"Recommended --chunk-size: {rec:,}")
-    print(f"{'=' * 60}\n")
+    lines.append(f"\n{'=' * 60}")
+    lines.append(f"Recommended --chunk-size: {rec:,}")
+    lines.append(f"{'=' * 60}\n")
+    logger.info("\n".join(lines))
 
 
 @app.command()
@@ -620,13 +621,13 @@ def main(
         Optional[Path],
         typer.Option("--temp-dir", help="Parent directory for pass-1 temporary piles"),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Shuffle sharded parquet splits that do not fit in RAM, using a 2-pass scatter/shuffle."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s  %(levelname)-8s  %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_script_logging(verbose=verbose)
 
     if forecast:
         _handle_forecast(
@@ -663,4 +664,4 @@ def main(
 if __name__ == "__main__":
     t0 = time.perf_counter()
     app()
-    print(f"\nTotal wall time: {time.perf_counter() - t0:.1f}s")
+    logger.info(f"Total wall time: {time.perf_counter() - t0:.1f}s")

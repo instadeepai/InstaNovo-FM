@@ -24,9 +24,8 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -79,7 +78,7 @@ def _process_parquet_file(
 ) -> bool:
     """Isolate per-file failures so one corrupt Parquet does not stop the batch."""
     if verbose:
-        logger.info("Processing file: %s", file)
+        logger.debug(f"Processing file: {file}")
     try:
         ldf = pl.scan_parquet(file)
         schema = ldf.collect_schema()
@@ -94,12 +93,12 @@ def _process_parquet_file(
         ).collect()
         df.write_parquet(file)
         if verbose:
-            typer.echo(
+            logger.debug(
                 f"Updated file: {file} (columns: {', '.join(columns_to_update)})"
             )
         return True
     except Exception as e:
-        typer.echo(f"Error processing {file}: {e}", err=True)
+        logger.error(f"Error processing {file}: {e}")
         return False
 
 
@@ -108,7 +107,7 @@ def _write_affected_files_list(output_path: str, files_with_unknown: List[str]) 
     output_file_path = Path(output_path)
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     pl.DataFrame({"files": files_with_unknown}).write_csv(output_path)
-    typer.echo(f"Updated {len(files_with_unknown)} files. List saved to {output_path}")
+    logger.info(f"Updated {len(files_with_unknown)} files. List saved to {output_path}")
 
 
 def enforce_nulls(
@@ -135,17 +134,15 @@ def enforce_nulls(
     if column_names is None:
         column_names = DEFAULT_COLUMNS
 
-    if verbose:
-        typer.echo(f"Processing directory: {input_dir}")
-        typer.echo(f"Columns: {', '.join(column_names)}")
-        typer.echo(f"Replacing '{old_value}' with {new_value}")
-        if output_path:
-            typer.echo(f"Output file: {output_path}")
+    logger.debug(f"Processing directory: {input_dir}")
+    logger.debug(f"Columns: {', '.join(column_names)}")
+    logger.debug(f"Replacing '{old_value}' with {new_value}")
+    if output_path:
+        logger.debug(f"Output file: {output_path}")
 
     matched_files = find_files(input_dir=input_dir, file_pattern="**/*.parquet")
 
-    if verbose:
-        typer.echo(f"Found {len(matched_files)} parquet files to process")
+    logger.debug(f"Found {len(matched_files)} parquet files to process")
 
     files_with_unknown: List[str] = []
     for file in tqdm(matched_files, unit="file"):
@@ -156,7 +153,7 @@ def enforce_nulls(
         if files_with_unknown:
             _write_affected_files_list(output_path, files_with_unknown)
         else:
-            typer.echo("No files were updated.")
+            logger.info("No files were updated.")
 
     return files_with_unknown
 
@@ -201,15 +198,14 @@ def main(
     ] = False,
 ) -> None:
     """Replace placeholder metadata with null in parquet files."""
+    configure_script_logging(verbose=verbose)
+
     all_updated: List[str] = []
     for directory in input_dir:
         if not directory.exists():
-            typer.echo(
-                f"Warning: Directory '{directory}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Directory '{directory}' does not exist, skipping...")
             continue
-        typer.echo(f"Processing directory: {directory}")
+        logger.info(f"Processing directory: {directory}")
         all_updated.extend(
             enforce_nulls(
                 input_dir=str(directory),
@@ -224,7 +220,7 @@ def main(
     if all_updated:
         _write_affected_files_list(str(output_file), all_updated)
     else:
-        typer.echo("No files were updated.")
+        logger.info("No files were updated.")
 
 
 if __name__ == "__main__":

@@ -16,11 +16,14 @@ Use ``python script.py --help`` for flags.
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 from typing import Annotated, List
 
 import polars as pl
 import typer
+
+from scripts.logging_setup import configure_script_logging
 
 try:
     from label_modifications import (
@@ -43,6 +46,8 @@ except ImportError:
     read_pxd009449_ambiguous_modifications = (
         label_modifications.read_pxd009449_ambiguous_modifications
     )
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Check if modifications from Excel file are in mod_dict",
@@ -80,23 +85,23 @@ def _report_overrides(
     pxd009449_mod_dict: dict,
 ) -> None:
     """Make project-specific overrides visible before mappings are applied."""
-    typer.echo(
+    logger.info(
         f"\nPXD009449 OVERRIDE MODIFICATIONS ({len(override_modifications)}):"
     )
-    typer.echo("   These modifications have special handling for PXD009449:")
+    logger.info("   These modifications have special handling for PXD009449:")
     for mod in sorted(override_modifications):
         original_value = gold_mod_dict.get(mod, "N/A")
         override_value = pxd009449_mod_dict[mod]
-        typer.echo(f"   - {mod}: {original_value} → {override_value} (for PXD009449)")
+        logger.info(f"   - {mod}: {original_value} → {override_value} (for PXD009449)")
 
 
 def _report_missing(missing_modifications: set) -> None:
     """Show unsupported labels so maintainers know which mappings to add."""
-    typer.echo(f"\nMISSING MODIFICATIONS ({len(missing_modifications)}):")
-    typer.echo("   These modifications are in the Excel file but NOT in mod_dict:")
+    logger.warning(f"\nMISSING MODIFICATIONS ({len(missing_modifications)}):")
+    logger.warning("   These modifications are in the Excel file but NOT in mod_dict:")
     for mod in sorted(missing_modifications):
-        typer.echo(f"   - {mod}")
-    typer.echo(
+        logger.warning(f"   - {mod}")
+    logger.warning(
         "\nACTION REQUIRED: Add these modifications to mod_dict "
         "in label_modifications.py"
     )
@@ -104,12 +109,12 @@ def _report_missing(missing_modifications: set) -> None:
 
 def _report_extra(extra_modifications: set) -> None:
     """Expose unused mappings when a verbose audit needs to detect stale entries."""
-    typer.echo(f"\nEXTRA MODIFICATIONS ({len(extra_modifications)}):")
-    typer.echo("   These modifications are in mod_dict but not in the Excel file:")
+    logger.info(f"\nEXTRA MODIFICATIONS ({len(extra_modifications)}):")
+    logger.info("   These modifications are in mod_dict but not in the Excel file:")
     for mod in sorted(extra_modifications)[:20]:
-        typer.echo(f"   - {mod}")
+        logger.info(f"   - {mod}")
     if len(extra_modifications) > 20:
-        typer.echo(f"   ... and {len(extra_modifications) - 20} more")
+        logger.info(f"   ... and {len(extra_modifications) - 20} more")
 
 
 def check_modifications(
@@ -136,30 +141,28 @@ def check_modifications(
     pxd009449_mod_dict = create_mod_dict(pxd009449_df)
     merged_mod_dict = {**gold_mod_dict, **pxd009449_mod_dict}
 
-    if verbose:
-        typer.echo(f"Reading Excel file: {excel_file}")
+    logger.debug(f"Reading Excel file: {excel_file}")
 
     found_modifications = _load_modifications(excel_file)
 
-    if verbose:
-        typer.echo(
-            f"Found {len(found_modifications)} unique modifications in Excel file"
-        )
+    logger.debug(
+        f"Found {len(found_modifications)} unique modifications in Excel file"
+    )
 
     mod_dict_keys = set(merged_mod_dict.keys())
     missing_modifications = found_modifications - mod_dict_keys
     extra_modifications = mod_dict_keys - found_modifications
     override_modifications = found_modifications & set(pxd009449_mod_dict.keys())
 
-    typer.echo("\n" + "=" * 80)
-    typer.echo("MODIFICATION CHECK RESULTS")
-    typer.echo("=" * 80)
-    typer.echo(f"\nTotal modifications found in Excel file: {len(found_modifications)}")
-    typer.echo(
+    logger.info("\n" + "=" * 80)
+    logger.info("MODIFICATION CHECK RESULTS")
+    logger.info("=" * 80)
+    logger.info(f"\nTotal modifications found in Excel file: {len(found_modifications)}")
+    logger.info(
         f"Total modifications in mod_dict (including PXD009449 overrides): "
         f"{len(mod_dict_keys)}"
     )
-    typer.echo(
+    logger.info(
         f"Modifications in Excel AND mod_dict: "
         f"{len(found_modifications & mod_dict_keys)}"
     )
@@ -170,14 +173,14 @@ def check_modifications(
     if missing_modifications:
         _report_missing(missing_modifications)
     else:
-        typer.echo(
+        logger.info(
             "\nSUCCESS: All modifications from Excel file are present in mod_dict!"
         )
 
     if extra_modifications and verbose:
         _report_extra(extra_modifications)
 
-    typer.echo("\n" + "=" * 80)
+    logger.info("\n" + "=" * 80)
 
     if missing_modifications:
         raise typer.Exit(1)
@@ -212,6 +215,8 @@ def main(
     ] = False,
 ) -> None:
     """Verify modification inventories against mapping workbooks."""
+    configure_script_logging(verbose=verbose)
+
     if len(input_file) == 1:
         check_modifications(
             excel_file=str(input_file[0]),
@@ -232,14 +237,14 @@ def main(
     all_found = set()
 
     for excel_path in input_file:
-        typer.echo(f"\n{'=' * 80}")
-        typer.echo(f"Checking: {excel_path}")
-        typer.echo("=" * 80)
+        logger.info(f"\n{'=' * 80}")
+        logger.info(f"Checking: {excel_path}")
+        logger.info("=" * 80)
 
         try:
             df = pl.read_excel(excel_path)
             if "modification" not in df.columns:
-                typer.echo(f"Skipping {excel_path}: 'modification' column not found")
+                logger.warning(f"Skipping {excel_path}: 'modification' column not found")
                 continue
 
             found_modifications = set(df["modification"].unique().to_list())
@@ -250,33 +255,33 @@ def main(
             all_missing.update(missing_modifications)
 
             if missing_modifications:
-                typer.echo(
+                logger.warning(
                     f"Found {len(missing_modifications)} missing modifications"
                 )
             else:
-                typer.echo("All modifications are present in mod_dict")
+                logger.info("All modifications are present in mod_dict")
 
         except Exception as e:
-            typer.echo(f"Error processing {excel_path}: {e}", err=True)
+            logger.error(f"Error processing {excel_path}: {e}")
 
-    typer.echo("\n" + "=" * 80)
-    typer.echo("BATCH CHECK SUMMARY")
-    typer.echo("=" * 80)
-    typer.echo(f"\nTotal unique modifications across all files: {len(all_found)}")
-    typer.echo(
+    logger.info("\n" + "=" * 80)
+    logger.info("BATCH CHECK SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"\nTotal unique modifications across all files: {len(all_found)}")
+    logger.info(
         f"Total modifications in mod_dict (including PXD009449 overrides): {len(merged_mod_dict.keys())}"
     )
 
     if all_missing:
-        typer.echo(f"\nTOTAL MISSING MODIFICATIONS ({len(all_missing)}):")
+        logger.warning(f"\nTOTAL MISSING MODIFICATIONS ({len(all_missing)}):")
         for mod in sorted(all_missing):
-            typer.echo(f"   - {mod}")
-        typer.echo(
+            logger.warning(f"   - {mod}")
+        logger.warning(
             "\nACTION REQUIRED: Add these modifications to mod_dict in label_modifications.py"
         )
         raise typer.Exit(1)
     else:
-        typer.echo("\nSUCCESS: All modifications are present in mod_dict!")
+        logger.info("\nSUCCESS: All modifications are present in mod_dict!")
 
 
 if __name__ == "__main__":

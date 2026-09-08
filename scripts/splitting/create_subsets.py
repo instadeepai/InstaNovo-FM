@@ -21,6 +21,7 @@ CLI::
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -30,10 +31,13 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
+from scripts.logging_setup import configure_script_logging
 from scripts.splitting.split_labelled_data import (
     normalise_dataframe_schema,
     REFERENCE_SCHEMA,
 )
+
+logger = logging.getLogger(__name__)
 
 _TEMP_SCORING_COLS = ("_composite_score", "_peptide_length")
 
@@ -213,8 +217,14 @@ def main(
             help="Exclude rows with [IN:<int>] tokens from scoring and outputs",
         ),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Carve a PSM corpus into medium- and high-confidence subsets with corpus-wide cutoffs."""
+    configure_script_logging(verbose=verbose)
+
     input_root = str(input_dir)
     folder_mcfm = str(medium_output_dir)
     folder_hcfm = str(high_output_dir)
@@ -222,7 +232,7 @@ def main(
 
     all_files = list(iter_parquet_files(input_root))
     if not all_files:
-        print(f"No .parquet files found under: {input_root}")
+        logger.info(f"No .parquet files found under: {input_root}")
         return
 
     # Pass 1: compute composite scores for all files to set global thresholds.
@@ -237,7 +247,7 @@ def main(
             score_frames.append(sf)
 
     if not score_frames:
-        print("No valid composite scores were computed.")
+        logger.info("No valid composite scores were computed.")
         return
 
     all_scores_df = pl.concat(score_frames)
@@ -247,8 +257,8 @@ def main(
     threshold_hcfm = float(
         all_scores_df["_composite_score"].quantile(0.98, interpolation="linear")
     )
-    print(f"Global MCFM threshold (top 10%): {threshold_mcfm:.6f}")
-    print(f"Global HCFM threshold (top 2%): {threshold_hcfm:.6f}")
+    logger.info(f"Global MCFM threshold (top 10%): {threshold_mcfm:.6f}")
+    logger.info(f"Global HCFM threshold (top 2%): {threshold_hcfm:.6f}")
 
     # Pass 2: apply global thresholds and write subsets.
     count_input = 0
@@ -270,9 +280,9 @@ def main(
             scored.filter(pl.col("_composite_score") > threshold_hcfm)
         )
 
-        print(f"Processing {subfolder}/{name}")
-        print("Filter percentage mcfm: ", filtered_df_mcfm.height / df.height * 100)
-        print("Filter percentage hcfm: ", filtered_df_hcfm.height / df.height * 100)
+        logger.debug(f"Processing {subfolder}/{name}")
+        logger.debug(f"Filter percentage mcfm: {filtered_df_mcfm.height / df.height * 100}")
+        logger.debug(f"Filter percentage hcfm: {filtered_df_hcfm.height / df.height * 100}")
 
         filtered_df_mcfm.write_parquet(os.path.join(folder_mcfm, subfolder, name))
         filtered_df_hcfm.write_parquet(os.path.join(folder_hcfm, subfolder, name))
@@ -281,9 +291,9 @@ def main(
         count_mcfm += filtered_df_mcfm.height
         count_hcfm += filtered_df_hcfm.height
 
-    print(f"Total number of PSMs in input: {count_input}")
-    print(f"Total number of PSMs in medium subset: {count_mcfm}")
-    print(f"Total number of PSMs in high subset: {count_hcfm}")
+    logger.info(f"Total number of PSMs in input: {count_input}")
+    logger.info(f"Total number of PSMs in medium subset: {count_mcfm}")
+    logger.info(f"Total number of PSMs in high subset: {count_hcfm}")
 
 
 if __name__ == "__main__":

@@ -41,15 +41,14 @@ from scripts.verification.verify_calc_mz import (
     find_parquet_files_in_project,
 )
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Apply implicit carbamidomethylation from verify_calc_mz report",
     no_args_is_help=True,
     add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 INPUT_DIR_OPTION = typer.Option(
@@ -301,8 +300,7 @@ def main(
         dry_run: Log actions without modifying files.
         verbose: Enable verbose logging.
     """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     run_apply_carbamidomethylation(
         input_dir=input_dir,

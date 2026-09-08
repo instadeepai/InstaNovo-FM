@@ -29,11 +29,8 @@ from typing import Annotated, List, Optional
 import polars as pl
 import typer
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -230,9 +227,13 @@ def main(
         Optional[int],
         typer.Option("--seed", help="Random seed for reproducibility"),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Globally shuffle train/valid/test parquet shards that fit in RAM."""
-    logging.getLogger().setLevel(logging.INFO)
+    configure_script_logging(verbose=verbose)
 
     shuffle_split_labelled_output_folder(
         str(input_dir),

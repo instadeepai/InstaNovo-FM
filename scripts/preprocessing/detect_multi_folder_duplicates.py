@@ -14,11 +14,16 @@ Use ``python script.py --help`` for flags.
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Annotated, List
 
 import typer
+
+from scripts.logging_setup import configure_script_logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Detect multi-folder duplicate files",
@@ -76,10 +81,10 @@ def find_duplicate_files(
                 for folder in folders:
                     outfile.write(f"  - {folder}\n")
                 outfile.write("\n")
-        typer.echo(f"Duplicate detection report written to {output_file}")
-        typer.echo(f"Found {len(duplicates)} files with multi-folder duplicates")
+        logger.info(f"Duplicate detection report written to {output_file}")
+        logger.info(f"Found {len(duplicates)} files with multi-folder duplicates")
     else:
-        typer.echo(f"No multi-folder duplicates found in {input_file}.")
+        logger.info(f"No multi-folder duplicates found in {input_file}.")
 
     return duplicates
 
@@ -107,16 +112,14 @@ def main(
     ] = False,
 ) -> None:
     """Produce a review list of duplicates that cross folder boundaries."""
-    if verbose:
-        typer.echo(f"Input files: {input_file}")
-        typer.echo(f"Output file: {output_file}")
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Input files: {input_file}")
+    logger.debug(f"Output file: {output_file}")
 
     valid_files = [f for f in input_file if f.exists()]
     for missing in set(input_file) - set(valid_files):
-        typer.echo(
-            f"Warning: Input file '{missing}' does not exist, skipping...",
-            err=True,
-        )
+        logger.warning(f"Input file '{missing}' does not exist, skipping...")
 
     if not valid_files:
         typer.echo("Error: no valid input files", err=True)
@@ -125,8 +128,7 @@ def main(
     # Merge classifications from all reports into one output.
     merged: dict = {}
     for path in valid_files:
-        if verbose:
-            typer.echo(f"Processing: {path}")
+        logger.debug(f"Processing: {path}")
         # Write through a temp merge: collect then write once.
         if not path.exists():
             continue
@@ -154,10 +156,10 @@ def main(
                 for folder in folders:
                     outfile.write(f"  - {folder}\n")
                 outfile.write("\n")
-        typer.echo(f"Duplicate detection report written to {output_file}")
-        typer.echo(f"Found {len(merged)} files with multi-folder duplicates")
+        logger.info(f"Duplicate detection report written to {output_file}")
+        logger.info(f"Found {len(merged)} files with multi-folder duplicates")
     else:
-        typer.echo("No multi-folder duplicates found.")
+        logger.info("No multi-folder duplicates found.")
 
 
 if __name__ == "__main__":

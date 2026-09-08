@@ -21,9 +21,8 @@ from typing import Annotated, List
 
 import typer
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
@@ -54,10 +53,10 @@ def delete_files_from_list(
         files_to_delete = [line.strip() for line in f.readlines()]
 
     if dry_run:
-        typer.echo("DRY RUN - The following files would be deleted:")
+        logger.info("DRY RUN - The following files would be deleted:")
         for file_path in files_to_delete:
-            typer.echo(f"  {file_path}")
-        typer.echo(f"Total: {len(files_to_delete)} files")
+            logger.info(f"  {file_path}")
+        logger.info(f"Total: {len(files_to_delete)} files")
         return
 
     error_log = Path(error_log_path)
@@ -108,10 +107,11 @@ def main(
     ] = False,
 ) -> None:
     """Apply reviewed cleanup lists to IPC and Parquet variants."""
-    if verbose:
-        typer.echo(f"Input files: {input_file}")
-        typer.echo(f"Error log: {error_log}")
-        typer.echo(f"Dry run: {dry_run}")
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Input files: {input_file}")
+    logger.debug(f"Error log: {error_log}")
+    logger.debug(f"Dry run: {dry_run}")
 
     # Truncate shared error log once at the start of a real run.
     if not dry_run:
@@ -120,12 +120,9 @@ def main(
 
     for path in input_file:
         if not path.exists():
-            typer.echo(
-                f"Warning: File list '{path}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"File list '{path}' does not exist, skipping...")
             continue
-        typer.echo(f"Processing file list: {path}")
+        logger.info(f"Processing file list: {path}")
         delete_files_from_list(str(path), str(error_log), dry_run=dry_run)
 
 

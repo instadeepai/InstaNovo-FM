@@ -25,6 +25,7 @@ CLI::
 """
 
 import glob
+import logging
 import os
 import random
 import time
@@ -35,6 +36,10 @@ from typing import Annotated, Dict, List, Optional
 import polars as pl
 import typer
 from tqdm import tqdm
+
+from scripts.logging_setup import configure_script_logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -300,7 +305,7 @@ def write_chunk_file(
     output_file = os.path.join(output_dir, f"{split_type}_{chunk_id}.parquet")
     final_chunk.write_parquet(output_file)
 
-    print(f"  Wrote {len(final_chunk):,} rows to {os.path.basename(output_file)}")
+    logger.info(f"  Wrote {len(final_chunk):,} rows to {os.path.basename(output_file)}")
 
 
 def create_shuffled_chunks(
@@ -336,7 +341,7 @@ def verify_row_counts(original_split_info: SplitInfo, output_dir: str) -> bool:
         True when the totals agree; the caller reports the mismatch rather than
         raising, so remaining splits still get processed.
     """
-    print("Verifying row counts...")
+    logger.info("Verifying row counts...")
 
     # Count rows in new chunks
     new_files = get_parquet_files(output_dir, original_split_info.split_type)
@@ -345,16 +350,16 @@ def verify_row_counts(original_split_info: SplitInfo, output_dir: str) -> bool:
     for file_path in new_files:
         row_count = count_rows_in_file(file_path)
         new_total_rows += row_count
-        print(f"  {os.path.basename(file_path)}: {row_count:,} rows")
+        logger.info(f"  {os.path.basename(file_path)}: {row_count:,} rows")
 
-    print(f"Original total: {original_split_info.total_rows:,} rows")
-    print(f"New total: {new_total_rows:,} rows")
+    logger.info(f"Original total: {original_split_info.total_rows:,} rows")
+    logger.info(f"New total: {new_total_rows:,} rows")
 
     if new_total_rows == original_split_info.total_rows:
-        print("Row counts match!")
+        logger.info("Row counts match!")
         return True
     else:
-        print("Row counts do not match!")
+        logger.error("Row counts do not match!")
         return False
 
 
@@ -379,50 +384,50 @@ def shuffle_split_by_indices(
         output_dir: Where shuffled shards are written; defaults to *split_dir*,
             which overwrites the originals.
     """
-    print(f"Processing {split_type} split in {split_dir}")
+    logger.info(f"Processing {split_type} split in {split_dir}")
 
     # Use output_dir if provided, otherwise use split_dir
     if output_dir is None:
         output_dir = split_dir
 
     # Step 1: Get split information
-    print("Step 1: Analysing split...")
+    logger.info("Step 1: Analysing split...")
     split_info = get_split_info(split_dir, split_type, chunk_size)
 
-    print(f"Found {len(split_info.original_files)} files:")
+    logger.info(f"Found {len(split_info.original_files)} files:")
     for file_path in split_info.original_files:
         row_count = split_info.original_row_counts[file_path]
-        print(f"  {os.path.basename(file_path)}: {row_count:,} rows")
+        logger.info(f"  {os.path.basename(file_path)}: {row_count:,} rows")
 
-    print(f"Total rows: {split_info.total_rows:,}")
-    print(f"Will create {split_info.num_chunks} chunks of ~{chunk_size:,} rows each")
+    logger.info(f"Total rows: {split_info.total_rows:,}")
+    logger.info(f"Will create {split_info.num_chunks} chunks of ~{chunk_size:,} rows each")
 
     # Step 2: Create row indices
-    print("Step 2: Creating row indices...")
+    logger.info("Step 2: Creating row indices...")
     indices = create_row_indices(split_info)
-    print(f"Created {len(indices):,} row indices")
+    logger.info(f"Created {len(indices):,} row indices")
 
     # Step 3: Shuffle indices
-    print("Step 3: Shuffling indices...")
+    logger.info("Step 3: Shuffling indices...")
     shuffled_indices = shuffle_indices(indices, seed)
 
     # Step 4: Chunk the shuffled indices
-    print("Step 4: Creating index chunks...")
+    logger.info("Step 4: Creating index chunks...")
     index_chunks = chunk_indices(shuffled_indices, chunk_size)
-    print(f"Created {len(index_chunks)} index chunks")
+    logger.info(f"Created {len(index_chunks)} index chunks")
 
     # Step 5: Create shuffled chunks
-    print("Step 5: Creating shuffled chunks...")
+    logger.info("Step 5: Creating shuffled chunks...")
     create_shuffled_chunks(split_info, index_chunks, output_dir)
 
     # Step 6: Verify row counts
-    print("Step 6: Verifying results...")
+    logger.info("Step 6: Verifying results...")
     success = verify_row_counts(split_info, output_dir)
 
     if success:
-        print(f"Successfully shuffled {split_type} split!")
+        logger.info(f"Successfully shuffled {split_type} split!")
     else:
-        print(f"Error in {split_type} split shuffling!")
+        logger.error(f"Error in {split_type} split shuffling!")
 
 
 def shuffle_all_splits(
@@ -452,16 +457,16 @@ def shuffle_all_splits(
     ]
 
     if not split_dirs:
-        print(f"No split directories found in {base_dir}")
+        logger.info(f"No split directories found in {base_dir}")
         return
 
-    print(f"Found split directories: {[d.name for d in split_dirs]}")
+    logger.info(f"Found split directories: {[d.name for d in split_dirs]}")
 
     # Process each split directory
     for split_dir in split_dirs:
-        print(f"\n{'=' * 60}")
-        print(f"Processing {split_dir.name}")
-        print(f"{'=' * 60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"Processing {split_dir.name}")
+        logger.info(f"{'=' * 60}")
 
         # Determine output directory for this split
         if output_dir is not None:
@@ -476,7 +481,7 @@ def shuffle_all_splits(
                     str(split_dir), split_type, chunk_size, seed, split_output_dir
                 )
             except Exception as e:
-                print(f"Error processing {split_type} in {split_dir.name}: {e}")
+                logger.error(f"Error processing {split_type} in {split_dir.name}: {e}")
                 continue
 
 
@@ -509,23 +514,29 @@ def main(
         Optional[int],
         typer.Option("--seed", help="Random seed for reproducibility"),
     ] = 42,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
     """Shuffle every dataset's train/valid/test shards by permuting row addresses."""
+    configure_script_logging(verbose=verbose)
+
     for base in input_dir:
-        print(f"Index-based shuffle of parquet files in {base}")
-        print(f"Target chunk size: {chunk_size:,} rows")
+        logger.info(f"Index-based shuffle of parquet files in {base}")
+        logger.info(f"Target chunk size: {chunk_size:,} rows")
         if seed is not None:
-            print(f"Random seed: {seed}")
-        print(f"Output directory: {output_dir}")
+            logger.info(f"Random seed: {seed}")
+        logger.info(f"Output directory: {output_dir}")
         shuffle_all_splits(str(base), chunk_size, seed, str(output_dir))
 
-    print("\nShuffling complete!")
+    logger.info("Shuffling complete!")
 
 
 if __name__ == "__main__":
     start_time = time.time()
     app()
     end_time = time.time()
-    print(
+    logger.info(
         f"Time taken for index-based shuffling: {(end_time - start_time) / 3600:.2f} hours"
     )

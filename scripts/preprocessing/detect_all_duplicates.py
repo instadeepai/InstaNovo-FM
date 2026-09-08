@@ -14,11 +14,16 @@ Use ``python script.py --help`` for flags.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated, Dict, List, Optional
 
 import typer
+
+from scripts.logging_setup import configure_script_logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Detect duplicate files in directory structure",
@@ -87,9 +92,9 @@ def save_duplicates(output_file: str, duplicates: List[List[str]]) -> None:
         with open(output_file, "w") as f:
             for duplicate_group in duplicates:
                 f.write("\n".join(duplicate_group) + "\n\n")
-        typer.echo(f"Duplicate files have been saved to {output_file}")
+        logger.info(f"Duplicate files have been saved to {output_file}")
     else:
-        typer.echo("No duplicates found.")
+        logger.info("No duplicates found.")
 
 
 @app.command()
@@ -124,17 +129,18 @@ def main(
     ] = False,
 ) -> None:
     """Generate a duplicate candidate report for one or more dataset trees."""
+    configure_script_logging(verbose=verbose)
+
     if extensions is None:
         extensions = [".ipc", ".mzML.ipc"]
 
-    if verbose:
-        typer.echo(f"Input dirs: {input_dir}")
-        typer.echo(f"Output file: {output_file}")
-        typer.echo(f"Extensions: {extensions}")
+    logger.debug(f"Input dirs: {input_dir}")
+    logger.debug(f"Output file: {output_file}")
+    logger.debug(f"Extensions: {extensions}")
 
     valid_dirs = [d for d in input_dir if d.exists()]
     for missing in set(input_dir) - set(valid_dirs):
-        typer.echo(f"Warning: Directory '{missing}' does not exist, skipping...", err=True)
+        logger.warning(f"Directory '{missing}' does not exist, skipping...")
 
     if not valid_dirs:
         typer.echo("Error: no valid input directories", err=True)
@@ -145,15 +151,13 @@ def main(
     # Multiple trees: write one combined report (paths retain their folders).
     all_duplicates: List[List[str]] = []
     for directory in valid_dirs:
-        if verbose:
-            typer.echo(f"Searching for duplicates in: {directory}")
+        logger.debug(f"Searching for duplicates in: {directory}")
         file_dict = group_files_by_base_name(str(directory))
         all_duplicates.extend(identify_duplicates(file_dict))
 
     save_duplicates(str(output_file), all_duplicates)
 
-    if verbose:
-        typer.echo("Duplicate detection completed successfully!")
+    logger.info("Duplicate detection completed successfully!")
 
 
 if __name__ == "__main__":

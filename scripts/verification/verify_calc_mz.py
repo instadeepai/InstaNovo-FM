@@ -96,6 +96,8 @@ import typer
 
 from instanovo.utils.residues import ResidueSet, H2O_MASS, PROTON_MASS_AMU
 
+from scripts.logging_setup import configure_script_logging
+
 
 app = typer.Typer(
     help="Verify peptide_calc_mz against sequence-derived m/z",
@@ -103,10 +105,6 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # Module-level constants for CLI options
@@ -1113,8 +1111,7 @@ def run_verification(
     Raises:
         ValueError: When ``lysine_label_file_csv`` is set without ``search_data``.
     """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     logger.info(f"Input directory: {input_dir}")
     logger.info(f"Tolerance: {tolerance} ppm")

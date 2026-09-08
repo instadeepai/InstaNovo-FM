@@ -43,15 +43,14 @@ import polars as pl
 import typer
 from huggingface_hub import HfApi, hf_hub_download
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Split labelled parquet into peptide-disjoint train/test/valid",
     no_args_is_help=True,
     add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # ── Quality filter config ────────────────────────────────────────────────────
@@ -1266,8 +1265,7 @@ def split(
         typer.Exit: If the input directory is missing or ``--column-remap`` is
             not valid JSON, so neither failure surfaces mid-run.
     """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
     if not os.path.exists(input_dir):
         typer.echo(f"Error: directory does not exist: {input_dir}")
         raise typer.Exit(1)
@@ -1278,7 +1276,7 @@ def split(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Mode: {mode.value} | Input: {input_dir} | Output: {output_dir}")
+    logger.info(f"Mode: {mode.value} | Input: {input_dir} | Output: {output_dir}")
 
     process_directories(
         input_dirs=[input_dir],
@@ -1324,13 +1322,12 @@ def batch(
         typer.Exit: If no input directory exists or ``--column-remap`` is not
             valid JSON.
     """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     valid_dirs = [d for d in input_dirs if os.path.exists(d)]
     skipped = set(input_dirs) - set(valid_dirs)
     for d in skipped:
-        typer.echo(f"Warning: skipping non-existent directory: {d}")
+        logger.warning(f"Skipping non-existent directory: {d}")
 
     if not valid_dirs:
         typer.echo("Error: no valid input directories")
@@ -1342,7 +1339,7 @@ def batch(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Mode: {mode.value} | Dirs: {valid_dirs} | Output: {output_dir}")
+    logger.info(f"Mode: {mode.value} | Dirs: {valid_dirs} | Output: {output_dir}")
 
     process_directories(
         input_dirs=valid_dirs,

@@ -15,11 +15,16 @@ Use ``python script.py --help`` for flags.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated, List
 
 import typer
+
+from scripts.logging_setup import configure_script_logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Delete multi-folder duplicate files",
@@ -41,14 +46,14 @@ def delete_files_safely(files_to_delete: list) -> int:
     for file_path in files_to_delete:
         try:
             os.remove(file_path)
-            typer.echo(f"Deleted: {file_path}")
+            logger.info(f"Deleted: {file_path}")
             deleted_count += 1
         except FileNotFoundError:
-            typer.echo(f"File not found (skipped): {file_path}", err=True)
+            logger.warning(f"File not found (skipped): {file_path}")
         except PermissionError:
-            typer.echo(f"Permission denied (skipped): {file_path}", err=True)
+            logger.error(f"Permission denied (skipped): {file_path}")
         except Exception as e:
-            typer.echo(f"Error deleting {file_path}: {e}", err=True)
+            logger.error(f"Error deleting {file_path}: {e}")
 
     return deleted_count
 
@@ -60,21 +65,21 @@ def check_delete_with_user(files_to_delete: list, force: bool = False) -> None:
         files_to_delete: Paths proposed for removal.
         force: Whether prior approval allows bypassing the interactive prompt.
     """
-    typer.echo(f"The following {len(files_to_delete)} files will be deleted:")
+    logger.info(f"The following {len(files_to_delete)} files will be deleted:")
     for file_path in files_to_delete:
-        typer.echo(f"  {file_path}")
+        logger.info(f"  {file_path}")
 
     if force:
-        typer.echo("Force mode enabled - proceeding with deletion")
+        logger.info("Force mode enabled - proceeding with deletion")
         proceed = True
     else:
         proceed = typer.confirm("Do you want to proceed with deletion?")
 
     if proceed:
         deleted_count = delete_files_safely(files_to_delete)
-        typer.echo(f"\nDeletion process completed. {deleted_count} files deleted.")
+        logger.info(f"Deletion process completed. {deleted_count} files deleted.")
     else:
-        typer.echo("\nDeletion aborted by user.")
+        logger.info("Deletion aborted by user.")
 
 
 def parse_files_to_delete(input_file: str, target_folder: str) -> list:
@@ -126,16 +131,16 @@ def delete_multi_folder_duplicates(
     files_to_delete = parse_files_to_delete(input_file, target_folder)
 
     if dry_run:
-        typer.echo("DRY RUN - The following files would be deleted:")
+        logger.info("DRY RUN - The following files would be deleted:")
         for file_path in files_to_delete:
-            typer.echo(f"  {file_path}")
-        typer.echo(f"Total: {len(files_to_delete)} files")
+            logger.info(f"  {file_path}")
+        logger.info(f"Total: {len(files_to_delete)} files")
         return
 
     if files_to_delete:
         check_delete_with_user(files_to_delete, force=force)
     else:
-        typer.echo("No multi-folder duplicates found to delete.")
+        logger.info("No multi-folder duplicates found to delete.")
 
 
 @app.command()
@@ -168,20 +173,18 @@ def main(
     ] = False,
 ) -> None:
     """Apply a reviewed cross-folder deletion report with safety controls."""
-    if verbose:
-        typer.echo(f"Input files: {input_file}")
-        typer.echo(f"Target dir: {target_dir}")
-        typer.echo(f"Force mode: {force}")
-        typer.echo(f"Dry run: {dry_run}")
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Input files: {input_file}")
+    logger.debug(f"Target dir: {target_dir}")
+    logger.debug(f"Force mode: {force}")
+    logger.debug(f"Dry run: {dry_run}")
 
     for path in input_file:
         if not path.exists():
-            typer.echo(
-                f"Warning: Input file '{path}' does not exist, skipping...",
-                err=True,
-            )
+            logger.warning(f"Input file '{path}' does not exist, skipping...")
             continue
-        typer.echo(f"Processing: {path}")
+        logger.info(f"Processing: {path}")
         delete_multi_folder_duplicates(
             str(path), str(target_dir), force=force, dry_run=dry_run
         )

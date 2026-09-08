@@ -16,6 +16,7 @@ Use ``python script.py --help`` for flags.
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import re
 from pathlib import Path
@@ -25,7 +26,10 @@ import polars as pl
 import typer
 from tqdm import tqdm
 
+from scripts.logging_setup import configure_script_logging
 from scripts.preprocessing.parquet_io import nan_string_to_null_expr
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     help="Infer isolation target values in parquet files",
@@ -121,7 +125,7 @@ def check_search_data_value(
             )
         elif show_duplicate_warnings is True:
             # If duplicates have the same column entry, count once and report
-            typer.echo(
+            logger.warning(
                 f"Duplicate matches found in search_data for file name: {search_path}, "
                 f"but they have the same column value: {unique_column_values[0]}. Counting once."
             )
@@ -193,7 +197,7 @@ def process_single_file(file_path: str, verbose: bool = False) -> tuple[bool, bo
         Flags indicating whether the file changed and whether inference failed.
     """
     if verbose:
-        typer.echo(f"Processing file: {file_path}")
+        logger.debug(f"Processing file: {file_path}")
 
     query = pl.scan_parquet(file_path)
 
@@ -247,7 +251,7 @@ def write_log_files(
         with open(log_file, "w") as f:
             for filename in modified_files:
                 f.write(filename + "\n")
-        typer.echo(
+        logger.info(
             f"A list of {len(modified_files)} modified files is saved at {log_file}."
         )
 
@@ -260,7 +264,7 @@ def write_log_files(
         with open(error_log_file, "w") as f:
             for filename in error_files:
                 f.write(filename + "\n")
-        typer.echo(
+        logger.info(
             f"A list of {len(error_files)} files that could not be inferred is at {error_log_file}."
         )
 
@@ -282,12 +286,11 @@ def infer_isolation_target(
     Returns:
         ``(modified_files, error_files)`` path lists.
     """
-    if verbose:
-        typer.echo(f"Processing directory pattern: {source_dir}")
-        if log_file:
-            typer.echo(f"Log file: {log_file}")
-        if error_log_file:
-            typer.echo(f"Error log file: {error_log_file}")
+    logger.debug(f"Processing directory pattern: {source_dir}")
+    if log_file:
+        logger.debug(f"Log file: {log_file}")
+    if error_log_file:
+        logger.debug(f"Error log file: {error_log_file}")
 
     modified_files: list[str] = []
     error_files: list[str] = []
@@ -334,11 +337,13 @@ def main(
     ] = False,
 ) -> None:
     """Repair missing isolation targets for selected parquet globs."""
+    configure_script_logging(verbose=verbose)
+
     all_modified: list[str] = []
     all_errors: list[str] = []
 
     for pattern in input_dir:
-        typer.echo(f"Processing directory pattern: {pattern}")
+        logger.info(f"Processing directory pattern: {pattern}")
         modified, errors = infer_isolation_target(
             source_dir=pattern,
             log_file=None,

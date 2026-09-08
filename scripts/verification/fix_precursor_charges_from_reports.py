@@ -40,15 +40,14 @@ from scripts.verification.verify_precursor_charges_and_acq_type import (
     extract_file_name,
 )
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
     help="Fix precursor charges from verification CSV reports",
     no_args_is_help=True,
     add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 INPUT_DIR_OPTION = typer.Option(
@@ -437,6 +436,7 @@ def main(
     input_dir: str = INPUT_DIR_OPTION,
     report_dir: str = REPORT_DIR_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable DEBUG logging"),
 ) -> None:
     """Fix precursor charges from verification CSVs: delete bad DIA files, drop zero-charge DDA rows.
 
@@ -444,7 +444,9 @@ def main(
         input_dir: Input directory containing parquet/ipc files organised by project subfolders.
         report_dir: Directory containing incorrect_dia_files.csv and incorrect_dda_files.csv.
         dry_run: Log actions without making changes.
+        verbose: Enable DEBUG logging.
     """
+    configure_script_logging(verbose=verbose)
     run_cleanup(input_dir=input_dir, report_dir=report_dir, dry_run=dry_run)
 
 

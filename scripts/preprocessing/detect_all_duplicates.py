@@ -1,3 +1,17 @@
+"""Find IPC files that share an experiment basename within dataset trees.
+
+Run this before the same-folder and multi-folder duplicate classifiers so later
+cleanup stages have a complete candidate report.
+
+CLI::
+
+    python scripts/preprocessing/detect_all_duplicates.py --help
+    python scripts/preprocessing/detect_all_duplicates.py detect-duplicates <data-root>/acfm
+    python scripts/preprocessing/detect_all_duplicates.py batch-detect <data-root>/acfm <data-root>/lcfm
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import os
 from typing import List, Dict
 from pathlib import Path
@@ -26,13 +40,14 @@ PREFIX_OPTION = typer.Option(
 def find_duplicate_files(
     source_dir: str, output_file: str = "duplicate_files.txt"
 ) -> None:
-    """Finds and records duplicate files in the source directory based on base filenames.
+    """Create the candidate report needed for safe duplicate classification.
 
-    Duplicates are defined as having the same base name with different extensions (e.g., .ipc, .mzml.ipc).
+    Files sharing a basename across ``.ipc`` and ``.mzML.ipc`` variants are
+    treated as candidates.
 
-    Parameters:
-        source_dir (str): The directory to search for duplicate files.
-        output_file (str): The file where duplicates will be saved.
+    Args:
+        source_dir: Directory tree to inspect.
+        output_file: Destination for grouped duplicate paths.
     """
     file_dict = group_files_by_base_name(source_dir)
     duplicates = identify_duplicates(file_dict)
@@ -40,7 +55,14 @@ def find_duplicate_files(
 
 
 def group_files_by_base_name(source_dir: str) -> Dict[str, List[str]]:
-    """Groups files by their base names in the given directory."""
+    """Preserve every candidate path so duplicate groups can be classified later.
+
+    Args:
+        source_dir: Directory tree containing IPC variants.
+
+    Returns:
+        Mapping from experiment basename to matching paths.
+    """
     file_dict: Dict[str, List[str]] = {}
     for root, _, files in os.walk(source_dir):
         for file in files:
@@ -53,12 +75,24 @@ def group_files_by_base_name(source_dir: str) -> Dict[str, List[str]]:
 
 
 def identify_duplicates(file_dict: Dict[str, List[str]]) -> List[List[str]]:
-    """Identifies duplicate files from the grouped files dictionary."""
+    """Discard singleton experiments so reports contain only cleanup candidates.
+
+    Args:
+        file_dict: Experiment basenames mapped to candidate paths.
+
+    Returns:
+        Path groups containing more than one file.
+    """
     return [file_paths for file_paths in file_dict.values() if len(file_paths) > 1]
 
 
 def save_duplicates(output_file: str, duplicates: List[List[str]]) -> None:
-    """Saves the list of duplicate files to a text file."""
+    """Persist duplicate groups for the folder-aware cleanup stages.
+
+    Args:
+        output_file: Destination for the duplicate report.
+        duplicates: Path groups to record.
+    """
     if duplicates:
         with open(output_file, "w") as f:
             for duplicate_group in duplicates:
@@ -75,7 +109,14 @@ def detect_duplicates(
     extensions: List[str] = EXTENSIONS_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Detect duplicate files in a directory structure."""
+    """Generate a complete duplicate candidate report for one dataset.
+
+    Args:
+        source_dir: Directory tree to inspect.
+        output_file: Destination for duplicate groups.
+        extensions: Requested extensions retained for CLI compatibility.
+        verbose: Whether to print scan details.
+    """
     if verbose:
         typer.echo(f"Searching for duplicates in: {source_dir}")
         typer.echo(f"Output file: {output_file}")
@@ -101,7 +142,13 @@ def batch_detect(
     output_dir: str = OUTPUT_DIR_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Detect duplicates in multiple directories."""
+    """Generate separate duplicate reports for several datasets.
+
+    Args:
+        directories: Dataset trees to inspect.
+        output_dir: Directory that receives the reports.
+        prefix: Prefix used for each report filename.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -119,8 +166,8 @@ def batch_detect(
 
 
 def main() -> None:
-    """Entry point for the script to detect duplicate named files in a folder system."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible scans of the historical hardcoded paths."""
+    # Legacy behaviour for backwards compatibility
     directories = ["<data-root>/acfm", "<data-root>/lcfm"]
     output_dir = "preprocessing/outputs"
 

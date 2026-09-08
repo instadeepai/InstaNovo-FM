@@ -1,27 +1,13 @@
-"""Add acquisition column to parquet files based on search data.
+"""Attach DIA or DDA acquisition metadata to converted Parquet files.
 
-This script reads an Excel search data file containing project, file path,
-and acquisition type information, then adds an "acquisition" column to each
-matching parquet file with the value ("DIA" or "DDA") from the search data.
+Run this when converted files lack the acquisition metadata required downstream.
+It matches project and normalised filenames against an Excel search-data table
+and supports local trees or S3 listings.
 
-USAGE:
-======
-# Local directory
-python scripts/preprocessing/add_acquisition_column.py \
-    --input-dir <data-root>/lcfm/ \
-    --search-data search_data_with_new_projects.xlsx
+CLI::
 
-# S3 bucket (requires AWS profile)
-python scripts/preprocessing/add_acquisition_column.py \
-    --input-dir s3://bucket/acfm/ \
-    --search-data search_data.xlsx \
-    --aws-profile <your-aws-profile>
-
-# Dry run (preview changes without modifying files)
-python scripts/preprocessing/add_acquisition_column.py \
-    --input-dir <data-root>/lcfm/ \
-    --search-data search_data.xlsx \
-    --dry-run
+    python scripts/preprocessing/add_acquisition_column.py --help
+    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/ --search-data search_data_with_new_projects.xlsx
 """
 
 import logging
@@ -47,7 +33,7 @@ INPUT_DIR_OPTION = typer.Option(
     ...,
     "--input-dir",
     "-i",
-    help="Input directory containing parquet files organized by project subfolders",
+    help="Input directory containing parquet files organised by project subfolders",
 )
 SEARCH_DATA_OPTION = typer.Option(
     "search_data_with_new_projects.xlsx",
@@ -76,12 +62,23 @@ VERBOSE_OPTION = typer.Option(
 
 
 def is_s3_path(path: str) -> bool:
-    """Check if a path is an S3 path."""
+    """Let callers select remote handling without attempting filesystem access.
+
+    Args:
+        path: Input location to classify.
+
+    Returns:
+        Whether the location uses the S3 URI scheme.
+    """
     return path.startswith("s3://")
 
 
 def setup_aws_credentials(aws_profile: Optional[str]) -> None:
-    """Set up AWS credentials from profile for polars S3 access."""
+    """Expose the requested AWS profile so Polars and the AWS CLI agree.
+
+    Args:
+        aws_profile: Profile name to activate, or null for ambient credentials.
+    """
     if not aws_profile:
         return
 
@@ -103,7 +100,15 @@ def setup_aws_credentials(aws_profile: Optional[str]) -> None:
 
 
 def list_s3_data_files(s3_path: str, aws_profile: Optional[str] = None) -> List[str]:
-    """List data files (.parquet or .ipc) in an S3 path using AWS CLI."""
+    """Discover remote data files without downloading the dataset.
+
+    Args:
+        s3_path: Bucket prefix to search recursively.
+        aws_profile: Optional AWS profile used for the listing.
+
+    Returns:
+        S3 URIs for Parquet and IPC objects found below the prefix.
+    """
     cmd = ["aws", "s3", "ls", s3_path, "--recursive"]
     if aws_profile:
         cmd.extend(["--profile", aws_profile])
@@ -135,7 +140,15 @@ def list_s3_data_files(s3_path: str, aws_profile: Optional[str] = None) -> List[
 def find_data_files_in_folder(
     input_dir: str, aws_profile: Optional[str] = None
 ) -> List[str]:
-    """Find all data files (.parquet or .ipc) in a folder (local or S3)."""
+    """Give acquisition enrichment one uniform file list for local or S3 input.
+
+    Args:
+        input_dir: Local directory or S3 prefix to inspect.
+        aws_profile: Optional AWS profile for S3 access.
+
+    Returns:
+        Paths to Parquet and IPC files below the input location.
+    """
     if is_s3_path(input_dir):
         return list_s3_data_files(input_dir, aws_profile)
     else:
@@ -151,28 +164,45 @@ def find_data_files_in_folder(
 
 
 def extract_file_name(path_str: str) -> str:
-    """Extract a search-data lookup key from a file path.
+    """Normalise stored filenames so they match search-data rows reliably.
 
     Strips compound proteomics extensions (``.mzml.parquet``, etc.), shard
-    suffixes, and embedded ``.mzml`` so paths align with Excel ``file path``
-    entries. For the value stored in the parquet ``experiment_name`` column or
-    USI ``datafile``, use :func:`experiment_name_from_path` instead.
+    suffixes, and embedded ``.mzml``.
+
+    Args:
+        path_str: Data path whose experiment key is needed.
+
+    Returns:
+        Canonical key used by the search-data workbook.
     """
     return search_data_lookup_key(path_str)
 
 
 def extract_project(path: str) -> str:
-    """Extract project as the immediate folder the file is inside."""
+    """Associate a file with the project dimension used in metadata lookups.
+
+    Args:
+        path: Data file path organised beneath its project folder.
+
+    Returns:
+        Immediate parent folder name.
+    """
     return Path(path).parent.name
 
 
 def load_acquisitions_from_search_data(
     search_data_path: str,
 ) -> Dict[Tuple[str, str], str]:
-    """Load acquisition types from the search data Excel file.
+    """Build an unambiguous lookup before any Parquet files are modified.
+
+    Args:
+        search_data_path: Excel workbook containing project, file path, and acquisition.
 
     Returns:
-        Dictionary mapping (project, filename) to acquisition type ("DIA" or "DDA")
+        Project and filename keys mapped to acquisition type.
+
+    Raises:
+        ValueError: If required columns are absent or assignments conflict.
     """
     df = pl.read_excel(search_data_path)
 
@@ -238,7 +268,7 @@ def _process_data_file_with_acquisition(
     dry_run: bool,
     verbose: bool,
 ) -> Literal["updated", "already_has_column", "error"]:
-    """Read parquet, add acquisition column if missing; return outcome."""
+    """Keep per-file failures from aborting acquisition enrichment for the dataset."""
     try:
         df = pl.read_parquet(file_path)
 
@@ -277,14 +307,14 @@ def add_acquisition_column(
     dry_run: bool = False,
     verbose: bool = False,
 ) -> None:
-    """Add acquisition column to parquet files based on search data.
+    """Fill required acquisition metadata from the authoritative search-data table.
 
     Args:
-        input_dir: Input directory containing parquet files
-        search_data_path: Path to search data Excel file
-        aws_profile: AWS profile for S3 access
-        dry_run: If True, preview changes without modifying files
-        verbose: Enable verbose output
+        input_dir: Local directory or S3 prefix containing data files.
+        search_data_path: Excel workbook with acquisition assignments.
+        aws_profile: Optional AWS profile for S3 access.
+        dry_run: Whether to preview without modifying files.
+        verbose: Whether to print per-file details.
     """
     if is_s3_path(input_dir):
         setup_aws_credentials(aws_profile)
@@ -344,7 +374,15 @@ def main(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Add acquisition column to parquet files based on search data."""
+    """Enrich converted files with acquisition type.
+
+    Args:
+        input_dir: Local directory or S3 prefix containing data files.
+        search_data: Excel workbook with acquisition assignments.
+        aws_profile: Optional AWS profile for S3 access.
+        dry_run: Whether to preview without modifying files.
+        verbose: Whether to print per-file details.
+    """
     add_acquisition_column(
         input_dir=input_dir,
         search_data_path=search_data,

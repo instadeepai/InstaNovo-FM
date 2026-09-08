@@ -1,9 +1,11 @@
-r"""2-pass out-of-core shuffle for large parquet datasets.
+r"""Globally shuffle parquet splits that are far too large to hold in RAM.
 
-Based on https://blog.janestreet.com/how-to-shuffle-a-big-dataset/
+Training needs rows in random order, but a corpus of sharded ``{split}_*.parquet``
+files cannot simply be loaded and sampled. This script implements the two-pass
+out-of-core shuffle from Jane Street's
+https://blog.janestreet.com/how-to-shuffle-a-big-dataset/, which reaches a true
+global shuffle while never holding more than a pile in memory.
 
-Algorithm
----------
 Pass 1 — Scatter:
     For each input file, read it into memory, randomly assign every row to one
     of M piles, and write each pile to a temporary parquet file.  Sub-piles from
@@ -12,11 +14,8 @@ Pass 1 — Scatter:
 Pass 2 — Shuffle:
     Load each pile into RAM, shuffle it, and write it as a final output file.
 
-Complexity  (per split, e.g. the train split alone)
----------------------------------------------------
-Let N = total rows across all files in the split (e.g. train_0 + train_1 + …),
-    F = number of those input files,
-    M = number of piles (≈ N / chunk_size).
+Complexity (per split, e.g. the train split alone), with N = total rows across
+the split's files and M = number of piles (≈ N / chunk_size):
 
     Time  : O(N)   — every row is read and written a constant number of times.
     RAM   : Pass 1 holds one input file at a time: O(max(rows per file)).
@@ -24,31 +23,36 @@ Let N = total rows across all files in the split (e.g. train_0 + train_1 + …),
     Disk  : Temporary piles use ≈ 1× the split's on-disk size.
             Output files also use ≈ 1× the split's on-disk size.
             Both coexist briefly, so peak transient disk ≈ 2× one split's size.
-            Use *temp_dir* (``--temp-dir``) to place pile files on a specific volume
+            Use ``--temp-dir`` to place pile files on a specific volume
             instead of the process default (often ``/tmp``).
 
 Each split (train, valid, test) is processed independently and sequentially,
 so these costs never stack across splits.
 
-Usage
------
-    # Forecast optimal settings
-    python shuffle_2pass.py --forecast --sample-file train_0.parquet
+CLI::
+
+    python scripts/splitting/shuffle_2pass.py --help
+
+    # Forecast a safe --chunk-size for this machine before committing to a run
+    python scripts/splitting/shuffle_2pass.py --forecast --sample-file train_0.parquet
 
     # Basic run: single directory
-    python shuffle_2pass.py --base-dir /data/shards --output-dir /data/shuffled
+    python scripts/splitting/shuffle_2pass.py \
+        --base-dir /data/shards --output-dir /data/shuffled
 
     # Combine multiple dataset directories into a single shuffled output
-    python shuffle_2pass.py \
+    python scripts/splitting/shuffle_2pass.py \
         --base-dirs /data/dataset1 /data/dataset2 /data/dataset3 \
         --output-dir /data/shuffled
 
     # Custom chunk size + seed for reproducibility
-    python shuffle_2pass.py --base-dir /data/shards --output-dir /data/shuffled \
+    python scripts/splitting/shuffle_2pass.py \
+        --base-dir /data/shards --output-dir /data/shuffled \
         --chunk-size 200000 --seed 42
 
     # Different parallelism per stage
-    python shuffle_2pass.py --base-dir /data/shards --output-dir /data/shuffled \
+    python scripts/splitting/shuffle_2pass.py \
+        --base-dir /data/shards --output-dir /data/shuffled \
         --pass1-procs 4 --pass2-procs 8
 """
 
@@ -75,7 +79,16 @@ logger = logging.getLogger(__name__)
 
 
 def estimate_bytes_per_row(sample_file: str, n: int = 10_000) -> float:
-    """Estimate in-memory bytes per row from a sample parquet file."""
+    """Ground the memory forecast in real data instead of the generic default.
+
+    Args:
+        sample_file: A representative parquet file from the corpus.
+        n: Rows to read; enough to average out per-row size variation.
+
+    Returns:
+        Estimated in-memory bytes per row, falling back to 1000.0 if the file
+        cannot be read, so forecasting never blocks a run.
+    """
     try:
         df = pl.scan_parquet(sample_file).head(n).collect()
         bpr = float(df.estimated_size()) / len(df)
@@ -93,17 +106,19 @@ def forecast_chunk_size(
     safety: float = 0.7,
     pass2: bool = False,
 ) -> dict[str, Any]:
-    """Forecast the max safe chunk size for a given RAM / parallelism config.
+    """Size piles so a parallel run fits in RAM rather than OOMing hours in.
 
     Args:
         ram_gb: Total system RAM in GB.
-        num_procs: Number of parallel workers.
+        num_procs: Number of parallel workers competing for that RAM.
         bytes_per_row: Estimated in-memory bytes per row.
         safety: Fraction of RAM to use (0–1). Default 0.7 leaves 30% headroom.
-        pass2: If True, accounts for 2× memory (original + shuffled copy).
+        pass2: Account for 2× memory, since the shuffle holds the original and
+            the shuffled copy at once.
 
     Returns:
-        Dict with ``max_chunk_size`` and a memory breakdown.
+        The recommended ``max_chunk_size`` plus a memory breakdown, so the
+        forecast can be inspected before a long run is started.
     """
     usable = ram_gb * (1024**3) * safety
     per_proc = usable / num_procs
@@ -126,7 +141,15 @@ def forecast_chunk_size(
 
 
 def detect_ram_gb() -> float:
-    """Return total system RAM in GB.  Requires *psutil*."""
+    """Discover the RAM budget so callers need not pass ``--ram-gb`` on every run.
+
+    Returns:
+        Total system RAM in GB.
+
+    Raises:
+        SystemExit: If *psutil* is not installed, since auto-detection is then
+            impossible and the caller must supply ``--ram-gb`` explicitly.
+    """
     try:
         import psutil
 
@@ -144,7 +167,7 @@ def detect_ram_gb() -> float:
 
 
 def _file_seed(seed: Optional[int], file_path: str) -> Optional[int]:
-    """Deterministic per-file seed (stable across Python sessions, unlike hash())."""
+    """Derive a stable per-file seed from ``--seed`` and the path, so reruns match and parallel files do not share one RNG stream."""
     if seed is None:
         return None
     h = int(hashlib.sha256(file_path.encode()).hexdigest()[:8], 16)
@@ -154,7 +177,7 @@ def _file_seed(seed: Optional[int], file_path: str) -> Optional[int]:
 def _scatter_file(
     file_path: str, num_piles: int, temp_dir: str, seed: Optional[int]
 ) -> list[tuple[int, str, int]]:
-    """Read one file, assign rows to random piles, write piles to temp dir."""
+    """Spread one file's rows across piles so pass 2 can shuffle globally in bounded RAM."""
     t0 = time.perf_counter()
     df = pl.read_parquet(file_path)
     n = len(df)
@@ -189,11 +212,7 @@ def _scatter_file(
 def _combine_pile(
     pile_id: int, pile_files: list[tuple[str, int]], dest_dir: str
 ) -> Optional[tuple[int, str, int]]:
-    """Merge sub-pile files sharing a pile_id into a single file.
-
-    When only one contributor exists the file is moved (zero-copy) instead of
-    being re-read and re-written.
-    """
+    """Gather a pile's contributions from every input file, moving rather than copying when there is only one."""
     total = sum(rc for _, rc in pile_files)
     if total == 0:
         return None
@@ -223,7 +242,7 @@ def _shuffle_pile(
     split: str,
     seed: Optional[int],
 ) -> tuple[int, int]:
-    """Load a pile, shuffle it in RAM, write the final output file."""
+    """Randomise within a pile, which is what makes the scattered rows a true global shuffle."""
     pile_id, pile_file, _ = pile_info
     t0 = time.perf_counter()
 
@@ -249,7 +268,7 @@ def _shuffle_pile(
 
 
 def _init_worker() -> None:
-    """Configure logging inside spawned worker processes."""
+    """Restore logging in spawned workers, which start without the parent's configuration."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -258,13 +277,13 @@ def _init_worker() -> None:
 
 
 def _spawn_pool(num_procs: int) -> ProcessPool:
-    """Create a multiprocessing Pool with the 'spawn' start method."""
+    """Force the 'spawn' start method, so workers never inherit the parent's Polars thread state."""
     ctx = mp.get_context("spawn")
     return ctx.Pool(processes=num_procs, initializer=_init_worker)
 
 
 def _count_rows(path: str) -> int:
-    """Row count from parquet metadata (no full data scan)."""
+    """Size the run from parquet metadata so planning does not read the whole corpus."""
     n: int = int(pl.scan_parquet(path).select(pl.len()).collect().item())
     return n
 
@@ -275,7 +294,7 @@ def _auto_chunk_size(
     ram_gb: Optional[float] = None,
     safety: float = 0.7,
 ) -> int:
-    """Derive a safe chunk size from system RAM so pass 2 fits in memory."""
+    """Pick a chunk size for the caller so an omitted ``--chunk-size`` cannot OOM pass 2."""
     if ram_gb is None:
         ram_gb = detect_ram_gb()
     info = forecast_chunk_size(ram_gb, pass2_procs, bytes_per_row, safety, pass2=True)
@@ -291,7 +310,7 @@ def _auto_chunk_size(
 def _run_parallel_or_seq(
     func: Callable[..., Any], items: list[Any], num_procs: int, label: str
 ) -> list[Any]:
-    """Run func over items using a spawn pool, falling back to sequential."""
+    """Avoid paying process-spawn cost when there is nothing to parallelise."""
     if len(items) < 2:
         return [func(x) for x in items]
     n = min(num_procs, len(items))
@@ -313,15 +332,28 @@ def shuffle_split(
     safety: float = 0.7,
     temp_dir: Optional[str] = None,
 ) -> None:
-    """Shuffle one split (e.g. train / valid / test) using the 2-pass algorithm.
+    """Shuffle one split end to end when it does not fit in memory.
+
+    Runs both passes, verifies the output row count against the input, and logs
+    per-stage timings so a long run can be diagnosed after the fact.
 
     Args:
         split_dirs: One or more directories containing ``{split}_*.parquet``
             files.  When a list is given, files from every directory are combined
             into a single shuffled output.
+        split: Split prefix to process, e.g. ``train``.
+        output_dir: Where the shuffled ``{split}_{i}.parquet`` files are written.
+        chunk_size: Target rows per pile; derived from RAM when omitted.
+        seed: Fixes the scatter and shuffle randomness for reproducible output.
+        pass1_procs: Worker count for the scatter pass; defaults to all CPUs.
+        pass2_procs: Worker count for the shuffle pass; defaults to all CPUs.
+        ram_gb: RAM budget used to derive *chunk_size*; auto-detected when omitted.
+        bytes_per_row: Per-row size estimate feeding the same derivation.
+        safety: Fraction of RAM the derivation is allowed to plan for.
         temp_dir: Parent directory for pass-1 temporary pile files (a unique
             subdirectory is created inside it). If ``None``, uses the system default
-            (typically ``TMPDIR`` or ``/tmp``).
+            (typically ``TMPDIR`` or ``/tmp``). Point it at a volume with room for
+            roughly the split's on-disk size.
     """
     if isinstance(split_dirs, str):
         split_dirs = [split_dirs]
@@ -388,7 +420,7 @@ def shuffle_split(
 
         dtc = time.perf_counter() - tc
         logger.info(
-            f"[{split}] Pile combine done ({dtc:.1f}s) — " f"{len(final_piles)} piles"
+            f"[{split}] Pile combine done ({dtc:.1f}s) — "  f"{len(final_piles)} piles"
         )
 
         # ── Pass 2: shuffle ──────────────────────────────────────────────
@@ -426,12 +458,26 @@ def shuffle_all(
     safety: float = 0.7,
     temp_dir: Optional[str] = None,
 ) -> None:
-    """Shuffle every split found under one or more base directories.
+    """Shuffle a whole dataset directory in one call, split by split.
 
     Each directory in *base_dirs* must contain sharded parquet files:
     ``train_0.parquet``, ``train_1.parquet``, … and the same pattern for
     ``valid_``, ``val_``, and ``test_``.  When multiple directories are given,
-    files from all of them are combined into a single shuffled output per split.
+    files from all of them are combined into a single shuffled output per split,
+    which is how several source datasets get merged into one training corpus.
+    A failure on one split is logged and the remaining splits still run.
+
+    Args:
+        base_dirs: One or more directories of sharded split files.
+        output_dir: Destination for the shuffled shards of every split.
+        chunk_size: Target rows per pile; derived from RAM when omitted.
+        seed: Fixes randomness for reproducible output.
+        pass1_procs: Worker count for the scatter pass; defaults to all CPUs.
+        pass2_procs: Worker count for the shuffle pass; defaults to all CPUs.
+        ram_gb: RAM budget used to derive *chunk_size*; auto-detected when omitted.
+        bytes_per_row: Per-row size estimate feeding the same derivation.
+        safety: Fraction of RAM the derivation is allowed to plan for.
+        temp_dir: Parent directory for the temporary pile files.
     """
     if isinstance(base_dirs, str):
         base_dirs = [base_dirs]
@@ -443,7 +489,7 @@ def shuffle_all(
 
     os.makedirs(output_dir, exist_ok=True)
     logger.info(
-        f"\n{'=' * 60}\n" f"Shuffling shards in {', '.join(base_dirs)}\n" f"{'=' * 60}"
+        f"\n{'=' * 60}\n"  f"Shuffling shards in {', '.join(base_dirs)}\n"  f"{'=' * 60}"
     )
     dirs_as_str = [str(Path(d)) for d in base_dirs]
     for split in ("train", "valid", "val", "test"):
@@ -469,7 +515,7 @@ def shuffle_all(
 
 
 def _handle_forecast(args: argparse.Namespace) -> None:
-    """Print chunk-size forecast and exit."""
+    """Render the ``--forecast`` report so a chunk size can be chosen before committing hours."""
     ram = args.ram_gb or detect_ram_gb()
     bpr = args.bytes_per_row
     if args.sample_file and os.path.exists(args.sample_file):
@@ -504,14 +550,24 @@ def _handle_forecast(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    """CLI entry point."""
+    """Shuffle sharded parquet splits that do not fit in RAM, using a 2-pass scatter/shuffle.
+
+    Run this to randomise training order over a corpus too large to load, or to
+    merge several dataset directories into one shuffled output. Pass
+    ``--forecast`` first to size ``--chunk-size`` against this machine's RAM
+    instead of discovering the limit by OOMing part-way through.
+
+    Raises:
+        SystemExit: Via argparse when neither ``--base-dir`` nor ``--base-dirs``
+            is given together with ``--output-dir`` (outside ``--forecast``).
+    """
     parser = argparse.ArgumentParser(
         description="2-pass out-of-core shuffle for large parquet splits.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--base-dir",
-        help="Single directory containing sharded parquet files (backward-compatible).",
+        help="Single directory containing sharded parquet files (backwards-compatible).",
     )
     parser.add_argument(
         "--base-dirs",

@@ -1,3 +1,17 @@
+"""Separate cross-folder duplicates that require manual ownership decisions.
+
+Run this on output from ``detect_all_duplicates.py`` so ambiguous copies in
+different project folders can be reviewed before any deletion.
+
+CLI::
+
+    python scripts/preprocessing/detect_multi_folder_duplicates.py --help
+    python scripts/preprocessing/detect_multi_folder_duplicates.py detect-duplicates preprocessing/outputs/duplicate_files_acfm.txt
+    python scripts/preprocessing/detect_multi_folder_duplicates.py batch-detect preprocessing/outputs/duplicate_files_acfm.txt preprocessing/outputs/duplicate_files_lcfm.txt
+
+Use ``python script.py command --help`` for flags.
+"""
+
 from collections import defaultdict
 from pathlib import Path
 import typer
@@ -27,13 +41,17 @@ PREFIX_OPTION = typer.Option(
 def find_duplicate_files(
     input_file: str, output_file: str = "multi_folder_duplicates.txt"
 ) -> None:
-    """Finds and records files that occur in two different folders, as opposed to duplicates within the same folder.
+    """Separate ambiguous cross-folder copies for manual resolution.
 
-    This function is designed to run on the output of `detect_all_duplicates`. These multi-folder duplicates must be carefully considered and manually dealt with, since only one folder entry can be the true entry.
+    This consumes ``detect_all_duplicates.py`` output because only one folder
+    entry can represent the intended dataset record.
 
-    Parameters:
-        input_file (str): The duplicate search output file to search for multi-folder duplicate files.
-        output_file (str): The file where multi-folder duplicates will be saved.
+    Args:
+        input_file: Duplicate report to classify by parent folder.
+        output_file: Destination for cross-folder duplicate groups.
+
+    Raises:
+        typer.Exit: If the input report does not exist.
     """
     if not Path(input_file).exists():
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
@@ -42,7 +60,7 @@ def find_duplicate_files(
     # Dictionary to store file names and their corresponding folders
     file_map = defaultdict(list)
 
-    # Read the input file and organize data
+    # Read the input file and organise data
     with open(input_file, "r") as infile:
         for line in infile:
             line = line.strip()
@@ -83,7 +101,13 @@ def detect_duplicates(
     output_file: str = OUTPUT_FILE_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Detect multi-folder duplicate files."""
+    """Produce a review list before deleting duplicates across folder boundaries.
+
+    Args:
+        input_file: Duplicate report produced by the all-duplicates detector.
+        output_file: Destination for cross-folder groups.
+        verbose: Whether to print selected paths.
+    """
     if verbose:
         typer.echo(f"Input file: {input_file}")
         typer.echo(f"Output file: {output_file}")
@@ -97,7 +121,13 @@ def batch_detect(
     output_dir: str = OUTPUT_DIR_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Detect multi-folder duplicates from multiple input files."""
+    """Classify several duplicate reports for a batch of datasets.
+
+    Args:
+        input_files: Duplicate reports to classify.
+        output_dir: Directory that receives classified reports.
+        prefix: Prefix used for each output filename.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -115,8 +145,8 @@ def batch_detect(
 
 
 def main() -> None:
-    """Entry point for the script to detect multi-folder duplicates from a list of all detected duplicates."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible classification of the hardcoded ACFM report."""
+    # Legacy behaviour for backwards compatibility
     input_file = "preprocessing/outputs/duplicate_files_acfm.txt"
     output_file = "preprocessing/outputs/multi_folder_duplicates_acfm.txt"
 

@@ -1,11 +1,27 @@
-"""Index-based shuffling of parquet files across train/validation/test splits.
+"""Shuffle parquet splits by shuffling row addresses rather than rows.
 
-This approach:
-1. Counts rows in each chunk file
-2. Assigns unique indices to each row (file_id, row_index)
-3. Shuffles the index list
-4. Creates new chunks by reading specific rows from original files
-5. Verifies row counts match original
+Only the ``(file, row)`` index list is held in memory; the actual spectra are
+pulled from the original files as each output chunk is assembled. That keeps
+peak memory tied to the index list instead of the data, at the cost of
+re-reading source files once per chunk they contribute to. The steps are:
+
+1. Count rows in each chunk file
+2. Assign unique indices to each row (file_id, row_index)
+3. Shuffle the index list
+4. Create new chunks by reading specific rows from original files
+5. Verify row counts match original
+
+This is the slowest of the three shuffle scripts — prefer ``shuffle_in_ram.py``
+when a split fits in memory, or ``shuffle_2pass.py`` when it does not.
+
+CLI::
+
+    python scripts/splitting/shuffle_indices.py --help
+    python scripts/splitting/shuffle_indices.py \
+        --base-dir /data/root \
+        --output-dir test_output \
+        --chunk-size 400000 \
+        --seed 42
 """
 
 import polars as pl
@@ -22,7 +38,13 @@ import time
 
 @dataclass
 class RowIndex:
-    """Represents a specific row in a specific file."""
+    """Addresses one row without holding it, so the shuffle can run over indices alone.
+
+    Args:
+        file_path: Source parquet file the row lives in.
+        file_id: Position of that file in the split's sorted file list.
+        row_index: Zero-based row offset within the file.
+    """
 
     file_path: str
     file_id: int
@@ -31,7 +53,20 @@ class RowIndex:
 
 @dataclass
 class SplitInfo:
-    """Information about a split (train/valid/test)."""
+    """Everything the shuffle needs to know about a split before touching its data.
+
+    Gathering counts and the chunk plan once means the later passes never
+    re-scan the inputs just to work out sizes.
+
+    Args:
+        split_type: Split prefix, e.g. ``train``.
+        total_rows: Rows across all of the split's files; the figure output is
+            verified against.
+        chunk_size: Target rows per output chunk.
+        num_chunks: Output chunks implied by *total_rows* and *chunk_size*.
+        original_files: The split's source files, in sorted order.
+        original_row_counts: Row count per source file, keyed by path.
+    """
 
     split_type: str
     total_rows: int
@@ -42,14 +77,29 @@ class SplitInfo:
 
 
 def get_parquet_files(split_dir: str, split_type: str) -> List[str]:
-    """Get all parquet files for a specific split type (train/valid/test)."""
+    """List a split's shards in a stable order, so ``file_id`` means the same thing every run.
+
+    Args:
+        split_dir: Directory holding the ``{split}_*.parquet`` shards.
+        split_type: Split prefix to match, e.g. ``train``.
+
+    Returns:
+        The matching paths, sorted; empty when the split is absent.
+    """
     pattern = os.path.join(split_dir, f"{split_type}_*.parquet")
     files = sorted(glob.glob(pattern))
     return files
 
 
 def count_rows_in_file(file_path: str) -> int:
-    """Count rows in a parquet file efficiently."""
+    """Read a row count from parquet metadata, so index building costs no full scan.
+
+    Args:
+        file_path: Parquet file to measure.
+
+    Returns:
+        The file's row count.
+    """
     lazy_df = pl.scan_parquet(file_path)
     count: int = lazy_df.select(pl.len()).collect().item()
     return count
@@ -58,7 +108,21 @@ def count_rows_in_file(file_path: str) -> int:
 def get_split_info(
     split_dir: str, split_type: str, target_chunk_size: int
 ) -> SplitInfo:
-    """Get information about a split including row counts and chunking."""
+    """Plan the shuffle in one metadata pass, so nothing downstream has to re-scan.
+
+    Args:
+        split_dir: Directory holding the split's shards.
+        split_type: Split prefix to inspect, e.g. ``train``.
+        target_chunk_size: Rows wanted per output chunk.
+
+    Returns:
+        A :class:`SplitInfo` carrying the file list, per-file counts and the
+        resulting chunk plan.
+
+    Raises:
+        ValueError: If the split has no files, since silently producing nothing
+            would look like a successful run.
+    """
     parquet_files = get_parquet_files(split_dir, split_type)
 
     if not parquet_files:
@@ -87,7 +151,14 @@ def get_split_info(
 
 
 def create_row_indices(split_info: SplitInfo) -> List[RowIndex]:
-    """Create a list of all row indices for the split."""
+    """Enumerate the split as addresses, the lightweight stand-in the shuffle operates on.
+
+    Args:
+        split_info: Plan produced by :func:`get_split_info`.
+
+    Returns:
+        One :class:`RowIndex` per row in the split, in file order.
+    """
     indices = []
 
     for file_id, file_path in enumerate(split_info.original_files):
@@ -104,7 +175,15 @@ def create_row_indices(split_info: SplitInfo) -> List[RowIndex]:
 def shuffle_indices(
     indices: List[RowIndex], seed: Optional[int] = None
 ) -> List[RowIndex]:
-    """Shuffle the list of row indices."""
+    """Randomise row order without moving any data.
+
+    Args:
+        indices: Row addresses to permute.
+        seed: Fixes the permutation so a run can be reproduced.
+
+    Returns:
+        A shuffled copy; the input list is left untouched.
+    """
     if seed is not None:
         random.seed(seed)
 
@@ -114,7 +193,15 @@ def shuffle_indices(
 
 
 def chunk_indices(indices: List[RowIndex], chunk_size: int) -> List[List[RowIndex]]:
-    """Split the shuffled indices into chunks."""
+    """Decide the output shard boundaries before any data is read.
+
+    Args:
+        indices: Shuffled row addresses.
+        chunk_size: Rows per output shard.
+
+    Returns:
+        One list of addresses per output shard.
+    """
     chunks = []
     for i in range(0, len(indices), chunk_size):
         chunk = indices[i : i + chunk_size]
@@ -123,7 +210,17 @@ def chunk_indices(indices: List[RowIndex], chunk_size: int) -> List[List[RowInde
 
 
 def read_specific_rows(file_path: str, row_indices: List[int]) -> pl.DataFrame:
-    """Read specific rows from a parquet file."""
+    """Fetch one chunk's share of a source file.
+
+    Args:
+        file_path: Source parquet file.
+        row_indices: Zero-based offsets to keep.
+
+    Returns:
+        The selected rows, in the file's own order rather than the requested
+        order — the shuffle comes from how chunks are composed, not from
+        within-file ordering.
+    """
     # Read the entire file and select specific rows
     df = pl.read_parquet(file_path)
     return df.filter(pl.arange(0, pl.len()).is_in(row_indices))
@@ -132,7 +229,14 @@ def read_specific_rows(file_path: str, row_indices: List[int]) -> pl.DataFrame:
 def group_indices_by_file(
     shuffled_chunks: List[List[RowIndex]],
 ) -> Dict[str, Dict[int, List[int]]]:
-    """Group row indices by file and chunk for efficient reading."""
+    """Invert the plan to file-major order, turning scattered row reads into one read per file and chunk.
+
+    Args:
+        shuffled_chunks: Output chunks expressed as row addresses.
+
+    Returns:
+        A ``{file_path: {chunk_id: [row_index, ...]}}`` lookup.
+    """
     file_groups: Dict[str, Dict[int, List[int]]] = {}
 
     for chunk_id, chunk_indices in enumerate(shuffled_chunks):
@@ -149,7 +253,15 @@ def group_indices_by_file(
 def read_chunk_data(
     file_groups: Dict[str, Dict[int, List[int]]], chunk_id: int
 ) -> List[pl.DataFrame]:
-    """Read data for a specific chunk from all relevant files."""
+    """Gather one output chunk's rows from every file that contributes to it.
+
+    Args:
+        file_groups: Lookup from :func:`group_indices_by_file`.
+        chunk_id: Output chunk being assembled.
+
+    Returns:
+        One frame per contributing file, ready to concatenate.
+    """
     chunk_data = []
 
     for file_path, chunk_data_dict in file_groups.items():
@@ -165,7 +277,15 @@ def read_chunk_data(
 def write_chunk_file(
     chunk_data: List[pl.DataFrame], output_dir: str, split_type: str, chunk_id: int
 ) -> None:
-    """Write chunk data to a parquet file."""
+    """Persist one assembled chunk under the naming scheme the rest of the pipeline expects.
+
+    Args:
+        chunk_data: Per-file frames making up the chunk; an empty list writes
+            nothing rather than an empty file.
+        output_dir: Destination directory.
+        split_type: Split prefix used in the output filename.
+        chunk_id: Index used in the output filename.
+    """
     if not chunk_data:
         return
 
@@ -185,7 +305,13 @@ def write_chunk_file(
 def create_shuffled_chunks(
     split_info: SplitInfo, shuffled_chunks: List[List[RowIndex]], output_dir: str
 ) -> None:
-    """Create shuffled chunk files by reading specific rows from original files."""
+    """Materialise the shuffled plan on disk, one chunk at a time to bound memory.
+
+    Args:
+        split_info: Plan describing the split being shuffled.
+        shuffled_chunks: Output chunks expressed as row addresses.
+        output_dir: Destination for the shuffled shards; created if absent.
+    """
     # Group indices by file for efficient reading
     file_groups = group_indices_by_file(shuffled_chunks)
 
@@ -199,7 +325,16 @@ def create_shuffled_chunks(
 
 
 def verify_row_counts(original_split_info: SplitInfo, output_dir: str) -> bool:
-    """Verify that the new chunks have the same total row count as the original."""
+    """Catch silently dropped rows before the shuffled output is trusted for training.
+
+    Args:
+        original_split_info: Plan carrying the expected row total.
+        output_dir: Directory holding the freshly-written shards.
+
+    Returns:
+        True when the totals agree; the caller reports the mismatch rather than
+        raising, so remaining splits still get processed.
+    """
     print("Verifying row counts...")
 
     # Count rows in new chunks
@@ -215,10 +350,10 @@ def verify_row_counts(original_split_info: SplitInfo, output_dir: str) -> bool:
     print(f"New total: {new_total_rows:,} rows")
 
     if new_total_rows == original_split_info.total_rows:
-        print("✅ Row counts match!")
+        print("Row counts match!")
         return True
     else:
-        print("❌ Row counts do not match!")
+        print("Row counts do not match!")
         return False
 
 
@@ -229,14 +364,19 @@ def shuffle_split_by_indices(
     seed: Optional[int] = None,
     output_dir: Optional[str] = None,
 ) -> None:
-    """Shuffle a split using the index-based approach.
+    """Shuffle one split without ever holding its data in memory.
+
+    Runs the whole index pipeline — plan, enumerate, shuffle, chunk, write,
+    verify — reporting progress at each step because the read-per-chunk pattern
+    makes this slow on large splits.
 
     Args:
-        split_dir: Directory containing the split files
-        split_type: Type of split (train, valid, test)
-        chunk_size: Target number of rows per chunk
-        seed: Random seed for reproducibility
-        output_dir: Output directory (if None, uses split_dir)
+        split_dir: Directory containing the split files.
+        split_type: Type of split (train, valid, test).
+        chunk_size: Target number of rows per output chunk.
+        seed: Random seed, for a reproducible permutation.
+        output_dir: Where shuffled shards are written; defaults to *split_dir*,
+            which overwrites the originals.
     """
     print(f"Processing {split_type} split in {split_dir}")
 
@@ -245,7 +385,7 @@ def shuffle_split_by_indices(
         output_dir = split_dir
 
     # Step 1: Get split information
-    print("Step 1: Analyzing split...")
+    print("Step 1: Analysing split...")
     split_info = get_split_info(split_dir, split_type, chunk_size)
 
     print(f"Found {len(split_info.original_files)} files:")
@@ -279,9 +419,9 @@ def shuffle_split_by_indices(
     success = verify_row_counts(split_info, output_dir)
 
     if success:
-        print(f"✅ Successfully shuffled {split_type} split!")
+        print(f"Successfully shuffled {split_type} split!")
     else:
-        print(f"❌ Error in {split_type} split shuffling!")
+        print(f"Error in {split_type} split shuffling!")
 
 
 def shuffle_all_splits(
@@ -290,13 +430,18 @@ def shuffle_all_splits(
     seed: Optional[int] = None,
     output_dir: Optional[str] = None,
 ) -> None:
-    """Shuffle all splits (train, valid, test) for all datasets using index-based approach.
+    """Shuffle every ``*_splits`` dataset folder under one root in a single run.
+
+    Each split directory's layout is preserved in the output, and a failure on
+    one split is reported and skipped so one bad dataset does not abort the
+    whole sweep.
 
     Args:
-        base_dir: Base directory containing the split folders
-        chunk_size: Target number of rows per chunk
-        seed: Random seed for reproducibility
-        output_dir: Output directory (if None, uses base_dir)
+        base_dir: Root containing per-dataset folders named ``*_splits``.
+        chunk_size: Target number of rows per output chunk.
+        seed: Random seed, for a reproducible permutation.
+        output_dir: Root for the shuffled output; defaults to *base_dir*, which
+            overwrites the originals in place.
     """
     base_path = Path(base_dir)
 
@@ -335,7 +480,13 @@ def shuffle_all_splits(
 
 
 def main() -> None:
-    """Main function to parse arguments and shuffle splits."""
+    """Shuffle every dataset's train/valid/test shards by permuting row addresses.
+
+    Run this when a split is too large to load but you want a simple,
+    dependency-free shuffle: only the index list is kept in memory. It re-reads
+    source files once per contributing chunk, so ``shuffle_2pass.py`` is the
+    faster choice at scale.
+    """
     parser = argparse.ArgumentParser(
         description="Index-based shuffle of parquet files across splits"
     )
@@ -372,7 +523,7 @@ def main() -> None:
     if args.output_dir is not None:
         print(f"Output directory: {args.output_dir}")
     else:
-        print("⚠️  WARNING: Will overwrite original files!")
+        print("WARNING: Will overwrite original files!")
 
     shuffle_all_splits(args.base_dir, args.chunk_size, args.seed, args.output_dir)
 

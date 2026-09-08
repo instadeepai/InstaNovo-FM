@@ -1,22 +1,32 @@
-r"""Split unlabelled MS/MS spectra into train/val/test using LSH clustering.
+r"""Split unlabelled MS/MS spectra into train/val/test without leaking near-duplicates.
 
-Uses Locality-Sensitive Hashing to cluster similar spectra and assign entire
-clusters to the same split, preventing data leakage.
+Unlabelled spectra have no peptide to key a split on, but the same analyte is
+measured repeatedly, so a naive random split scatters near-identical spectra
+across train and test and biases evaluation. Locality-Sensitive Hashing (LSH) gives
+similar spectra the same hash, and each hash is assigned to exactly one split,
+so an entire cluster of near-duplicates moves together. Assignments accumulate
+in a persistent table (hundreds of millions of hashes), which later batches join
+against so hashes seen before keep their original split.
 
 Modes:
     full       — compute LSH hashes + split data (default)
     lsh_only   — compute and save LSH assignments only
     split_only — split using pre-computed LSH assignments
 
-Usage:
-    python split_unlabelled_data_v2.py --mode full --input-dir data --output-dir splits
-    python split_unlabelled_data_v2.py --mode lsh_only --input-dir data --output-dir splits
-    python split_unlabelled_data_v2.py --mode split_only --input-dir data --output-dir splits \
-        --lsh-assignments splits/updated_lsh_assignments.parquet --mz-max 6000
-
 Checkpointing:
     Long-running jobs checkpoint every N files (default: 10).
     Resume by re-running the same command.  Use --clear-checkpoint to start fresh.
+
+CLI::
+
+    python scripts/splitting/split_unlabelled_data.py --help
+    python scripts/splitting/split_unlabelled_data.py --mode full \
+        --input-dir data --output-dir splits
+    python scripts/splitting/split_unlabelled_data.py --mode lsh_only \
+        --input-dir data --output-dir splits
+    python scripts/splitting/split_unlabelled_data.py --mode split_only \
+        --input-dir data --output-dir splits \
+        --lsh-assignments splits/updated_lsh_assignments.parquet --mz-max 6000
 """
 
 import argparse
@@ -80,9 +90,22 @@ _SCHEMA_COLS = list(REFERENCE_SCHEMA.keys())
 
 
 class CheckpointManager:
-    """Manages checkpointing and resuming of the splitting process."""
+    """Lets a multi-day split survive interruption without redoing finished files.
+
+    Persists the processed-file list alongside the in-flight split buffers, so a
+    resumed run continues mid-shard rather than re-reading the corpus. A separate
+    progress file is written every file for monitoring, since the checkpoint
+    itself is only written every *interval* files.
+
+    Args:
+        output_dir: Directory the checkpoint, buffer pickle and progress file
+            live in; created if absent.
+        interval: Files between full checkpoints, trading rewind distance
+            against the cost of pickling the buffers.
+    """
 
     def __init__(self, output_dir: str, interval: int = 10):
+        """Bind checkpoint paths so a resume finds the same files as the interrupted run."""
         self.output_dir = Path(output_dir)
         self.interval = interval
         self.checkpoint_path = self.output_dir / CHECKPOINT_FILENAME
@@ -103,7 +126,24 @@ class CheckpointManager:
         rows_per_file: int,
         parquet_files: List[str],
     ) -> None:
-        """Save current state to checkpoint file."""
+        """Capture enough state that a resumed run produces the same output as an uninterrupted one.
+
+        Args:
+            processed_files: Files already handled, skipped on resume.
+            split_buffers: Rows buffered but not yet written, pickled so no
+                spectra are lost mid-shard.
+            buffer_sizes: Per-split buffered row counts.
+            file_counters: Per-split shard counters, so resumed writes do not
+                overwrite existing shards.
+            total_processed: Spectra written so far.
+            total_input_spectra: Spectra read so far.
+            start_time: Original run start, kept so rate and ETA stay meaningful.
+            mode: Run mode; a resume against a different mode is rejected.
+            overall_mz_max: m/z ceiling the LSH projector was built with.
+            rows_per_file: Shard size in effect.
+            parquet_files: The full input list, compared on resume to detect a
+                changed corpus.
+        """
         meta = {
             "timestamp": datetime.now().isoformat(),
             "mode": mode,
@@ -125,7 +165,13 @@ class CheckpointManager:
         logger.info(f"Checkpoint saved to {self.checkpoint_path}")
 
     def load_checkpoint(self) -> Optional[Dict[str, Any]]:
-        """Load checkpoint data if it exists."""
+        """Offer previous state to a restarted run, treating a damaged checkpoint as none.
+
+        Returns:
+            The saved state including any pickled ``split_buffers``, or ``None``
+            when no checkpoint exists or it cannot be read — a corrupt
+            checkpoint should start a fresh run, not abort one.
+        """
         if not self.checkpoint_path.exists():
             return None
         try:
@@ -153,7 +199,17 @@ class CheckpointManager:
         total_input_spectra: int,
         start_time: float,
     ) -> None:
-        """Save progress snapshot for monitoring."""
+        """Publish a per-file progress snapshot so a days-long run can be monitored.
+
+        Args:
+            current_file: File just finished.
+            file_index: Position of that file in the input list.
+            total_files: Size of the input list.
+            total_processed: Spectra written so far.
+            total_input_spectra: Spectra read so far.
+            start_time: Run start, used to derive elapsed time and an estimate
+                of the remaining time.
+        """
         elapsed = time.time() - start_time
         with open(self.progress_path, "w") as f:
             json.dump(
@@ -179,7 +235,7 @@ class CheckpointManager:
             )
 
     def clear_checkpoint(self) -> None:
-        """Clear checkpoint files after successful completion."""
+        """Remove finished state so the next run does not resume into a completed job."""
         for p in (
             self.checkpoint_path,
             self.output_dir / "split_buffers.pkl",
@@ -199,7 +255,7 @@ _LSH_ASSIGNMENT_FILENAMES = frozenset(
 
 
 def _is_spectrum_parquet(path: str) -> bool:
-    """Return False for LSH assignment tables stored alongside spectrum data."""
+    """Stop the script's own LSH assignment tables being picked up as input spectra."""
     name = Path(path).name
     if name in _LSH_ASSIGNMENT_FILENAMES:
         return False
@@ -208,7 +264,18 @@ def _is_spectrum_parquet(path: str) -> bool:
 
 
 def find_files(input_dir: str) -> List[str]:
-    """Find all spectrum parquet files recursively under *input_dir*."""
+    """Collect the input corpus in a fixed order, which checkpoint resume depends on.
+
+    Args:
+        input_dir: Root to walk recursively.
+
+    Returns:
+        Sorted spectrum parquet paths, excluding LSH assignment tables that may
+        sit in the same tree.
+
+    Raises:
+        ValueError: If *input_dir* does not exist.
+    """
     path = Path(input_dir)
     if not path.exists():
         raise ValueError(f"Input directory {input_dir} does not exist")
@@ -224,7 +291,16 @@ def find_files(input_dir: str) -> List[str]:
 def normalise_dataframe_schema(
     df: pl.DataFrame, schema: Dict[str, pl.DataType]
 ) -> pl.DataFrame:
-    """Ensure *df* matches *schema* (add missing cols, reorder, drop extras)."""
+    """Give every source file the same columns, so their rows can share an output shard.
+
+    Args:
+        df: Frame to normalise.
+        schema: Canonical column names and dtypes to conform to.
+
+    Returns:
+        The frame with exactly *schema*'s columns, in its order; missing ones
+        null-filled and extras dropped.
+    """
     missing = [
         pl.lit(None).cast(dtype).alias(name)
         for name, dtype in schema.items()
@@ -236,10 +312,19 @@ def normalise_dataframe_schema(
 
 
 def get_spectra(df: pl.DataFrame, target_len: int = TARGET_LEN) -> np.ndarray:
-    """Pad mz/intensity list columns into a (N, 2, target_len) float32 array.
+    """Turn variable-length peak lists into the fixed-shape array the LSH projector needs.
 
-    Directly fills a pre-allocated numpy array instead of going through
-    Polars map_elements → per-row np.pad → np.stack.
+    Fills a pre-allocated array directly rather than going through Polars
+    ``map_elements`` → per-row ``np.pad`` → ``np.stack``, which dominated
+    runtime at corpus scale.
+
+    Args:
+        df: Frame carrying ``mz_array`` and ``intensity_array`` list columns.
+        target_len: Peaks kept per spectrum; longer lists are truncated and
+            shorter ones zero-padded.
+
+    Returns:
+        A ``(N, 2, target_len)`` float32 array of m/z and intensity channels.
     """
     n = len(df)
     out = np.zeros((n, 2, target_len), dtype=np.float32)
@@ -251,7 +336,14 @@ def get_spectra(df: pl.DataFrame, target_len: int = TARGET_LEN) -> np.ndarray:
 
 
 def filter_spectra(df: pl.DataFrame) -> pl.DataFrame:
-    """Apply quality-filter criteria to spectra."""
+    """Drop unusable spectra identically in both passes, so no row hashes to an unassigned split.
+
+    Args:
+        df: Spectra to filter.
+
+    Returns:
+        Rows within the retention time, offset, charge and m/z limits.
+    """
     return df.filter(
         (pl.col("retention_time") <= 10800)
         & (pl.col("lower_offset") <= 300)
@@ -268,7 +360,19 @@ def write_buffer(
     buffer_sizes: Dict[str, int],
     output_dir: str,
 ) -> None:
-    """Flush a split buffer to a shuffled parquet file."""
+    """Emit a shard once a split has buffered enough rows, shuffling away input-file order.
+
+    Filenames are zero-padded to five digits so a lexical listing matches
+    numeric order.
+
+    Args:
+        split: Split whose buffer should be flushed.
+        split_buffers: Per-split accumulated frames; the flushed entry is reset.
+        file_counters: Per-split shard counters, used for the output filename
+            and incremented here.
+        buffer_sizes: Per-split buffered row counts, reset for the flushed split.
+        output_dir: Destination directory for the shard.
+    """
     if not split_buffers[split]:
         return
     df = pl.concat(split_buffers[split], how="vertical_relaxed")
@@ -285,7 +389,7 @@ def write_buffer(
 
 
 def _iter_chunks(df: pl.DataFrame, chunk_size: int) -> Iterator[pl.DataFrame]:
-    """Yield in-memory chunks from *df* (no disk round-trip)."""
+    """Bound peak memory for large files without paying a disk round-trip."""
     if len(df) <= chunk_size:
         yield df
     else:
@@ -306,7 +410,7 @@ def _process_chunk(
     lsh_projector: BatchedPeakListRandomProjection,
     lsh_to_split: Dict,
 ) -> Tuple[int, int]:
-    """Process one (possibly chunked) DataFrame: filter → LSH → distribute."""
+    """Send each spectrum to the split its LSH cluster belongs to."""
     df = filter_spectra(df)
     if len(df) == 0:
         return 0, 0
@@ -347,7 +451,22 @@ def process_single_file(
     lsh_projector: BatchedPeakListRandomProjection,
     lsh_to_split: Dict,
 ) -> Tuple[int, int]:
-    """Process a file (auto-chunked in memory if > CHUNK_SIZE rows)."""
+    """Route one input file's spectra to their splits, chunking so a large file cannot exhaust RAM.
+
+    Args:
+        df: The file's spectra, already read into memory.
+        reference_schema: Canonical schema each chunk is normalised to.
+        split_buffers: Per-split accumulated frames, appended to in place.
+        buffer_sizes: Per-split buffered row counts, updated in place.
+        rows_per_file: Buffered rows that trigger a shard write.
+        output_dir: Destination for any shard written during this call.
+        file_counters: Per-split shard counters.
+        lsh_projector: Projector producing the cluster hash for each spectrum.
+        lsh_to_split: Hash to split-name lookup covering every hash in this file.
+
+    Returns:
+        Spectra routed to buffers and the number of distinct hashes seen.
+    """
     total_processed = 0
     total_unique = 0
     for chunk in _iter_chunks(df, CHUNK_SIZE):
@@ -371,7 +490,7 @@ def process_single_file(
 
 
 def _find_max_mz_value(parquet_files: List[str]) -> float:
-    """Find the maximum m/z value across all files (reads only mz_array col)."""
+    """Size the LSH binning grid to the data, capping at 6000 m/z so outliers cannot skew it."""
     logger.info("Finding maximum m/z value ...")
     max_vals: List[float] = []
     for i, f in enumerate(parquet_files):
@@ -403,7 +522,7 @@ def _process_file_for_lsh(
     df: pl.DataFrame,
     lsh_projector: BatchedPeakListRandomProjection,
 ) -> set:
-    """Compute LSH hashes for one file (auto-chunked in memory)."""
+    """Reduce a file to just its distinct cluster hashes."""
     unique: set = set()
     for chunk in _iter_chunks(df, CHUNK_SIZE):
         chunk = filter_spectra(chunk)
@@ -427,12 +546,20 @@ _EMPTY_ASSIGNMENTS_SCHEMA: Dict[str, pl.DataType] = {
 def load_existing_lsh_assignments(
     existing_file: Optional[str], output_dir: str
 ) -> pl.DataFrame:
-    """Load existing LSH assignments as a ``(lsh_hash, split)`` DataFrame.
+    """Read prior assignments so hashes seen in earlier batches keep the split they were given.
 
-    Returns an empty (but correctly-typed) DataFrame when no file exists. The
-    assignments are kept columnar (not a Python ``dict``) so the historical
-    table — which can hold hundreds of millions of hashes — never has to be
-    materialised as Python objects.
+    Kept columnar rather than as a Python ``dict``: the historical table holds
+    hundreds of millions of hashes and must never be materialised as Python
+    objects.
+
+    Args:
+        existing_file: Path to the assignments parquet; defaults to
+            ``lsh_assignments.parquet`` inside *output_dir*.
+        output_dir: Run output directory, used to resolve the default path.
+
+    Returns:
+        A ``(lsh_hash, split)`` frame, empty but correctly typed when the file
+        does not exist, so a first run needs no special casing.
     """
     if existing_file is None:
         existing_file = str(Path(output_dir) / "lsh_assignments.parquet")
@@ -453,14 +580,7 @@ def load_existing_lsh_assignments(
 def _scan_existing_lsh_assignments(
     existing_file: Optional[str], output_dir: str, hash_dtype: pl.DataType
 ) -> pl.LazyFrame:
-    """Lazily scan existing LSH assignments as a ``(lsh_hash, split)`` LazyFrame.
-
-    Unlike :func:`load_existing_lsh_assignments`, this never collects the table —
-    the historical assignments hold hundreds of millions of rows, so callers join
-    against it with the streaming engine (building only on the small batch side).
-    ``lsh_hash`` is cast to *hash_dtype* to match the freshly-computed hashes, and
-    an empty (typed) LazyFrame is returned when no file exists.
-    """
+    """Keep historical LSH assignments lazy so hundred-million-row joins never collect."""
     if existing_file is None:
         existing_file = str(Path(output_dir) / "lsh_assignments.parquet")
     p = Path(existing_file)
@@ -481,12 +601,19 @@ def _scan_existing_lsh_assignments(
 def create_initial_lsh_assignments(
     all_lsh: pl.DataFrame, existing_assignments: pl.DataFrame
 ) -> pl.DataFrame:
-    """Create assignment DataFrame: known hashes get their split, rest are null.
+    """Separate the batch's already-decided hashes from the genuinely new ones.
 
-    *all_lsh* is a one-column ``lsh_hash`` DataFrame of the unique hashes seen in
-    the current batch; *existing_assignments* is a ``(lsh_hash, split)`` table.
     A left join carries each known hash's split across and leaves brand-new
     hashes null — done columnar so it scales to 100M+ hashes.
+
+    Args:
+        all_lsh: One-column ``lsh_hash`` frame of the current batch's unique
+            hashes.
+        existing_assignments: Historical ``(lsh_hash, split)`` table.
+
+    Returns:
+        The batch's hashes with ``split`` filled where known and null where the
+        hash has never been seen.
     """
     return all_lsh.select("lsh_hash").join(
         existing_assignments, on="lsh_hash", how="left"
@@ -494,7 +621,18 @@ def create_initial_lsh_assignments(
 
 
 def assign_remaining_lsh(split_df: pl.DataFrame) -> pl.DataFrame:
-    """Assign unassigned hashes to achieve ~80/10/10 ratio."""
+    """Place new hashes so the batch approaches 80/10/10 despite immovable prior assignments.
+
+    Already-assigned hashes cannot be moved without leaking, so a split can
+    arrive over its target; new hashes are then handed out to fill the remaining
+    deficits, scaled down proportionally when there are too few to go round.
+
+    Args:
+        split_df: The batch's hashes, with ``split`` null where undecided.
+
+    Returns:
+        The same hashes with every ``split`` filled in.
+    """
     assigned_df = split_df.filter(pl.col("split").is_not_null())
     unassigned_df = split_df.filter(pl.col("split").is_null())
 
@@ -552,7 +690,14 @@ def assign_remaining_lsh(split_df: pl.DataFrame) -> pl.DataFrame:
 
 
 def dict_to_dataframe(mapping: Dict) -> pl.DataFrame:
-    """Convert {hash: split} dict to a two-column DataFrame."""
+    """Lift a hash lookup back into the columnar form the assignment code works in.
+
+    Args:
+        mapping: ``{hash: split}`` lookup.
+
+    Returns:
+        The equivalent ``(lsh_hash, split)`` frame.
+    """
     return pl.DataFrame(
         {"lsh_hash": list(mapping.keys()), "split": list(mapping.values())}
     )
@@ -561,13 +706,7 @@ def dict_to_dataframe(mapping: Dict) -> pl.DataFrame:
 def _updated_assignments_plan(
     existing_assignments: pl.DataFrame, split_df: pl.DataFrame
 ) -> pl.LazyFrame:
-    """Lazy plan for the full updated assignment table.
-
-    Combines historical hashes that are *not* in the current batch (keeping
-    their original split) with this batch's freshly-resolved assignments. The
-    two sets are disjoint by construction, so no global de-duplication is
-    needed. Kept lazy so callers can stream it straight to disk.
-    """
+    """Merge history with this batch lazily so the combined table can stream to disk."""
     existing_only = existing_assignments.lazy().join(
         split_df.lazy().select("lsh_hash"), on="lsh_hash", how="anti"
     )
@@ -575,7 +714,7 @@ def _updated_assignments_plan(
 
 
 def _log_split_distribution(split_df: pl.DataFrame, prefix: str) -> None:
-    """Log the before/after train/val/test/unassigned counts for *split_df*."""
+    """Make the effect of an assignment pass visible, including how many hashes were new."""
     counts = {
         row["split"]: row["len"]
         for row in split_df.group_by("split").len().iter_rows(named=True)
@@ -592,11 +731,17 @@ def _log_split_distribution(split_df: pl.DataFrame, prefix: str) -> None:
 def assign_batch_splits(
     all_lsh: pl.DataFrame, existing_assignments: pl.DataFrame
 ) -> pl.DataFrame:
-    """Resolve every hash in the current batch to a split.
+    """Give every hash in the batch a split, which the splitting pass then relies on.
 
-    Known hashes keep their existing split; brand-new hashes are assigned to
-    hit the ~80/10/10 ratio. Returns the ``(lsh_hash, split)`` table for the
-    batch only.
+    Known hashes keep their existing split; brand-new hashes are assigned
+    towards the ~80/10/10 ratio.
+
+    Args:
+        all_lsh: One-column ``lsh_hash`` frame of the batch's unique hashes.
+        existing_assignments: Historical ``(lsh_hash, split)`` table.
+
+    Returns:
+        The ``(lsh_hash, split)`` table for the batch only.
     """
     logger.info("Creating LSH split assignments")
     split_df = create_initial_lsh_assignments(all_lsh, existing_assignments)
@@ -609,11 +754,17 @@ def assign_batch_splits(
 def create_and_verify_lsh_splits(
     all_lsh: pl.DataFrame, existing_assignments: pl.DataFrame
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
-    """Assign the current batch and merge it into the historical assignments.
+    """Assign the batch and produce the full updated table, materialised in memory.
 
-    Returns ``(split_df, updated_assignments)`` where *split_df* covers only the
-    current batch's hashes and *updated_assignments* is the full historical +
-    new table. Both are columnar DataFrames.
+    Suitable when the history is small enough to collect; production runs use
+    :func:`_stream_lsh_assignments` instead.
+
+    Args:
+        all_lsh: One-column ``lsh_hash`` frame of the batch's unique hashes.
+        existing_assignments: Historical ``(lsh_hash, split)`` table.
+
+    Returns:
+        The batch-only assignment table and the full historical-plus-new table.
     """
     split_df = assign_batch_splits(all_lsh, existing_assignments)
     updated = _updated_assignments_plan(existing_assignments, split_df).collect()
@@ -623,17 +774,7 @@ def create_and_verify_lsh_splits(
 def _stream_lsh_assignments(
     all_lsh_df: pl.DataFrame, existing_lf: pl.LazyFrame, out_path: Path
 ) -> pl.DataFrame:
-    """Merge the current batch into the historical assignments with bounded memory.
-
-    Every join builds its hashtable on the small current-batch frame and streams
-    the huge historical table through it (semi/anti), and the final union is
-    streamed straight to *out_path* — the 100M+-row historical table is never
-    collected into memory. Returns the batch's ``(lsh_hash, split)`` table (needed
-    by the downstream splitting pass).
-
-    This is the memory-bounded production equivalent of
-    :func:`create_and_verify_lsh_splits`.
-    """
+    """Stream-merge batch hashes into history so 100M+ assignment rows never collect."""
     # Known hashes: existing rows whose hash is in this batch (build on the batch).
     known = existing_lf.join(all_lsh_df.lazy(), on="lsh_hash", how="semi").collect(
         engine="streaming"
@@ -680,6 +821,7 @@ _SplitOrchestrationState = Tuple[
 
 
 def _fresh_state() -> _SplitOrchestrationState:
+    """Provide the zeroed orchestration state a run starts from when there is no checkpoint."""
     return (
         {s: [] for s in _SPLITS},
         {s: 0 for s in _SPLITS},
@@ -698,7 +840,7 @@ def _init_split_state(
     rows_per_file: int,
     parquet_files: List[str],
 ) -> _SplitOrchestrationState:
-    """Resume from checkpoint or start fresh."""
+    """Only resume when the checkpoint was written under identical parameters."""
     if ckpt and ckpt.get("mode") == mode:
         if (
             ckpt["overall_mz_max"] == mz_max
@@ -721,7 +863,7 @@ def _init_split_state(
 
 
 def _calculate_split_totals(output_dir: str) -> Dict[str, int]:
-    """Count rows per split from parquet metadata (no data read)."""
+    """Measure the written output from parquet metadata, so the final report costs no scan."""
     totals: Dict[str, int] = {}
     for split in _SPLITS:
         files = list(Path(output_dir).glob(f"{split}_*.parquet"))
@@ -737,6 +879,7 @@ def _log_final_statistics(
     total_input: int,
     total_unique_lsh: int,
 ) -> None:
+    """Warn when realised split ratios drift from target, since clustering can skew them."""
     total_rows = sum(totals.values())
     logger.info("Final split ratios:")
     for s in _SPLITS:
@@ -765,7 +908,27 @@ def process_and_write_files(
     checkpoint_manager: Optional[CheckpointManager] = None,
     mode: str = "split_only",
 ) -> Tuple[int, int]:
-    """Process all files and write split outputs with checkpointing."""
+    """Write the split shards for the whole corpus, resumably.
+
+    Checkpoints every *interval* files and once more on any failure, so an
+    interrupted multi-day run restarts from the last good state instead of the
+    beginning. The exception is re-raised after that checkpoint is written.
+
+    Args:
+        parquet_files: Input files to process, in a fixed order.
+        output_dir: Destination for the split shards and checkpoint files.
+        rows_per_file: Buffered rows that trigger a shard write.
+        overall_mz_max: m/z ceiling the LSH projector is built with; must match
+            the value used when the assignments were computed.
+        lsh_to_split: Hash to split-name lookup covering every hash in the corpus.
+        checkpoint_manager: Checkpoint handler; one is created for *output_dir*
+            when omitted.
+        mode: Mode label recorded in the checkpoint, so a resume can confirm it
+            matches.
+
+    Returns:
+        Total spectra written and total spectra read.
+    """
     if checkpoint_manager is None:
         checkpoint_manager = CheckpointManager(output_dir)
 
@@ -877,7 +1040,7 @@ def _load_lsh_state_from_checkpoint_or_fresh(
     ckpt: Optional[Dict[str, Any]],
     output_dir: str,
 ) -> Tuple[List[str], Set[Any], int, float]:
-    """Restore LSH-only run state from checkpoint, or start empty."""
+    """Recover the accumulated hash set so a resumed LSH pass need not rehash finished files."""
     if ckpt and ckpt.get("mode") == "lsh_only":
         logger.info("Resuming LSH computation from checkpoint ...")
         processed_files: List[str] = ckpt["processed_files"]
@@ -904,7 +1067,7 @@ def _persist_lsh_only_interval_checkpoint(
     overall_mz_max: float,
     all_unique_lsh: Set[Any],
 ) -> None:
-    """Write JSON + pickle checkpoint for lsh_only mode."""
+    """Persist the hash set separately, since the LSH pass has no split buffers to save."""
     with open(checkpoint_manager.checkpoint_path, "w") as f:
         json.dump(
             {
@@ -933,11 +1096,28 @@ def compute_lsh_assignments(
     existing_lsh_assignments_path: Optional[str] = None,
     updated_lsh_assignments_path: Optional[str] = None,
 ) -> Tuple[pl.DataFrame, float]:
-    """Compute LSH assignments for all spectra with checkpointing.
+    """Decide which split every spectrum cluster belongs to, before any data is written.
 
-    Returns the ``(lsh_hash, split)`` table for the current batch (used by the
-    subsequent splitting pass) and the overall max m/z. The full updated
-    assignment table is streamed to *updated_lsh_assignments_path*.
+    Hashes the whole corpus, merges the result into the historical assignment
+    table, and streams the merged table to disk. Files that fail are recorded in
+    ``failed_files.txt`` and skipped rather than aborting a multi-day pass.
+
+    Args:
+        parquet_files: Input files to hash, in a fixed order.
+        output_dir: Destination for checkpoints, caches and the default
+            assignment paths.
+        overall_mz_max: m/z ceiling for the projector; scanned from the corpus
+            when omitted.
+        checkpoint_manager: Checkpoint handler; one is created for *output_dir*
+            when omitted.
+        existing_lsh_assignments_path: Historical assignments to inherit splits
+            from; defaults to ``lsh_assignments.parquet`` in *output_dir*.
+        updated_lsh_assignments_path: Where the merged table is streamed;
+            defaults to ``updated_lsh_assignments.parquet`` in *output_dir*.
+
+    Returns:
+        The batch's ``(lsh_hash, split)`` table, used by the subsequent
+        splitting pass, and the overall max m/z the projector was built with.
     """
     if checkpoint_manager is None:
         checkpoint_manager = CheckpointManager(output_dir)
@@ -1050,15 +1230,7 @@ def compute_lsh_assignments(
 
 
 def _load_lsh_to_split(path: str) -> Dict:
-    """Build the ``hash -> split`` lookup from an assignments parquet.
-
-    The historical assignments table can hold 300M+ rows. Reading it whole with
-    ``pl.read_parquet`` and then ``dict(zip(...))`` keeps the full DataFrame and
-    a freshly-materialised dict alive at the same time (~90GB at 333M rows —
-    OOM). Instead, stream the file in row-group batches so only one batch is held
-    at a time, and share the handful of distinct split strings so that only the
-    byte-string keys dominate memory (~40GB for 333M keys).
-    """
+    """Stream the hash-to-split lookup so a many-million-row assignments table does not OOM."""
     import pyarrow.parquet as pq
 
     split_intern: Dict[str, str] = {}
@@ -1076,7 +1248,15 @@ def _load_lsh_to_split(path: str) -> Dict:
 
 
 def main() -> None:
-    """Parse CLI arguments and run LSH assignment and/or splitting."""
+    """Split unlabelled spectra into train/val/test with near-duplicates kept in one split.
+
+    Locality-sensitive hashing puts similar spectra in one split. ``lsh_only`` saves assignments, ``split_only`` writes from a saved table, ``full`` does both; re-run to resume, or ``--clear-checkpoint`` to start over.
+
+    Raises:
+        ValueError: If the input directory holds no parquet files, or if
+            ``split_only`` is requested without ``--lsh-assignments`` and
+            ``--mz-max``, which it cannot reconstruct on its own.
+    """
     parser = argparse.ArgumentParser(
         description="Split unlabelled spectra using LSH clustering"
     )

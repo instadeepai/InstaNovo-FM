@@ -1,8 +1,9 @@
-r"""Split labelled MS/MS spectra into train/test/valid sets (optimised).
+r"""Split labelled MS/MS spectra into train/test/valid sets without peptide leakage.
 
-Partitions labelled mass spectrometry data while ensuring no peptide leakage.
-Peptides are normalised (UNIMOD tags stripped, I→L) and looked up in a registry
-loaded from HuggingFace or a local directory.
+A persistent peptide registry (HuggingFace or a local directory) records each
+peptide's split so the same sequence never appears in both train and test,
+including across later datasets. Peptides are normalised (UNIMOD tags stripped,
+I→L) before lookup; new ones are assigned toward 80/10/10 and written back.
 
 Modes:
     both (default) — update registry + split files
@@ -13,12 +14,14 @@ If *unmodified_peptide* is missing from an input file, it is filled from *sequen
 by removing bracketed segments (e.g. ``[UNIMOD:123]``) and all hyphen (``-``)
 characters.
 
-Usage:
-    python split_labelled_data.py split --input-dir lcfm --output-dir splits
-    python split_labelled_data.py split -i lcfm -o splits --mode split-only
-    python split_labelled_data.py split -i data -o splits \\
+CLI::
+
+    python scripts/splitting/split_labelled_data.py --help
+    python scripts/splitting/split_labelled_data.py split --input-dir lcfm --output-dir splits
+    python scripts/splitting/split_labelled_data.py split -i lcfm -o splits --mode split-only
+    python scripts/splitting/split_labelled_data.py split -i data -o splits \\
         --column-remap '{"legacy_peptide":"unmodified_peptide"}'
-    python split_labelled_data.py batch dir1 dir2 --output-dir splits/
+    python scripts/splitting/split_labelled_data.py batch dir1 dir2 --output-dir splits/
 """
 
 from __future__ import annotations
@@ -52,7 +55,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class QualityFilterConfig:
-    """Quality filter configuration.
+    """Keeps the spectrum quality cutoffs in one immutable place.
+
+    The same thresholds have to apply when collecting peptides and when writing
+    rows.
 
     Args:
         max_retention_time: Maximum retention time in seconds.
@@ -127,12 +133,14 @@ REFERENCE_SCHEMA_COLUMN_REMAP: Dict[str, str] = {}
 
 
 class Mode(str, Enum):
-    """Mode of operation.
+    """Separate cheap registry updates from expensive split-file writes.
 
     Args:
-        UPDATE_SPLITS: Update the splits and save the registry.
-        SPLIT_ONLY: Split the data but do not update the registry.
-        BOTH: Update the splits and save the registry.
+        UPDATE_SPLITS: Assign any new peptides and save the registry, writing no
+            split files.
+        SPLIT_ONLY: Write split files against the existing registry, leaving it
+            untouched.
+        BOTH: Update the registry, then split using it.
     """
 
     UPDATE_SPLITS = "update-splits"
@@ -162,7 +170,19 @@ COLUMN_REMAP_OPTION = typer.Option(
 
 
 def parse_column_remap_json(raw: Optional[str]) -> Dict[str, str]:
-    """Parse *raw* as a JSON object of str→str; empty/whitespace → {}."""
+    """Validate ``--column-remap`` early, so a typo fails before a long run starts.
+
+    Args:
+        raw: JSON object mapping source to canonical column names; ``None`` or
+            blank means no remapping.
+
+    Returns:
+        The parsed mapping, empty when nothing was supplied.
+
+    Raises:
+        ValueError: If the value is not valid JSON, is not an object, or holds
+            non-string keys or values.
+    """
     if raw is None or not str(raw).strip():
         return {}
     try:
@@ -184,22 +204,33 @@ def parse_column_remap_json(raw: Optional[str]) -> Dict[str, str]:
 
 
 def effective_column_rename(cli_json: Optional[str]) -> Dict[str, str]:
-    """Module defaults merged with CLI remap (CLI overrides duplicate keys)."""
+    """Let a caller override the built-in column mapping without editing the module.
+
+    Args:
+        cli_json: Raw ``--column-remap`` JSON, if any.
+
+    Returns:
+        :data:`REFERENCE_SCHEMA_COLUMN_REMAP` merged with the CLI mapping, the
+        CLI winning on duplicate keys.
+    """
     cli_part = parse_column_remap_json(cli_json)
     return {**REFERENCE_SCHEMA_COLUMN_REMAP, **cli_part}
 
 
 def _fmt(seconds: float) -> str:
+    """Render durations as h:mm:ss so multi-hour progress logs stay readable."""
     return str(timedelta(seconds=int(seconds)))
 
 
 def _resolved_column_rename(
     column_rename: Optional[Dict[str, str]],
 ) -> Dict[str, str]:
+    """Distinguish "caller passed no mapping" from "caller asked for none"."""
     return column_rename if column_rename is not None else REFERENCE_SCHEMA_COLUMN_REMAP
 
 
 def _build_peptide_to_split(split_lookup: Dict[str, Set[str]]) -> Dict[str, str]:
+    """Invert the per-split peptide sets so each row can be labelled with one lookup."""
     peptide_to_split: Dict[str, str] = {}
     for split_name, peptides in split_lookup.items():
         for peptide in peptides:
@@ -214,6 +245,7 @@ def _empty_split_buffer_state() -> (
         Dict[str, int],
     ]
 ):
+    """Start every split with the same buffer, counter and size triple, so writing stays uniform."""
     split_buffers: Dict[str, List[pl.DataFrame]] = {
         split_name: [] for split_name in _SPLITS
     }
@@ -225,6 +257,7 @@ def _empty_split_buffer_state() -> (
 def _log_splitting_progress_if_due(
     file_index: int, total_files: int, start_time: float
 ) -> None:
+    """Report throughput and ETA occasionally, so a multi-hour run is observable but not noisy."""
     if file_index % 100 != 0:
         return
     elapsed = time.time() - start_time
@@ -238,7 +271,14 @@ def _log_splitting_progress_if_due(
 
 
 def find_parquet_files(input_dirs: List[str]) -> List[str]:
-    """Find all parquet files recursively, sorted for reproducibility."""
+    """Collect the input corpus in a fixed order, so a seeded run is reproducible.
+
+    Args:
+        input_dirs: Directories to walk recursively.
+
+    Returns:
+        Every ``.parquet`` path found, sorted.
+    """
     files: List[str] = []
     for d in input_dirs:
         for root, _, names in os.walk(d):
@@ -250,6 +290,7 @@ def find_parquet_files(input_dirs: List[str]) -> List[str]:
 
 
 def _sequence_has_glyco_mods() -> pl.Expr:
+    """Flag internal ``[IN:<int>]`` modification tokens, whose rows the quality filter excludes."""
     return (
         pl.col("sequence")
         .cast(pl.Utf8, strict=False)
@@ -259,7 +300,7 @@ def _sequence_has_glyco_mods() -> pl.Expr:
 
 
 def _unmodified_peptide_from_sequence_expr() -> pl.Expr:
-    """Strip bracketed modifications (square and round) and hyphens from *sequence*."""
+    """Recover the bare amino-acid string, since leakage is judged on the unmodified peptide."""
     return (
         pl.col("sequence")
         .cast(pl.Utf8, strict=False)
@@ -271,7 +312,7 @@ def _unmodified_peptide_from_sequence_expr() -> pl.Expr:
 
 
 def _ensure_unmodified_peptide(df: pl.DataFrame) -> pl.DataFrame:
-    """If *unmodified_peptide* is missing, create it from *sequence* (mods and hyphens stripped)."""
+    """Accept inputs that only carry *sequence*, rather than failing the registry lookup."""
     if "unmodified_peptide" in df.columns:
         return df
     if "sequence" not in df.columns:
@@ -288,7 +329,7 @@ def _ensure_unmodified_peptide(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def _ensure_unmodified_peptide_lazy(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Lazy counterpart to :func:`_ensure_unmodified_peptide`."""
+    """Lazy counterpart to :func:`_ensure_unmodified_peptide`, for the scan-only peptide pass."""
     names = set(lf.collect_schema().names())
     if "unmodified_peptide" in names:
         return lf
@@ -304,11 +345,7 @@ def _ensure_unmodified_peptide_lazy(lf: pl.LazyFrame) -> pl.LazyFrame:
 def _apply_schema_column_rename(
     df: pl.DataFrame, column_rename: Dict[str, str]
 ) -> pl.DataFrame:
-    """Rename columns toward canonical schema names.
-
-    For each ``source -> target`` pair, renames *source* to *target* only when
-    *source* is present and *target* is not (the existing target column wins).
-    """
+    """Map legacy column names onto the canonical schema, never clobbering a real target column."""
     if not column_rename:
         return df
     names = set(df.columns)
@@ -323,7 +360,7 @@ def _apply_schema_column_rename(
 def _apply_schema_column_rename_lazy(
     lf: pl.LazyFrame, column_rename: Dict[str, str]
 ) -> pl.LazyFrame:
-    """Lazy counterpart to :func:`_apply_schema_column_rename`."""
+    """Lazy counterpart to :func:`_apply_schema_column_rename`, for the scan-only peptide pass."""
     if not column_rename:
         return lf
     names = set(lf.collect_schema().names())
@@ -336,12 +373,7 @@ def _apply_schema_column_rename_lazy(
 
 
 def _nullable_filter(col: str, op: str, threshold: float) -> pl.Expr:
-    """Build a filter expression that passes null values through unchanged.
-
-    When a column was not present in the source data it is filled with nulls by
-    schema normalisation.  Filtering on an all-null column should keep every row
-    rather than dropping them all.
-    """
+    """Let nulls pass, so a column absent from the source data cannot drop every row."""
     if op == "<=":
         cond = pl.col(col) <= threshold
     elif op == ">=":
@@ -352,11 +384,18 @@ def _nullable_filter(col: str, op: str, threshold: float) -> pl.Expr:
 
 
 def filter_spectra(df: pl.DataFrame) -> pl.DataFrame:
-    """Apply quality-filter criteria to spectra.
+    """Drop spectra the model cannot use, using the same criteria as the peptide pass.
 
-    Null values in any filter column are treated as passing (not filtered out).
-    This avoids dropping all rows when a column is absent from the source data
-    and was filled with nulls during schema normalisation.
+    Null values in any filter column are treated as passing, so a column absent
+    from the source data and null-filled during schema normalisation does not
+    wipe out the file.
+
+    Args:
+        df: Spectra to filter, already normalised to the reference schema.
+
+    Returns:
+        Only the rows passing every :data:`QUALITY_FILTERS` criterion and free
+        of glyco modifications.
     """
     return df.filter(
         _nullable_filter("retention_time", "<=", QUALITY_FILTERS.max_retention_time)
@@ -375,7 +414,7 @@ def filter_spectra(df: pl.DataFrame) -> pl.DataFrame:
 def _add_missing_schema_columns(
     df: pl.DataFrame, schema: Dict[str, pl.DataType]
 ) -> pl.DataFrame:
-    """Add keys from *schema* missing on *df* as null columns with the given dtypes."""
+    """Give every output the same columns, so shards from differing sources concatenate."""
     missing = [
         pl.lit(None).cast(dtype).alias(name)
         for name, dtype in schema.items()
@@ -389,7 +428,7 @@ def _add_missing_schema_columns(
 def _add_missing_schema_columns_lazy(
     lf: pl.LazyFrame, schema: Dict[str, pl.DataType]
 ) -> pl.LazyFrame:
-    """Lazy counterpart to :func:`_add_missing_schema_columns`."""
+    """Lazy counterpart to :func:`_add_missing_schema_columns`, for the scan-only peptide pass."""
     names = set(lf.collect_schema().names())
     missing = [
         pl.lit(None).cast(dtype).alias(name)
@@ -407,15 +446,18 @@ def normalise_dataframe_schema(
     *,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> pl.DataFrame:
-    """Ensure *df* matches *schema* (optional rename, add missing cols, reorder).
+    """Bring a heterogeneous input file onto the canonical schema so its rows can be pooled.
 
-    *column_rename* maps input column names to canonical *schema* names. If
-    omitted, no renaming is performed (see :data:`REFERENCE_SCHEMA_COLUMN_REMAP`
-    for the default map used by the split pipeline).
+    Args:
+        df: Frame to normalise.
+        schema: Canonical column names and dtypes to conform to.
+        column_rename: Input-to-canonical column mapping. Omit it (leave
+            ``None``) when the caller has already renamed and derived columns
+            itself, so this step only fills gaps and reorders; see
+            :data:`REFERENCE_SCHEMA_COLUMN_REMAP` for the pipeline default.
 
-    When the caller has already applied renaming (and e.g. derived
-    *unmodified_peptide*), pass ``column_rename=None`` so this step only fills
-    missing columns and reorders.
+    Returns:
+        The frame with exactly *schema*'s columns, in its order.
     """
     rename_map = column_rename if column_rename is not None else {}
     df = _apply_schema_column_rename(df, rename_map)
@@ -429,7 +471,16 @@ def normalise_lazyframe_schema(
     *,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> pl.LazyFrame:
-    """Lazy counterpart to :func:`normalise_dataframe_schema`."""
+    """Normalise without materialising, so the peptide-collection pass stays a scan.
+
+    Args:
+        lf: LazyFrame to normalise.
+        schema: Canonical column names and dtypes to conform to.
+        column_rename: Input-to-canonical column mapping; ``None`` skips renaming.
+
+    Returns:
+        A plan selecting exactly *schema*'s columns, in its order.
+    """
     rename_map = column_rename if column_rename is not None else {}
     lf = _apply_schema_column_rename_lazy(lf, rename_map)
     lf = _add_missing_schema_columns_lazy(lf, schema)
@@ -442,9 +493,21 @@ def normalise_lazyframe_schema(
 def load_peptide_registry(
     registry_dir: Optional[str] = None,
 ) -> Tuple[pl.DataFrame, Dict[str, Set[str]]]:
-    """Load peptide registry from HF or local dir.
+    """Recover the split decisions made by previous runs, which is what prevents leakage.
 
-    Returns (raw DataFrame, {train/test/valid: set of peptides}).
+    Only the registry file is fetched from HuggingFace, never a full snapshot.
+
+    Args:
+        registry_dir: Local directory holding the registry parquet. When
+            omitted, the registry is downloaded from HuggingFace.
+
+    Returns:
+        The raw registry frame plus a ``{train/test/valid: peptide set}`` lookup
+        ready for membership tests.
+
+    Raises:
+        FileNotFoundError: If *registry_dir* is given but holds no registry
+            file, rather than silently splitting against an empty registry.
     """
     if registry_dir is not None:
         registry_path = Path(registry_dir) / REGISTRY_FILENAME
@@ -494,11 +557,17 @@ def save_registry(
     upload_to_hf: bool = False,
     registry_changed: bool = True,
 ) -> None:
-    """Save registry to parquet (uses 'validation' for HF schema compat).
+    """Persist the split decisions so future runs and datasets inherit them.
 
-    When *upload_to_hf* is true, the remote dataset is updated only if
-    *registry_changed* is true (e.g. new peptides were assigned). If the
-    registry matches what was already on Hugging Face, upload is skipped.
+    Written with the HuggingFace ``validation`` label for schema compatibility.
+    An upload failure is logged rather than raised.
+
+    Args:
+        existing_splits: Peptide sets per split, as held in memory.
+        output_path: Local parquet path to write.
+        upload_to_hf: Publish the registry to the shared dataset repo.
+        registry_changed: Whether anything was actually assigned this run;
+            upload is skipped when false, since the remote is already in sync.
     """
     all_peptides: List[str] = []
     all_split_labels: List[str] = []
@@ -542,7 +611,22 @@ def collect_unique_peptides(
     *,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> Set[str]:
-    """Collect unique normalised peptides (I→L) from files after quality filter."""
+    """Learn which peptides a dataset contains before any row is written.
+
+    Runs entirely on lazy scans reading only the columns the quality filter and
+    peptide derivation need, so the whole corpus can be surveyed cheaply. The
+    filter must match :func:`filter_spectra` exactly, or the split pass will
+    encounter peptides this pass never registered. Isoleucine is folded to
+    leucine because the two are indistinguishable by mass.
+
+    Args:
+        parquet_files: Input files to scan.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
+
+    Returns:
+        The set of normalised peptides surviving the quality filter.
+    """
     all_peptides: Set[str] = set()
     start_time = time.time()
     total_parquet_files = len(parquet_files)
@@ -615,12 +699,21 @@ def assign_new_peptides(
     dataset_peptides: Set[str],
     existing_splits: Dict[str, Set[str]],
 ) -> Tuple[Dict[str, Set[str]], Dict[str, int]]:
-    """Assign peptides via deficit-proportional allocation with saturation.
+    """Place new peptides so this dataset approaches 80/10/10 despite prior assignments.
 
-    For each split, the target count is
-    ``desired_proportion * len(dataset_peptides)``.  Splits already at or
-    above their target are *saturated*; remaining new peptides are distributed
-    proportionally to each unsaturated split's deficit.
+    Peptides already in the registry cannot be moved without creating leakage,
+    so a dataset can arrive with a split already over its share. For each split
+    the target is ``desired_proportion * len(dataset_peptides)``; splits at or
+    above target are *saturated* and get nothing, and the remaining new
+    peptides are handed out in proportion to each unsaturated split's deficit.
+
+    Args:
+        dataset_peptides: Normalised peptides present in this dataset.
+        existing_splits: Registry peptide sets; mutated in place with the new
+            assignments.
+
+    Returns:
+        The updated split sets and the per-split count of peptides added.
     """
     total_dataset = len(dataset_peptides)
     if total_dataset == 0:
@@ -687,7 +780,7 @@ def _log_dataset_peptide_proportions(
     existing_splits: Dict[str, Set[str]],
     total_dataset: int,
 ) -> None:
-    """Log per-split peptide proportions relative to this dataset."""
+    """Log how far this dataset landed from the 80/10/10 target, given prior assignments."""
     logger.info(
         f"Split proportions for this dataset ({total_dataset:,} unique peptides):"
     )
@@ -710,7 +803,16 @@ def write_buffer(
     buffer_sizes: Dict[str, int],
     output_dir: str,
 ) -> None:
-    """Flush a split buffer to a shuffled parquet file."""
+    """Emit a shard once a split has buffered enough rows, shuffling away input-file order.
+
+    Args:
+        split: Split whose buffer should be flushed.
+        split_buffers: Per-split accumulated frames; the flushed entry is reset.
+        file_counters: Per-split shard counters, used for the output filename
+            and incremented here.
+        buffer_sizes: Per-split buffered row counts, reset for the flushed split.
+        output_dir: Destination directory for the shard.
+    """
     if not split_buffers[split]:
         return
     df = pl.concat(split_buffers[split], how="vertical_relaxed")
@@ -730,6 +832,7 @@ def _flush_nonempty_split_buffers(
     buffer_sizes: Dict[str, int],
     output_dir: str,
 ) -> None:
+    """Make sure the final partial shard of each split still reaches disk."""
     for split_name in _SPLITS:
         if not split_buffers[split_name]:
             continue
@@ -746,12 +849,25 @@ def process_single_file(
     file_counters: Dict[str, int],
     column_rename: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, int]:
-    """Read, filter, normalise, and distribute rows to split buffers.
+    """Route one input file's rows to the split each peptide already belongs to.
 
-    All peptides must already be verified via ``verify_no_unseen_peptides``
-    before calling this function.
+    Every peptide must already be verified via :func:`verify_no_unseen_peptides`;
+    an unregistered peptide raises a ``KeyError``.
 
-    Returns (output_row_count, row_count_before_filter).
+    Args:
+        file_path: Input parquet file to process.
+        peptide_to_split: Normalised peptide to split-name lookup.
+        split_buffers: Per-split accumulated frames, appended to in place.
+        buffer_sizes: Per-split buffered row counts, updated in place.
+        rows_per_file: Buffered rows that trigger a shard write.
+        output_dir: Destination for any shard written during this call.
+        file_counters: Per-split shard counters.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
+
+    Returns:
+        Rows routed to buffers and the file's row count before filtering, so
+        the caller can report how much was filtered out.
     """
     rename_map = _resolved_column_rename(column_rename)
     df = pl.read_parquet(file_path)
@@ -794,9 +910,22 @@ def process_and_write_files(
     rows_per_file: int,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, int]:
-    """Process all files and write split outputs.
+    """Stream the whole corpus into split shards without holding it in memory.
 
-    Returns (total_output_spectra, total_input_spectra).
+    Buffers rows per split and flushes as each reaches *rows_per_file*, so peak
+    memory is bounded by the buffers rather than the corpus size.
+
+    Args:
+        parquet_files: Input files to process, in a fixed order.
+        split_lookup: Registry peptide sets per split.
+        output_dir: Destination for the split shards.
+        rows_per_file: Buffered rows that trigger a shard write.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
+
+    Returns:
+        Total spectra written and total spectra read, whose difference is what
+        the quality filter removed.
     """
     rename_map = _resolved_column_rename(column_rename)
     peptide_to_split = _build_peptide_to_split(split_lookup)
@@ -839,9 +968,19 @@ def verify_no_unseen_peptides(
     dataset_peptides: Optional[Set[str]] = None,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Verify every dataset peptide is in the registry before writing splits.
+    """Fail before writing anything, rather than part-way through with unroutable rows.
 
-    Raises ``ValueError`` if any peptides are missing from the registry.
+    Args:
+        parquet_files: Input files the split will cover.
+        split_lookup: Registry peptide sets per split.
+        dataset_peptides: Peptides already collected by a preceding pass; when
+            omitted they are re-scanned from *parquet_files*.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
+
+    Raises:
+        ValueError: If any dataset peptide is absent from the registry, listing
+            a sample so the cause can be identified.
     """
     if dataset_peptides is None:
         dataset_peptides = collect_unique_peptides(
@@ -865,7 +1004,16 @@ def verify_and_log(
     total_input: int,
     split_lookup: Dict[str, Set[str]],
 ) -> None:
-    """Report peptide and spectral distributions, verify row counts."""
+    """Show whether the run actually hit its split targets, and that no rows appeared from nowhere.
+
+    Peptide proportions and spectral proportions differ (a split can hold 10%
+    of peptides but a different share of spectra), so both are reported.
+
+    Args:
+        output_dir: Directory holding the written shards.
+        total_input: Spectra read before quality filtering.
+        split_lookup: Registry peptide sets per split.
+    """
     total_peptides = sum(len(peptides) for peptides in split_lookup.values())
     if total_peptides:
         logger.info("Final peptide distribution:")
@@ -913,9 +1061,19 @@ def run_update_splits(
     upload_to_hf: bool,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> Tuple[Dict[str, Set[str]], Set[str]]:
-    """Update the splits and save the registry.
+    """Register this dataset's peptides so the split pass has a decision for every row.
 
-    Returns (updated_splits, dataset_peptides).
+    Args:
+        parquet_files: Input files to survey.
+        existing_splits: Registry peptide sets per split, updated in place.
+        output_dir: Where the registry parquet is written.
+        upload_to_hf: Publish the updated registry to the shared dataset repo.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
+
+    Returns:
+        The updated split sets and the dataset's peptide set, the latter so a
+        following split pass can skip re-scanning the corpus.
     """
     logger.info("=== UPDATE-SPLITS ===")
 
@@ -957,10 +1115,17 @@ def run_split_only(
     dataset_peptides: Optional[Set[str]] = None,
     column_rename: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Split data using the existing registry.
+    """Write the split shards against an already-settled registry.
 
-    If *dataset_peptides* is provided (e.g. from a preceding ``update-splits``
-    pass), the pre-split verification reuses it instead of re-scanning.
+    Args:
+        parquet_files: Input files to split.
+        existing_splits: Registry peptide sets per split.
+        output_dir: Destination for the split shards.
+        rows_per_file: Buffered rows that trigger a shard write.
+        dataset_peptides: Peptides from a preceding ``update-splits`` pass;
+            supplying them lets verification skip a full re-scan.
+        column_rename: Input-to-canonical column mapping; ``None`` uses the
+            module default.
     """
     logger.info("=== SPLIT-ONLY ===")
     verify_no_unseen_peptides(
@@ -988,7 +1153,19 @@ def process_directories(
     upload_to_hf: bool,
     column_remap_json: Optional[str] = None,
 ) -> None:
-    """Process the directories."""
+    """Run the requested mode over several directories as one dataset, so 80/10/10 is taken over the union.
+
+    Args:
+        input_dirs: Directories to walk for input parquet files.
+        output_dir: Destination for the registry and/or split shards.
+        rows_per_file: Buffered rows that trigger a shard write.
+        registry_dir: Local registry directory; ``None`` downloads from
+            HuggingFace.
+        mode: Which of the registry update and split passes to run.
+        upload_to_hf: Publish the updated registry to the shared dataset repo.
+        column_remap_json: Raw ``--column-remap`` JSON, merged over the module
+            default.
+    """
     parquet_files = find_parquet_files(input_dirs)
     logger.info(
         f"Found {len(parquet_files):,} parquet files "
@@ -1040,7 +1217,25 @@ def split(
     verbose: bool = VERBOSE_OPTION,
     column_remap: Optional[str] = COLUMN_REMAP_OPTION,
 ) -> None:
-    """Split parquet files into train/test/valid sets."""
+    """Split one labelled parquet directory into train/test/valid without peptide leakage.
+
+    ``--mode split-only`` writes against the existing registry; ``update-splits`` updates the registry without writing shards.
+
+    Args:
+        input_dir: Directory of labelled parquet files to split.
+        output_dir: Destination for the registry and split shards.
+        rows_per_file: Rows per output shard.
+        registry_dir: Local registry directory; omit to download from HuggingFace.
+        mode: Whether to update the registry, write splits, or both.
+        upload_registry_to_hf: Publish the updated registry to the shared repo.
+        verbose: Raise logging to DEBUG for troubleshooting.
+        column_remap: JSON mapping of source to canonical column names, for
+            inputs using legacy names.
+
+    Raises:
+        typer.Exit: If the input directory is missing or ``--column-remap`` is
+            not valid JSON, so neither failure surfaces mid-run.
+    """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     if not os.path.exists(input_dir):
@@ -1077,7 +1272,28 @@ def batch(
     verbose: bool = VERBOSE_OPTION,
     column_remap: Optional[str] = COLUMN_REMAP_OPTION,
 ) -> None:
-    """Process multiple input directories in a single combined pass."""
+    """Split several input directories as one dataset, in a single combined pass.
+
+    Prefer this over repeated ``split`` runs when the directories belong to the
+    same corpus: split proportions are then computed over their union, and each
+    peptide is assigned once rather than one directory at a time. Non-existent
+    directories are warned about and skipped.
+
+    Args:
+        input_dirs: Directories to treat as a single dataset.
+        output_dir: Destination for the registry and split shards.
+        rows_per_file: Rows per output shard.
+        registry_dir: Local registry directory; omit to download from HuggingFace.
+        mode: Whether to update the registry, write splits, or both.
+        upload_registry_to_hf: Publish the updated registry to the shared repo.
+        verbose: Raise logging to DEBUG for troubleshooting.
+        column_remap: JSON mapping of source to canonical column names, for
+            inputs using legacy names.
+
+    Raises:
+        typer.Exit: If no input directory exists or ``--column-remap`` is not
+            valid JSON.
+    """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 

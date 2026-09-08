@@ -1,3 +1,19 @@
+"""Replace placeholder strings such as ``Unknown`` with null in metadata columns.
+
+Some source files store missing ``collision_energy`` or ``frag_type`` as the
+text ``Unknown``. Downstream schemas treat that as a real value, so this script
+rewrites it to null before alignment or training. Batch mode writes a separate
+affected-file report for each dataset.
+
+CLI::
+
+    python scripts/preprocessing/enforce_nulls.py --help
+    python scripts/preprocessing/enforce_nulls.py enforce <data-root>/lcfm
+    python scripts/preprocessing/enforce_nulls.py batch-enforce <data-root>/lcfm <data-root>/hcfm
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import polars as pl
 from tqdm import tqdm
 import logging
@@ -45,7 +61,15 @@ PREFIX_OPTION = typer.Option(
 
 
 def find_files(input_dir: str, file_pattern: str) -> list[str]:
-    """Find files in a local directory that match a specified pattern."""
+    """List parquet files so each dataset can be scanned for placeholder metadata.
+
+    Args:
+        input_dir: Root directory for the search.
+        file_pattern: Recursive glob selecting candidate files.
+
+    Returns:
+        Paths matching the requested pattern.
+    """
     search_pattern = Path(input_dir) / file_pattern
     matched_files = glob.glob(str(search_pattern), recursive=True)
     return matched_files
@@ -57,7 +81,7 @@ def _columns_with_old_value(
     old_value: str,
     schema_column_names: set[str],
 ) -> List[str]:
-    """Return columns that exist and contain old_value."""
+    """Skip files that do not contain the placeholder string, so unchanged parquet is not rewritten."""
     columns_to_update: List[str] = []
     for col in column_names:
         if col not in schema_column_names:
@@ -75,7 +99,7 @@ def _process_parquet_file(
     new_value: Optional[str],
     verbose: bool,
 ) -> bool:
-    """Scan/replace in one parquet file. Returns True if the file was written."""
+    """Isolate per-file failures so one corrupt Parquet does not stop the batch."""
     if verbose:
         logger.info("Processing file: %s", file)
     try:
@@ -102,6 +126,7 @@ def _process_parquet_file(
 
 
 def _write_affected_files_list(output_path: str, files_with_unknown: List[str]) -> None:
+    """Record changed files so normalisation remains auditable."""
     output_file_path = Path(output_path)
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     pl.DataFrame({"files": files_with_unknown}).write_csv(output_path)
@@ -116,15 +141,15 @@ def enforce_nulls(
     new_value: Optional[str] = None,
     verbose: bool = False,
 ) -> None:
-    """Change entries with value 'Unknown' to null in specified columns.
+    """Rewrite placeholder metadata to null so missing values are stored as null, not text.
 
     Args:
-        input_dir (str): Input directory to process
-        output_path (str): Output file to save affected files list
-        column_names (List[str]): Column names to process (defaults to DEFAULT_COLUMNS)
-        old_value (str): Value to replace
-        new_value (str): New value (None for null)
-        verbose (bool): Enable verbose output
+        input_dir: Directory containing Parquet files to update.
+        output_path: CSV destination listing modified files.
+        column_names: Metadata columns to inspect.
+        old_value: Placeholder string to replace, typically ``Unknown``.
+        new_value: Replacement value, normally null.
+        verbose: Whether to print processing details.
     """
     if column_names is None:
         column_names = DEFAULT_COLUMNS
@@ -160,7 +185,16 @@ def enforce(
     new_value: Optional[str] = NEW_VALUE_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Enforce null values in parquet files."""
+    """Replace placeholder metadata with null in one dataset before downstream use.
+
+    Args:
+        input_dir: Directory containing Parquet files.
+        output_file: CSV destination listing modified files.
+        columns: Metadata columns to inspect.
+        old_value: Placeholder string to replace, typically ``Unknown``.
+        new_value: Replacement value, normally null.
+        verbose: Whether to print processing details.
+    """
     enforce_nulls(
         input_dir=input_dir,
         output_path=output_file,
@@ -180,7 +214,16 @@ def batch_enforce(
     new_value: Optional[str] = NEW_VALUE_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Enforce null values in multiple directories."""
+    """Normalise several datasets while keeping separate change reports.
+
+    Args:
+        input_dirs: Dataset directories to process.
+        output_dir: Directory that receives change reports.
+        columns: Metadata columns to inspect.
+        old_value: Placeholder string to replace, typically ``Unknown``.
+        new_value: Replacement value, normally null.
+        prefix: Prefix used for report filenames.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -197,8 +240,8 @@ def batch_enforce(
 
 
 def main() -> None:
-    """Entry point for the script to enforce null values."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible normalisation of historical hardcoded paths."""
+    # Legacy behaviour for backwards compatibility
     input_dirs = ["lcfm", "hcfm", "mcfm"]
     output_dir = "output_files"
 

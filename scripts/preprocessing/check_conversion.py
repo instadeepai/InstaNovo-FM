@@ -1,3 +1,17 @@
+"""Identify IPC inputs whose Parquet conversion is missing or incomplete.
+
+Run this after IPC conversion to find absent outputs or inconsistent shard sets
+before downstream preprocessing consumes them.
+
+CLI::
+
+    python scripts/preprocessing/check_conversion.py --help
+    python scripts/preprocessing/check_conversion.py check-conversion <data-root>/acfm
+    python scripts/preprocessing/check_conversion.py batch-check <data-root>/acfm <data-root>/lcfm
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import os
 from tqdm import tqdm
 import re
@@ -26,14 +40,14 @@ def check_missing_parquet_variants(
     source_dir: str,
     output_file: str = "missing_files.txt",
 ) -> List[Tuple[str, str]]:
-    """Checks for IPC files without corresponding Parquet files or shards.
+    """Reveal conversion gaps so callers can rerun only incomplete IPC inputs.
 
-    Parameters:
-        source_dir (str): Directory to search for files.
-        output_file (str): File to save the list of IPC files with missing outputs.
+    Args:
+        source_dir: Directory whose IPC inputs and Parquet outputs should be compared.
+        output_file: Report destination for missing or inconsistent conversions.
 
     Returns:
-        List[Tuple[str, str]]: List of IPC files and reasons for missing outputs.
+        IPC paths paired with reasons that their Parquet output is incomplete.
     """
     ipc_files = find_ipc_files(source_dir)
     missing_files = find_missing_parquet_files(ipc_files)
@@ -42,7 +56,14 @@ def check_missing_parquet_variants(
 
 
 def find_ipc_files(source_dir: str) -> List[str]:
-    """Finds all .ipc files in the given directory."""
+    """Supply the complete IPC input set needed for conversion verification.
+
+    Args:
+        source_dir: Directory tree to search for IPC files.
+
+    Returns:
+        IPC paths found beneath the source directory.
+    """
     ipc_files = []
     for root, _, files in os.walk(source_dir):
         for file in files:
@@ -52,7 +73,14 @@ def find_ipc_files(source_dir: str) -> List[str]:
 
 
 def find_missing_parquet_files(ipc_files: List[str]) -> List[Tuple[str, str]]:
-    """Identifies IPC files without corresponding Parquet files or with incomplete shards."""
+    """Isolate IPC inputs that need conversion or shard repair.
+
+    Args:
+        ipc_files: IPC paths whose neighboring Parquet outputs should be checked.
+
+    Returns:
+        IPC paths paired with explanations of the detected conversion gap.
+    """
     shard_pattern = re.compile(r".+_\d{4}-\d{4}.parquet$")
     missing_files = []
 
@@ -74,7 +102,16 @@ def find_missing_parquet_files(ipc_files: List[str]) -> List[Tuple[str, str]]:
 
 
 def collect_matching_files(directory: str, basename: str, extension: str) -> List[str]:
-    """Collects files in a directory matching the given basename and extension."""
+    """Gather candidate outputs so one IPC input can be checked efficiently.
+
+    Args:
+        directory: Directory containing the expected outputs.
+        basename: Filename prefix shared by the input and its outputs.
+        extension: Output suffix to require.
+
+    Returns:
+        Matching filenames in the directory.
+    """
     return [
         file
         for file in os.listdir(directory)
@@ -83,7 +120,15 @@ def collect_matching_files(directory: str, basename: str, extension: str) -> Lis
 
 
 def is_shard_incomplete(matches: List[str], shard_pattern: re.Pattern) -> bool:
-    """Checks if shard files are incomplete or inconsistent."""
+    """Detect shard-number inconsistencies that make a conversion unsafe to consume.
+
+    Args:
+        matches: Candidate Parquet filenames for one IPC input.
+        shard_pattern: Pattern distinguishing sharded outputs from whole files.
+
+    Returns:
+        Whether the shard set has inconsistent totals or missing members.
+    """
     shard_files = [f for f in matches if shard_pattern.match(f)]
     if shard_files:
         shard_numbers = [int(f.split("-")[-1].split(".")[0]) for f in shard_files]
@@ -96,7 +141,12 @@ def is_shard_incomplete(matches: List[str], shard_pattern: re.Pattern) -> bool:
 
 
 def save_missing_files(output_file: str, missing_files: List[Tuple[str, str]]) -> None:
-    """Saves missing file details to the specified output file."""
+    """Persist conversion gaps so they can drive a targeted rerun.
+
+    Args:
+        output_file: Destination for the human-readable report.
+        missing_files: IPC paths and reasons to record.
+    """
     if missing_files:
         # Ensure output directory exists
         output_path = Path(output_file)
@@ -116,7 +166,13 @@ def check_conversion(
     output_file: str = OUTPUT_FILE_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Check IPC to Parquet conversion completeness."""
+    """Verify one directory before allowing its converted data downstream.
+
+    Args:
+        source_dir: Directory containing IPC inputs and expected Parquet outputs.
+        output_file: Report destination for incomplete conversions.
+        verbose: Whether to print input and output details.
+    """
     if verbose:
         typer.echo(f"Checking directory: {source_dir}")
         typer.echo(f"Output file: {output_file}")
@@ -141,7 +197,13 @@ def batch_check(
     output_dir: str = OUTPUT_DIR_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Check conversion completeness in multiple directories."""
+    """Verify several dataset directories in one preprocessing run.
+
+    Args:
+        directories: Dataset directories to check.
+        output_dir: Directory that receives one report per dataset.
+        prefix: Prefix used to distinguish generated reports.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -159,8 +221,8 @@ def batch_check(
 
 
 def main() -> None:
-    """Entry point for the script to check all IPC to Parquet file conversion."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible checks against the historical hardcoded paths."""
+    # Legacy behaviour for backwards compatibility
     directories_to_check = [
         "<data-root>/acfm",
         "<data-root>/lcfm",

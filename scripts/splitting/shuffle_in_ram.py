@@ -1,10 +1,21 @@
-"""RAM-based shuffle for split_labelled_data-style output folders.
+"""Shuffle ``split_labelled_data`` output entirely in RAM.
 
-Reads a flat directory of ``train_*.parquet``, ``valid_*.parquet``, ``test_*.parquet``
-(``split_labelled_data.py`` layout), shuffles rows within each split, and writes new
-shards as ``{split}_{i}.parquet`` under ``--output-dir`` using ``--target-chunk-size``.
+``split_labelled_data.py`` writes shards grouped by input file, so rows arrive
+correlated; training needs them in random order. When a whole split fits in
+memory this is the simplest way to get a true global shuffle — one load, one
+sample, re-chunked to ``--target-chunk-size``. Splits are processed one at a
+time (train, then valid, then test), so the RAM requirement is the largest
+single split, not the whole corpus. Use ``shuffle_2pass.py`` when even that
+does not fit.
 
-Requires enough RAM to hold each split (train, then valid, then test) in memory.
+CLI::
+
+    python scripts/splitting/shuffle_in_ram.py --help
+    python scripts/splitting/shuffle_in_ram.py \
+        --input-dir lcfm_splits \
+        --output-dir lcfm_shuffled \
+        --target-chunk-size 400000 \
+        --seed 42
 """
 
 from __future__ import annotations
@@ -27,20 +38,35 @@ logger = logging.getLogger(__name__)
 
 
 def get_parquet_files(split_dir: str, split_type: str) -> List[str]:
-    """Get all parquet files for a specific split type (train/valid/test)."""
+    """List one split's shards in a stable order, so a seeded run is reproducible.
+
+    Args:
+        split_dir: Directory holding the ``{split}_*.parquet`` shards.
+        split_type: Split prefix to match, e.g. ``train``.
+
+    Returns:
+        The matching paths, sorted; empty when the split is absent.
+    """
     pattern = os.path.join(split_dir, f"{split_type}_*.parquet")
     return sorted(glob.glob(pattern))
 
 
 def count_rows_in_file(file_path: str) -> int:
-    """Count rows in a parquet file efficiently."""
+    """Read a row count from parquet metadata, so verification costs no full scan.
+
+    Args:
+        file_path: Parquet file to measure.
+
+    Returns:
+        The file's row count.
+    """
     lazy_df = pl.scan_parquet(file_path)
     count: int = lazy_df.select(pl.len()).collect().item()
     return count
 
 
 def _analyze_input_files(parquet_files: List[str]) -> tuple[int, List[int]]:
-    """Analyze input files and return total rows and per-file row counts."""
+    """Record the expected row total up front so the write can be verified against it."""
     logger.info("Found %d input files:", len(parquet_files))
     total_rows = 0
     file_sizes: List[int] = []
@@ -55,7 +81,7 @@ def _analyze_input_files(parquet_files: List[str]) -> tuple[int, List[int]]:
 
 
 def _read_all_data_to_ram(parquet_files: List[str]) -> pl.DataFrame:
-    """Read all parquet files into a single DataFrame in RAM."""
+    """Materialise the whole split at once, which is what makes a single global sample possible."""
     logger.info("Reading all data into RAM...")
     lazy_dfs = [pl.scan_parquet(file_path) for file_path in parquet_files]
     combined_lazy_df = pl.concat(lazy_dfs, how="vertical_relaxed")
@@ -71,7 +97,7 @@ def _shuffle_and_write_chunks(
     chunk_size: int,
     seed: Optional[int],
 ) -> int:
-    """Shuffle data and write to chunks."""
+    """Re-shard after shuffling so output files stay a manageable size for training."""
     logger.info("Shuffling %s rows globally...", f"{len(data):,}")
     shuffled_data = data.sample(
         n=len(data), with_replacement=False, seed=seed, shuffle=True
@@ -106,7 +132,18 @@ def ram_shuffle_split(
     chunk_size: int,
     seed: Optional[int] = None,
 ) -> None:
-    """Shuffle one split (train / valid / test) and write shards under output_dir."""
+    """Globally shuffle a single split, checking nothing was lost on the way out.
+
+    Missing splits are skipped rather than treated as an error, so the same call
+    works on directories that only carry some of train/valid/test.
+
+    Args:
+        split_dir: Directory holding the split's input shards.
+        split_type: Split prefix to process, e.g. ``train``.
+        output_dir: Destination for the reshuffled shards.
+        chunk_size: Rows per output shard.
+        seed: Fixes the shuffle so the run can be reproduced.
+    """
     logger.info(
         "Processing %s split in %s (chunk size %s)",
         split_type,
@@ -143,7 +180,18 @@ def shuffle_split_labelled_output_folder(
     chunk_size: int,
     seed: Optional[int] = None,
 ) -> None:
-    """Shuffle train/valid/test shards from input_dir into output_dir."""
+    """Reshuffle a whole split-output folder in one call.
+
+    Args:
+        input_dir: Directory produced by ``split_labelled_data.py``.
+        output_dir: Destination for the reshuffled shards; created if absent.
+        chunk_size: Rows per output shard.
+        seed: Fixes the shuffle so the run can be reproduced.
+
+    Raises:
+        FileNotFoundError: If *input_dir* does not exist, caught before any
+            output directory is created.
+    """
     input_path = Path(input_dir)
     if not input_path.is_dir():
         raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
@@ -155,7 +203,13 @@ def shuffle_split_labelled_output_folder(
 
 
 def main() -> None:
-    """Main function to parse arguments and shuffle splits."""
+    """Globally shuffle train/valid/test parquet shards that fit in RAM.
+
+    Run this after ``split_labelled_data.py`` to break up the file-order
+    correlation in its output, writing freshly-shuffled shards of
+    ``--target-chunk-size`` rows into a new directory. Reach for
+    ``shuffle_2pass.py`` instead when a single split is larger than memory.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Shuffle in RAM for split_labelled_data-style train_/valid_/test_ parquet shards "

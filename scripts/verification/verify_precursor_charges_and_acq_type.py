@@ -1,5 +1,8 @@
 r"""Verify precursor charge values for DIA and DDA files.
 
+Run after labelled parquets exist (and optionally on S3) to catch files whose
+``precursor_charge`` disagrees with search-data acquisition type.
+
 PURPOSE:
 ========
 This script checks the precursor_charge values for files with acquisition
@@ -12,20 +15,18 @@ charge, and any DDA-marked projects that have a zero precursor charge.
 
 Supports both local directories and S3 buckets as input.
 
-USAGE:
-======
-# Local directory
-python scripts/verification/verify_precursor_charge_and_acq_type.py \
-    --input-dir <data-root>/lcfm/ \
-    --search-data search_data_with_new_projects.xlsx \
-    --output-dir lcfm
+CLI::
 
-# S3 bucket
-python scripts/verification/verify_precursor_charge_and_acq_type.py \
-    --input-dir s3://<your-bucket>/acfm/ \
-    --search-data search_data_with_new_projects.xlsx \
-    --output-dir acfm \
-    --aws-profile <your-aws-profile>
+    python scripts/verification/verify_precursor_charges_and_acq_type.py --help
+    python scripts/verification/verify_precursor_charges_and_acq_type.py \
+        --input-dir <data-root>/lcfm/ \
+        --search-data search_data_with_new_projects.xlsx \
+        --output-dir lcfm
+    python scripts/verification/verify_precursor_charges_and_acq_type.py \
+        --input-dir s3://<your-bucket>/acfm/ \
+        --search-data search_data_with_new_projects.xlsx \
+        --output-dir acfm \
+        --aws-profile <your-aws-profile>
 """
 
 import polars as pl
@@ -52,7 +53,7 @@ INPUT_DIR_OPTION = typer.Option(
     "<data-root>/lcfm/",
     "--input-dir",
     "-i",
-    help="Input directory containing parquet files organized by project subfolders",
+    help="Input directory containing parquet files organised by project subfolders",
 )
 SEARCH_DATA_OPTION = typer.Option(
     "search_data_with_new_projects.xlsx",
@@ -75,12 +76,23 @@ AWS_PROFILE_OPTION = typer.Option(
 
 
 def is_s3_path(path: str) -> bool:
-    """Check if a path is an S3 path."""
+    """Choose AWS listing vs local walk from the input URI scheme.
+
+    Args:
+        path: Input directory string.
+
+    Returns:
+        True when the path should be treated as S3.
+    """
     return path.startswith("s3://")
 
 
 def setup_aws_credentials(aws_profile: Optional[str]) -> None:
-    """Set up AWS credentials from profile for polars S3 access."""
+    """Point Polars/AWS CLI at the user's ~/.aws profile without reading secrets.
+
+    Args:
+        aws_profile: Profile name, or None to leave the environment unchanged.
+    """
     if not aws_profile:
         return
 
@@ -98,12 +110,27 @@ def setup_aws_credentials(aws_profile: Optional[str]) -> None:
 
 
 def format_time(seconds: float) -> str:
-    """Format seconds into a human-readable time string."""
+    """Format elapsed seconds for long S3/local scans.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        A compact timedelta string for logs.
+    """
     return str(timedelta(seconds=int(seconds)))
 
 
 def list_s3_projects(s3_path: str, aws_profile: Optional[str] = None) -> List[str]:
-    """List project folders in an S3 bucket path using AWS CLI."""
+    """List project prefixes under an S3 URI via AWS CLI.
+
+    Args:
+        s3_path: ``s3://bucket/prefix/`` to list.
+        aws_profile: Optional AWS CLI profile.
+
+    Returns:
+        Sorted project folder names, or empty on CLI failure.
+    """
     cmd = ["aws", "s3", "ls", s3_path]
     if aws_profile:
         cmd.extend(["--profile", aws_profile])
@@ -124,7 +151,15 @@ def list_s3_projects(s3_path: str, aws_profile: Optional[str] = None) -> List[st
 
 
 def list_s3_data_files(s3_path: str, aws_profile: Optional[str] = None) -> List[str]:
-    """List data files (.parquet or .ipc) in an S3 path using AWS CLI."""
+    """Recursively list parquet/IPC objects under an S3 prefix.
+
+    Args:
+        s3_path: ``s3://bucket/prefix/`` to scan.
+        aws_profile: Optional AWS CLI profile.
+
+    Returns:
+        ``s3://`` URIs of data files, or empty on CLI failure.
+    """
     cmd = ["aws", "s3", "ls", s3_path, "--recursive"]
     if aws_profile:
         cmd.extend(["--profile", aws_profile])
@@ -165,7 +200,15 @@ def list_s3_data_files(s3_path: str, aws_profile: Optional[str] = None) -> List[
 def find_data_files_in_folder(
     input_dir: str, aws_profile: Optional[str] = None
 ) -> List[str]:
-    """Find all data files (.parquet or .ipc) in a folder (local or S3)."""
+    """Find parquet/IPC files locally or on S3 so the same checker can run in either place.
+
+    Args:
+        input_dir: Local directory or ``s3://`` URI.
+        aws_profile: Profile used only for S3 listing.
+
+    Returns:
+        Paths/URIs of data files to inspect.
+    """
     if is_s3_path(input_dir):
         # S3 path
         return list_s3_data_files(input_dir, aws_profile)
@@ -184,7 +227,7 @@ def find_data_files_in_folder(
 
 
 def _find_aws_dir() -> str:
-    """Find the AWS config directory (repo root or home)."""
+    """Prefer a checkout ``.aws`` directory when present, otherwise the user home config."""
     repo_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
@@ -195,7 +238,7 @@ def _find_aws_dir() -> str:
 
 
 def _read_aws_credentials(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Read AWS credentials from credentials file into storage_opts."""
+    """Load access keys into Polars storage options for S3 reads."""
     import configparser
 
     creds_file = os.path.join(aws_dir, "credentials")
@@ -214,7 +257,7 @@ def _read_aws_credentials(aws_dir: str, profile: str, storage_opts: dict) -> Non
 
 
 def _read_aws_config(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Read AWS region from config file into storage_opts."""
+    """Load region into Polars storage options for S3 reads."""
     import configparser
 
     config_file = os.path.join(aws_dir, "config")
@@ -229,7 +272,14 @@ def _read_aws_config(aws_dir: str, profile: str, storage_opts: dict) -> None:
 
 
 def get_storage_options(aws_profile: Optional[str] = None) -> Optional[dict]:
-    """Build storage options for Polars S3 access."""
+    """Build Polars S3 storage options from a named AWS profile.
+
+    Args:
+        aws_profile: Profile to read, or None for local files.
+
+    Returns:
+        Storage options dict, or None when unused or empty.
+    """
     if not aws_profile:
         return None
 
@@ -245,7 +295,7 @@ def get_storage_options(aws_profile: Optional[str] = None) -> Optional[dict]:
 def _read_file_lazy(
     file_path: str, storage_options: Optional[dict] = None
 ) -> pl.LazyFrame:
-    """Read a file as a LazyFrame, supporting both parquet and IPC formats."""
+    """Open parquet or IPC (including S3) without loading unused columns first."""
     if file_path.endswith(".ipc"):
         return pl.scan_ipc(file_path, storage_options=storage_options)
     else:
@@ -253,21 +303,40 @@ def _read_file_lazy(
 
 
 def extract_file_name(path_str: str) -> str:
-    """Extract a search-data lookup key from a file path."""
+    """Join search-data rows to on-disk files using the same experiment stem as preprocessing.
+
+    Args:
+        path_str: File path or URI.
+
+    Returns:
+        Canonical experiment basename for matching ``file path`` in search data.
+    """
     from scripts.preprocessing.parquet_io import search_data_lookup_key
 
     return str(search_data_lookup_key(path_str))
 
 
 def extract_project(path: str) -> str:
-    """Extract project as the immediate folder the file is inside."""
+    """Take the parent folder as the project id so S3 and local trees match search data.
+
+    Args:
+        path: File path or URI.
+
+    Returns:
+        Immediate parent folder name.
+    """
     return Path(path).parent.name
 
 
 def check_conflicting_acquistions(dia_df: pl.DataFrame, dda_df: pl.DataFrame) -> None:
-    """Check each unique combination of 'project' and 'filename' is only listed once on one of the dataframes.
+    """Refuse files labelled both DIA and DDA, because charge policy cannot be applied twice.
 
-    If there are duplicate rows, raise a ValueError.
+    Args:
+        dia_df: Unique DIA (project, filename) rows.
+        dda_df: Unique DDA (project, filename) rows.
+
+    Raises:
+        ValueError: When the same project/filename appears in both tables.
     """
     # Find the intersection
     # We use join to find rows that exist in both
@@ -293,7 +362,17 @@ def check_conflicting_acquistions(dia_df: pl.DataFrame, dda_df: pl.DataFrame) ->
 def load_aquisitions_from_search_data(
     search_data_path: str,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
-    """Load files with acquisition types 'DIA' and 'DDA' from the search data Excel file."""
+    """Split search-data files into DIA vs DDA so each can use the matching charge policy.
+
+    Args:
+        search_data_path: Excel with project, acquisition, and file path columns.
+
+    Returns:
+        Unique DIA and DDA tables with project, filename, and acquisition.
+
+    Raises:
+        ValueError: When required columns are missing or a file is both DIA and DDA.
+    """
     df = pl.read_excel(search_data_path)
 
     columns = df.columns
@@ -346,7 +425,7 @@ def load_aquisitions_from_search_data(
 
 @dataclass
 class FilePrecursorChargeErrors:
-    """Precursor charge error statistics for a file."""
+    """One file-level charge error so reports can drive later cleanup."""
 
     filename: str
     project: str
@@ -361,7 +440,7 @@ def _check_dda_file_precursor_charges(
     precursor_charge_col: pl.DataFrame,
     total_rows: int,
 ) -> List[FilePrecursorChargeErrors]:
-    """Check one DDA file for zero/unknown/null precursor charges. Return list of errors."""
+    """Flag DDA files whose charges are 0, unknown, or null (charge should be known)."""
     errors: List[FilePrecursorChargeErrors] = []
     dtype = precursor_charge_col["precursor_charge"].dtype
 
@@ -427,7 +506,7 @@ def _check_dia_file_precursor_charges(
     precursor_charge_col: pl.DataFrame,
     total_rows: int,
 ) -> List[FilePrecursorChargeErrors]:
-    """Check one DIA file for non-zero/unknown/null precursor charges. Return list of errors."""
+    """Flag DIA files whose charges are non-zero, unknown, or null (charge should be 0)."""
     errors: List[FilePrecursorChargeErrors] = []
     dtype = precursor_charge_col["precursor_charge"].dtype
 
@@ -489,7 +568,17 @@ def check_if_all_files_in_project_have_errors(
     incorrect_dda_files: pl.DataFrame,
     search_data_files: pl.DataFrame,  # The concat'd df of project/filename/acquisition
 ) -> pl.DataFrame:
-    """Check if all files in a project have errors."""
+    """Show whether a charge error is isolated or affects every file in a project/acquisition.
+
+    Args:
+        data_files: All parquet/IPC paths scanned.
+        incorrect_dia_files: Per-file DIA error rows.
+        incorrect_dda_files: Per-file DDA error rows.
+        search_data_files: Concatenated DIA+DDA lookup of project/filename/acquisition.
+
+    Returns:
+        Project-level summary with denominators over all files, not only failing ones.
+    """
     # Create a master list of expected files
     master_files = pl.DataFrame({"filepath": data_files}).with_columns(
         [
@@ -569,10 +658,18 @@ def check_if_all_files_in_project_have_errors(
 def analyze_precursor_charges(
     input_dir: str, search_data_path: str, aws_profile: Optional[str] = None
 ) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Analyze precursor charge values for a project.
+    """Scan files and apply DIA (charge 0) vs DDA (charge known) policy from search data.
 
-    Check if any files marked as 'DDA' contain zero or empty precursor charges, and
-    check if any files marked as 'DIA' contain non-zero precursor charges.
+    Args:
+        input_dir: Local tree or ``s3://`` prefix of parquet/IPC files.
+        search_data_path: Excel that labels each file DIA or DDA.
+        aws_profile: Profile for S3 listing and Polars reads.
+
+    Returns:
+        Incorrect DIA rows, incorrect DDA rows, and a project-level summary.
+
+    Raises:
+        ValueError: When no files are found under input_dir.
     """
     data_files = find_data_files_in_folder(input_dir, aws_profile)
 
@@ -635,7 +732,15 @@ def analyze_precursor_charges(
 def run_verification(
     input_dir: str, search_data_path: str, output_dir: str, aws_profile: Optional[str]
 ) -> None:
-    """Verify precursor charge values for DIA and DDA files."""
+    """Write DIA/DDA charge-error CSVs for downstream cleanup.
+
+    Args:
+        input_dir: Local tree or ``s3://`` prefix.
+        search_data_path: Excel with project, acquisition, and file path.
+        output_dir: Directory for ``incorrect_dia_files.csv``, ``incorrect_dda_files.csv``,
+            and ``project_summary.csv``.
+        aws_profile: Profile for S3 access.
+    """
     # Set up AWS credentials if using S3
     if is_s3_path(input_dir):
         setup_aws_credentials(aws_profile)
@@ -677,7 +782,14 @@ def main(
     output_dir: str = OUTPUT_DIR_OPTION,
     aws_profile: Optional[str] = AWS_PROFILE_OPTION,
 ) -> None:
-    """Verify precursor charge values for DIA projects."""
+    """Report DIA files with known charges and DDA files with unknown/zero charges.
+
+    Args:
+        input_dir: Input directory containing parquet files organised by project subfolders.
+        search_data: Path to search data Excel file with project and acquisition columns.
+        output_dir: Directory to write the output CSV reports to (one for each acquisition type).
+        aws_profile: AWS profile name for S3 access (read from ~/.aws/).
+    """
     run_verification(
         input_dir=input_dir,
         search_data_path=search_data,

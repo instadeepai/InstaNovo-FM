@@ -1,5 +1,8 @@
 r"""Verify per-spectrum max intensity normalisation in parquet/IPC files.
 
+Run after conversion/preprocessing so training spectra have max intensity 1.0
+and the original maximum is retained in ``scale_factor``.
+
 Each non-empty ``intensity_array`` must have maximum ``1.0``.
 Empty peak lists and all-zero spectra are not allowed.
 
@@ -12,16 +15,15 @@ With ``--fix``, non-conforming rows are max-normalised. ``scale_factor`` is set 
 ``max(intensity_array) * scale_factor`` when the column exists (null/NaN treated
 as ``1.0``), or **created** as ``Float32`` when the column was missing.
 
-USAGE:
-======
-uv run python scripts/verification/verify_intensity_max_normalisation.py \\
-    --input path/to/file.parquet
+CLI::
 
-uv run python scripts/verification/verify_intensity_max_normalisation.py \\
-    --input-dir <data-root>/lcfm/ --project PXD009449
-
-uv run python scripts/verification/verify_intensity_max_normalisation.py \\
-    --input path/to/file.parquet --fix --dry-run
+    python scripts/verification/verify_intensity_max_normalisation.py --help
+    python scripts/verification/verify_intensity_max_normalisation.py \
+        --input path/to/file.parquet
+    python scripts/verification/verify_intensity_max_normalisation.py \
+        --input-dir <data-root>/lcfm/ --project PXD009449
+    python scripts/verification/verify_intensity_max_normalisation.py \
+        --input path/to/file.parquet --fix --dry-run
 """
 
 from __future__ import annotations
@@ -83,7 +85,7 @@ VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Debug logging")
 
 @dataclass
 class FileVerifyStats:
-    """Per-file counts from intensity max-normalisation verification."""
+    """Per-file intensity-check counts so a tree can be summarised without rewriting."""
 
     path: str
     rows: int = 0
@@ -95,6 +97,7 @@ class FileVerifyStats:
 
 
 def _safe_scale_factor(v: object) -> float:
+    """Treat missing/NaN scale as 1.0 when reconstructing max * scale during a fix."""
     if v is None:
         return 1.0
     try:
@@ -107,7 +110,7 @@ def _safe_scale_factor(v: object) -> float:
 
 
 def _is_numeric_scale_factor(sf: Any) -> bool:
-    """Finite float (column present: value must exist as a number)."""
+    """Require a finite number when the scale_factor column exists."""
     if sf is None:
         return False
     try:
@@ -121,7 +124,15 @@ def normalise_intensity_row(
     intensity: object,
     scale_factor: object,
 ) -> tuple[list[float], float]:
-    """Return (new_intensity_list, new_scale_factor) preserving raw ≈ i * sf."""
+    """Max-normalise one spectrum while keeping raw intensity recoverable as i * scale.
+
+    Args:
+        intensity: Peak intensities for the row.
+        scale_factor: Existing scale, or missing/NaN treated as 1.0.
+
+    Returns:
+        New intensity list (max 1.0 when peaks are positive) and updated scale_factor.
+    """
     if intensity is None:
         return [], _safe_scale_factor(scale_factor)
 
@@ -139,12 +150,14 @@ def normalise_intensity_row(
 
 
 def _read_df(path: Path) -> pl.DataFrame:
+    """Load parquet or IPC so both labelled formats can be checked."""
     if path.suffix.lower() == ".parquet":
         return pl.read_parquet(path)
     return pl.read_ipc(path)
 
 
 def _atomic_write(df: pl.DataFrame, file_path: Path) -> None:
+    """Replace parquet/IPC only after a full write so a crash cannot leave a truncated file."""
     temp_fd, temp_path_str = tempfile.mkstemp(
         suffix=file_path.suffix, dir=file_path.parent
     )
@@ -163,6 +176,7 @@ def _atomic_write(df: pl.DataFrame, file_path: Path) -> None:
 
 
 def _record_bad_sample(stats: FileVerifyStats, idx: int, max_sample: int) -> None:
+    """Keep a few failing row indices for verbose logs without dumping the whole file."""
     if len(stats.sample_bad_row_indices) < max_sample:
         stats.sample_bad_row_indices.append(idx)
 
@@ -172,7 +186,7 @@ def _classify_intensity_row(
     sf: object,
     has_sf_col: bool,
 ) -> Literal["bad_max", "bad_scale", "missing_sf_column", "ok"]:
-    """Map one row's peak max and scale_factor to a verification outcome."""
+    """Separate true max-norm failures from missing scale metadata (not a verification failure)."""
     if peak_max is None:
         return "bad_max"
     m = float(cast(Any, peak_max))
@@ -188,7 +202,15 @@ def _classify_intensity_row(
 
 
 def verify_file(path: Path, max_sample: int = 5) -> FileVerifyStats:
-    """Scan file; return stats (does not modify)."""
+    """Scan a file for max-norm and scale_factor issues without modifying it.
+
+    Args:
+        path: Parquet or IPC path.
+        max_sample: Cap on failing row indices kept for verbose logging.
+
+    Returns:
+        Per-file counts, including missing-scale-column rows that are not failures.
+    """
     df = _read_df(path)
     if "intensity_array" not in df.columns:
         logger.warning("Skipping %s: missing intensity_array", path)
@@ -226,7 +248,17 @@ def verify_file(path: Path, max_sample: int = 5) -> FileVerifyStats:
 
 
 def apply_fix_to_dataframe(df: pl.DataFrame) -> pl.DataFrame:
-    """Return a copy with intensity_array updated; add or replace scale_factor."""
+    """Max-normalise intensities and write/create scale_factor so raw peaks stay recoverable.
+
+    Args:
+        df: Table that must contain ``intensity_array``.
+
+    Returns:
+        A copy with updated intensities and scale_factor.
+
+    Raises:
+        ValueError: When ``intensity_array`` is missing.
+    """
     if "intensity_array" not in df.columns:
         raise ValueError("DataFrame must contain intensity_array")
 
@@ -257,7 +289,15 @@ def apply_fix_to_dataframe(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def collect_parquet_paths(input_dir: str, projects: list[str]) -> list[Path]:
-    """Return parquet paths under ``input_dir``, optionally filtered by project names."""
+    """Enumerate project parquets for a directory-wide check or fix.
+
+    Args:
+        input_dir: Root with project subfolders.
+        projects: Restrict to these folder names; all projects when empty.
+
+    Returns:
+        Parquet paths to verify.
+    """
     project_names = find_project_folders(input_dir) if not projects else projects
     out: list[Path] = []
     for project in project_names:
@@ -271,6 +311,7 @@ def collect_parquet_paths(input_dir: str, projects: list[str]) -> list[Path]:
 
 
 def _print_stats(stats: FileVerifyStats, verbose: bool) -> None:
+    """Log per-file counts so operators can see bad_max vs missing scale metadata."""
     logger.info(
         "%s: rows=%d ok=%d bad_max=%d bad_scale_not_numeric=%d "
         "max_ok_missing_scale_column=%d",
@@ -290,6 +331,7 @@ def _print_stats(stats: FileVerifyStats, verbose: bool) -> None:
 def _resolve_paths(
     input_path: Optional[str], input_dir: Optional[str], project: list[str]
 ) -> list[Path]:
+    """Require exactly one of --input or --input-dir so a single file and a tree are not mixed."""
     if bool(input_path) == bool(input_dir):
         raise typer.BadParameter("Provide exactly one of --input or --input-dir")
     if input_path:
@@ -299,7 +341,7 @@ def _resolve_paths(
 
 
 def _maybe_fix_file(path: Path, dry_run: bool, verbose: bool) -> bool:
-    """Apply normalisation fix; return True if post-fix verification still fails."""
+    """Rewrite a failing file, then re-verify so silent incomplete fixes are caught."""
     df = _read_df(path)
     if "intensity_array" not in df.columns:
         return False
@@ -326,7 +368,16 @@ def main(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """CLI: verify parquet/IPC intensity normalisation; optionally rewrite files."""
+    """Check that spectra are max-normalised (and optionally rewrite intensities plus scale_factor).
+
+    Args:
+        input_path: Single .parquet or .ipc file.
+        input_dir: Root directory with project subfolders containing parquet files.
+        project: Restrict to these project folder names (with --input-dir).
+        fix: Re-normalise rows in place; add scale_factor if missing.
+        dry_run: With --fix, log changes only; do not write files.
+        verbose: Enable debug logging and sample failing row indices.
+    """
     paths = _resolve_paths(input_path, input_dir, project)
 
     if not paths:

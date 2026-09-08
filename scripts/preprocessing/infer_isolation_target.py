@@ -1,3 +1,18 @@
+"""Fill missing isolation targets in Parquet spectra from available metadata.
+
+Run this after conversion when ``isolation_target`` is absent or NaN. The script
+prefers header-derived values, falls back to precursor m/z, and records files it
+cannot infer; batch mode processes several glob patterns.
+
+CLI::
+
+    python scripts/preprocessing/infer_isolation_target.py --help
+    python scripts/preprocessing/infer_isolation_target.py infer-targets "<data-root>/acfm/**/*.parquet"
+    python scripts/preprocessing/infer_isolation_target.py batch-infer "<data-root>/acfm/**/*.parquet" "<data-root>/lcfm/**/*.parquet"
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import polars as pl
 import glob
 import os
@@ -32,34 +47,32 @@ PREFIX_OPTION = typer.Option(
 
 
 def _isolation_target_missing() -> pl.Expr:
-    """True when *isolation_target* is null, string ``'nan'``, or float NaN."""
+    """Treat every known missing-value encoding consistently during inference."""
     return pl.col("isolation_target").is_null() | pl.col("isolation_target").cast(
         pl.String, strict=False
     ).str.to_lowercase().eq("nan")
 
 
 def check_for_empty_it(ldf: pl.LazyFrame) -> bool:
-    """Check if the 'isolation_target' column in a LazyFrame contains any null values.
+    """Skip expensive rewrites when every isolation target is already usable.
 
     Args:
-        ldf (pl.LazyFrame): The LazyFrame to check.
+        ldf: Spectra table to inspect lazily.
 
     Returns:
-        bool: True if there are null values, False otherwise.
+        Whether at least one isolation target needs inference.
     """
     return bool(ldf.select(_isolation_target_missing().any()).collect().item())
 
 
 def extract_file_name(file_path: str) -> Tuple[str, str]:
-    """Extract the project name and base filename from a given file path.
-
-    Strips file extensions and sharding suffixes.
+    """Build the project and experiment key needed for metadata matching.
 
     Args:
-        file_path (str): The full path to the file.
+        file_path: Parquet path organised beneath its project directory.
 
     Returns:
-        Tuple[str, str]: A tuple containing the project name and base filename.
+        Project name and normalised experiment basename.
     """
     filename = os.path.basename(file_path)
     project = os.path.basename(os.path.dirname(file_path))
@@ -78,19 +91,19 @@ def check_search_data_value(
     column: str,
     show_duplicate_warnings: bool = False,
 ) -> str:
-    """Retrieve a column value from search_data that matches a given file path.
+    """Require an unambiguous metadata match before trusting a search-data value.
 
     Args:
-        file_path (str): The path of the file being processed.
-        search_data (pl.DataFrame): DataFrame containing search metadata.
-        column (str): The column to extract the value from.
-        show_duplicate_warnings (bool, optional): If True, prints warnings for duplicates. Defaults to False.
+        file_path: Data file whose metadata is needed.
+        search_data: Table containing file paths and metadata.
+        column: Metadata field to retrieve.
+        show_duplicate_warnings: Whether to report equivalent duplicate rows.
 
     Returns:
-        str: The extracted value from the specified column.
+        The unique matching metadata value.
 
     Raises:
-        ValueError: If no matches or conflicting values are found.
+        ValueError: If no row matches or matching rows disagree.
     """
     project, filename = extract_file_name(file_path)
     search_path = (
@@ -131,13 +144,13 @@ def check_search_data_value(
 
 
 def infer_it_from_precursor_mz(ldf: pl.LazyFrame) -> pl.LazyFrame:
-    """Infer missing isolation_target values from precursor_mz.
+    """Use precursor m/z when it is the only reliable isolation proxy available.
 
     Args:
-        ldf (pl.LazyFrame): The LazyFrame to process.
+        ldf: Spectra table with missing isolation targets.
 
     Returns:
-        pl.LazyFrame: The modified LazyFrame.
+        Lazy table with missing targets filled from precursor m/z.
     """
     # Replace Null values in isolation_target with precursor_mz values
     ldf = ldf.with_columns(
@@ -151,13 +164,13 @@ def infer_it_from_precursor_mz(ldf: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def infer_it_from_header(ldf: pl.LazyFrame) -> pl.LazyFrame:
-    """Infer missing isolation_target values from the 'header' column.
+    """Prefer instrument header values when reconstructing isolation targets.
 
     Args:
-        ldf (pl.LazyFrame): The LazyFrame to process.
+        ldf: Spectra table with parseable instrument headers.
 
     Returns:
-        pl.LazyFrame: The modified LazyFrame.
+        Lazy table with missing targets filled from headers.
     """
     # Regex pattern to extract the isolation target value
     isolation_target_pattern = r"\b\d+\.\d+@"
@@ -182,10 +195,14 @@ def infer_it_from_header(ldf: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def process_single_file(file_path: str, verbose: bool = False) -> tuple[bool, bool]:
-    """Process a single parquet file to infer isolation targets.
+    """Isolate inference decisions so a batch can log modified and unusable files.
+
+    Args:
+        file_path: Parquet file to inspect and potentially rewrite.
+        verbose: Whether to print file-level progress.
 
     Returns:
-        tuple[bool, bool]: (was_modified, had_error)
+        Flags indicating whether the file changed and whether inference failed.
     """
     if verbose:
         typer.echo(f"Processing file: {file_path}")
@@ -225,7 +242,14 @@ def process_single_file(file_path: str, verbose: bool = False) -> tuple[bool, bo
 def write_log_files(
     modified_files: list, error_files: list, log_file: str, error_log_file: str
 ) -> None:
-    """Write modified and error files to their respective log files."""
+    """Persist inference outcomes so changed and unresolved files remain auditable.
+
+    Args:
+        modified_files: Paths rewritten successfully.
+        error_files: Paths whose targets could not be inferred.
+        log_file: Destination for modified paths.
+        error_log_file: Destination for unresolved paths.
+    """
     # Write modified filenames to a text file
     if modified_files:
         # Ensure output directory exists
@@ -259,13 +283,13 @@ def infer_isolation_target(
     error_log_file: str = "error_files.txt",
     verbose: bool = False,
 ) -> None:
-    """Infer and update missing isolation_target values in Parquet files.
+    """Repair missing isolation metadata before spectra enter later pipeline stages.
 
     Args:
-        source_dir (str): Directory pattern to search for Parquet files.
-        log_file (str, optional): File to log modified files. Defaults to "modified_files.txt".
-        error_log_file (str, optional): File to log error files. Defaults to "error_files.txt".
-        verbose (bool, optional): Enable verbose output. Defaults to False.
+        source_dir: Glob pattern selecting Parquet files.
+        log_file: Destination for modified paths.
+        error_log_file: Destination for unresolved paths.
+        verbose: Whether to print processing details.
     """
     if verbose:
         typer.echo(f"Processing directory pattern: {source_dir}")
@@ -293,7 +317,14 @@ def infer_targets(
     error_log: str = ERROR_LOG_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Infer isolation target values in parquet files."""
+    """Repair missing isolation targets for one selected dataset pattern.
+
+    Args:
+        source_dir: Glob pattern selecting Parquet files.
+        log_file: Destination for modified paths.
+        error_log: Destination for unresolved paths.
+        verbose: Whether to print processing details.
+    """
     infer_isolation_target(
         source_dir=source_dir,
         log_file=log_file,
@@ -308,7 +339,13 @@ def batch_infer(
     log_dir: str = LOG_DIR_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Infer isolation targets in multiple directories."""
+    """Repair several dataset patterns while keeping separate outcome logs.
+
+    Args:
+        source_dirs: Glob patterns selecting Parquet files.
+        log_dir: Directory that receives outcome logs.
+        prefix: Prefix used for modified-file logs.
+    """
     output_path = Path(log_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -324,8 +361,8 @@ def batch_infer(
 
 
 def main() -> None:
-    """Main function to process multiple source directories."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible inference over historical hardcoded patterns."""
+    # Legacy behaviour for backwards compatibility
     source_dirs = [
         "<data-root>/acfm/**/*.parquet",
         "<data-root>/lcfm/**/*.parquet",

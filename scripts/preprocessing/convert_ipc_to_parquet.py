@@ -1,3 +1,18 @@
+"""Convert IPC spectra into schema-aligned, optionally enriched Parquet shards.
+
+Run this after validating IPC inputs and before Parquet-only preprocessing.
+Large files are sliced lazily to bound memory, while optional search data adds
+ACFM acquisition and USI metadata during conversion.
+
+CLI::
+
+    python scripts/preprocessing/convert_ipc_to_parquet.py --help
+    python scripts/preprocessing/convert_ipc_to_parquet.py convert --source-dir <data-root>/acfm
+    python scripts/preprocessing/convert_ipc_to_parquet.py batch-convert preprocessing/outputs/missing_files_lcfm.txt preprocessing/outputs/missing_files_acfm.txt
+
+Use ``python script.py command --help`` for flags.
+"""
+
 from __future__ import annotations
 
 import json
@@ -85,7 +100,16 @@ BATCH_OUTPUT_FILE_OPTION = typer.Option(
 def parquet_path_for_ipc_shard(
     ipc_path: str | Path, shard_counter: int, num_shards: int
 ) -> Path:
-    """Return the parquet output path for one IPC shard."""
+    """Keep whole-file and sharded output names compatible with downstream grouping.
+
+    Args:
+        ipc_path: Source IPC path.
+        shard_counter: Zero-based shard index.
+        num_shards: Denominator encoded in sharded filenames.
+
+    Returns:
+        Parquet destination for the requested shard.
+    """
     ipc_path = Path(ipc_path)
     root = ipc_path.parent
     ipc_name = ipc_path.name
@@ -98,6 +122,7 @@ def parquet_path_for_ipc_shard(
 
 
 def _add_usi_column(df: pl.DataFrame, parquet_path: Path) -> pl.DataFrame:
+    """Keep metadata enrichment usable when source IPC files omit scan identifiers."""
     if "scan" not in df.columns:
         return df.with_columns(pl.lit(None).cast(pl.String).alias("usi"))
 
@@ -120,7 +145,18 @@ def enrich_acfm_metadata(
     reference_dtypes: Dict[str, pl.DataType] = ACFM_REFERENCE_DTYPES,
     add_usi: bool = True,
 ) -> pl.DataFrame:
-    """Add canonical ``experiment_name``, ``acquisition``, and optionally ``usi``."""
+    """Make converted ACFM shards immediately compatible with the reference schema.
+
+    Args:
+        df: Converted IPC shard to enrich.
+        parquet_path: Output path used to derive stable experiment metadata.
+        acquisition: Acquisition type resolved from search data.
+        reference_dtypes: Canonical ACFM schema.
+        add_usi: Whether to construct universal spectrum identifiers.
+
+    Returns:
+        Enriched shard aligned to the reference schema.
+    """
     experiment_name = experiment_name_from_path(str(parquet_path))
     df = df.with_columns(
         pl.lit(experiment_name).alias("experiment_name"),
@@ -134,12 +170,7 @@ def enrich_acfm_metadata(
 def _prepare_ipc_shard(
     shard: pl.DataFrame, column_mapping: dict[str, str]
 ) -> pl.DataFrame:
-    """Apply the same per-shard transforms as ``SpectrumDataFrame.get_data_shards``.
-
-    Mirrors ``_df_from_ipc`` (the ``modified_sequence`` → annotated-column alias)
-    followed by the column rename and dtype casting, so a shard read via a lazy
-    slice is equivalent to one produced by the previous full-file path.
-    """
+    """Preserve ``SpectrumDataFrame`` conversion semantics while reading IPC lazily."""
     if "modified_sequence" in shard.columns:
         shard = shard.with_columns(pl.col("modified_sequence").alias(ANNOTATED_COLUMN))
     shard = shard.rename(
@@ -156,12 +187,21 @@ def convert_ipc_with_metadata(
     verbose: bool = False,
     add_usi: bool = True,
 ) -> None:
-    """Convert one IPC file to sharded parquet with ACFM metadata columns.
+    """Bound peak memory while producing complete, schema-aligned ACFM shards.
 
     The IPC file is read shard-by-shard through a lazy scan, so peak memory is
-    bounded by ``max_shard_size`` rows regardless of the file's total size —
-    previously the whole file was materialised (once to count rows and again to
-    shard it), which OOMed on large IPC files.
+    bounded by ``max_shard_size`` rows regardless of total size.
+
+    Args:
+        ipc_path: IPC file to convert.
+        acquisition_map: Project and filename keys mapped to acquisition type.
+        column_mapping: Source columns mapped to canonical names.
+        max_shard_size: Maximum rows materialised per output shard.
+        verbose: Whether to print shard details.
+        add_usi: Whether to construct universal spectrum identifiers.
+
+    Raises:
+        ValueError: If search data has no acquisition for the IPC file.
     """
     ipc_path_obj = Path(ipc_path)
     project = ipc_path_obj.parent.name
@@ -212,10 +252,24 @@ def convert_ipc_to_parquet(
     search_data_path: Optional[Path] = None,
     add_usi: bool = True,
 ) -> None:
-    """Converts IPC files to Parquet format.
+    """Produce Parquet inputs that downstream preprocessing can consume efficiently.
 
     When *search_data_path* is set, writes ``experiment_name`` and ``acquisition``
     during conversion, and ``usi`` when *add_usi* is true.
+
+    Args:
+        source_dir: Directory tree containing IPC files.
+        input_file: Text report listing IPC files to convert.
+        output_file: Destination for per-file conversion errors.
+        column_mapping: Source columns mapped to canonical names.
+        max_shard_size: Maximum rows per Parquet shard.
+        lazy: Whether the standard converter should use lazy loading.
+        verbose: Whether to print processing details.
+        search_data_path: Optional workbook enabling ACFM metadata enrichment.
+        add_usi: Whether to add USIs when metadata enrichment is enabled.
+
+    Raises:
+        typer.BadParameter: If the requested search-data workbook does not exist.
     """
     if column_mapping is None:
         column_mapping = {
@@ -260,7 +314,15 @@ def convert_ipc_to_parquet(
 def collect_ipc_files(
     source_dir: Optional[str] = None, input_file: Optional[str] = None
 ) -> list:
-    """Collects IPC file paths from a directory or an input file."""
+    """Accept either discovery or a prior report as the source of conversion work.
+
+    Args:
+        source_dir: Optional directory tree containing IPC files.
+        input_file: Optional text file listing IPC paths.
+
+    Returns:
+        IPC paths selected for conversion.
+    """
     ipc_files = []
     if source_dir:
         ipc_files.extend(find_ipc_files_in_directory(source_dir))
@@ -270,7 +332,14 @@ def collect_ipc_files(
 
 
 def find_ipc_files_in_directory(source_dir: str) -> list:
-    """Finds all IPC files in the given directory."""
+    """Discover every IPC input when no targeted conversion report is available.
+
+    Args:
+        source_dir: Directory tree to search.
+
+    Returns:
+        IPC paths found beneath the source directory.
+    """
     ipc_files = []
     for root, _, files in os.walk(source_dir):
         for file in files:
@@ -280,7 +349,17 @@ def find_ipc_files_in_directory(source_dir: str) -> list:
 
 
 def read_ipc_files_from_file(input_file: str) -> list:
-    """Reads IPC file paths from the input file."""
+    """Turn a validation report into a targeted IPC conversion queue.
+
+    Args:
+        input_file: Text file whose lines begin with IPC paths.
+
+    Returns:
+        IPC paths parsed from the report.
+
+    Raises:
+        typer.Exit: If the report does not exist.
+    """
     if not os.path.exists(input_file):
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
         raise typer.Exit(1)
@@ -304,7 +383,18 @@ def process_ipc_files(
     acquisition_map: Optional[Dict[tuple[str, str], str]] = None,
     add_usi: bool = True,
 ) -> None:
-    """Processes each IPC file and converts it to Parquet."""
+    """Continue batch conversion after individual failures and record each error.
+
+    Args:
+        ipc_files: IPC paths selected for conversion.
+        output_file: Destination for conversion errors.
+        column_mapping: Source columns mapped to canonical names.
+        max_shard_size: Maximum rows per Parquet shard.
+        lazy: Whether the standard converter should use lazy loading.
+        verbose: Whether to print per-file details.
+        acquisition_map: Optional metadata lookup enabling enriched conversion.
+        add_usi: Whether to add USIs during enriched conversion.
+    """
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -341,7 +431,13 @@ def process_ipc_files(
 
 
 def log_error(output_file: str, ipc_path: str, error: Exception) -> None:
-    """Logs errors encountered during file processing."""
+    """Preserve failed paths so conversion can be retried without rescanning.
+
+    Args:
+        output_file: Error log destination.
+        ipc_path: IPC file that failed.
+        error: Exception raised during conversion.
+    """
     with open(output_file, "a") as log:
         log.write(f"Error processing {ipc_path}: {error}\n")
 
@@ -358,7 +454,19 @@ def convert(
     search_data: Optional[Path] = SEARCH_DATA_OPTION,
     add_usi: bool = ADD_USI_OPTION,
 ) -> None:
-    """Convert IPC files to Parquet format."""
+    """Convert a directory or report-selected IPC set for Parquet preprocessing.
+
+    Args:
+        source_dir: Optional directory tree containing IPC files.
+        input_file: Optional text report listing IPC files.
+        output_file: Destination for conversion errors.
+        max_shard_size: Maximum rows per output shard.
+        lazy: Whether to use lazy loading.
+        verbose: Whether to print processing details.
+        column_mapping: Optional JSON mapping from source to canonical columns.
+        search_data: Optional workbook enabling ACFM metadata enrichment.
+        add_usi: Whether to add USIs during enriched conversion.
+    """
     parsed_column_mapping = None
     if column_mapping:
         try:
@@ -399,7 +507,15 @@ def batch_convert(
     lazy: bool = LAZY_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Convert IPC files listed in multiple input files."""
+    """Retry conversion queues from several validation reports in one run.
+
+    Args:
+        input_files: Text reports listing IPC files to convert.
+        output_file: Shared destination for conversion errors.
+        max_shard_size: Maximum rows per output shard.
+        lazy: Whether to use lazy loading.
+        verbose: Whether to print processing details.
+    """
     column_mapping = {
         "rt": "retention_time",
         "mz": "mz_array",
@@ -426,7 +542,7 @@ def batch_convert(
 
 
 def main() -> None:
-    """Entry point for the script to convert IPC files to Parquet format."""
+    """Preserve backwards-compatible conversion of historical hardcoded reports."""
     column_mapping = {
         "rt": "retention_time",
         "mz": "mz_array",

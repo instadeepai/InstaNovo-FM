@@ -1,3 +1,18 @@
+"""Delete redundant IPC variants that occur within the same folder.
+
+Run this after ``detect_all_duplicates.py`` has produced a candidate report.
+Same-folder copies can be resolved deterministically, but dry-run should be used
+to review associated Parquet deletions first.
+
+CLI::
+
+    python scripts/preprocessing/delete_same_folder_duplicates.py --help
+    python scripts/preprocessing/delete_same_folder_duplicates.py delete-duplicates duplicate_files_acfm.txt --dry-run
+    python scripts/preprocessing/delete_same_folder_duplicates.py batch-delete duplicate_files_acfm.txt duplicate_files_lcfm.txt --dry-run
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import os
 from collections import defaultdict
 from typing import List
@@ -21,7 +36,14 @@ INPUT_FILES_ARG = typer.Argument(
 
 
 def delete_files_safely(files_to_delete: list) -> int:
-    """Delete files safely and return the count of successfully deleted files."""
+    """Continue an approved cleanup even when individual files cannot be removed.
+
+    Args:
+        files_to_delete: Paths approved for removal.
+
+    Returns:
+        Number of files removed successfully.
+    """
     deleted_count = 0
     for file_path in files_to_delete:
         try:
@@ -39,7 +61,12 @@ def delete_files_safely(files_to_delete: list) -> int:
 
 
 def check_delete_with_user(files_to_delete: list, force: bool = False) -> None:
-    """Check the files to be deleted with the user before deletion."""
+    """Require review before applying an irreversible duplicate cleanup.
+
+    Args:
+        files_to_delete: Paths proposed for removal.
+        force: Whether prior approval permits bypassing the prompt.
+    """
     # Safety check: Print files to be deleted
     typer.echo(f"The following {len(files_to_delete)} files will be deleted:")
     for file_path in files_to_delete:
@@ -61,7 +88,14 @@ def check_delete_with_user(files_to_delete: list, force: bool = False) -> None:
 
 
 def parse_input_file(input_file: str) -> defaultdict:
-    """Parse the input file to group files by their base name."""
+    """Reconstruct experiment groups needed to distinguish same-folder copies.
+
+    Args:
+        input_file: Duplicate report produced by the all-duplicates detector.
+
+    Returns:
+        Experiment basenames mapped to their folders and full paths.
+    """
     file_map = defaultdict(list)
 
     with open(input_file, "r") as infile:
@@ -79,7 +113,14 @@ def parse_input_file(input_file: str) -> defaultdict:
 
 
 def find_duplicates_to_delete(file_map: defaultdict) -> list:
-    """Find files to delete based on same-folder duplicates."""
+    """Choose only redundant same-folder copies and their derived Parquet files.
+
+    Args:
+        file_map: Experiment groups from a duplicate report.
+
+    Returns:
+        Paths safe to propose for same-folder cleanup.
+    """
     files_to_delete = []
 
     for _base_name, file_info in file_map.items():
@@ -106,15 +147,15 @@ def find_duplicates_to_delete(file_map: defaultdict) -> list:
 def delete_same_folder_duplicates(
     input_file: str, force: bool = False, dry_run: bool = False
 ) -> None:
-    """Deletes same-folder duplicate files from an input file of detected duplicates.
+    """Remove deterministic same-folder copies while preserving cross-folder cases.
 
-    This function takes the output file of 'detect_same_duplicates` as its input file.
-    It will skip duplicates that are found in different subfolders.
+    Args:
+        input_file: Report produced by ``detect_all_duplicates.py``.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
 
-    Parameters:
-        input_file (str): The file where same-folder duplicates will be read from.
-        force (bool): Skip confirmation prompt
-        dry_run (bool): Show what would be deleted without actually deleting
+    Raises:
+        typer.Exit: If the duplicate report does not exist.
     """
     if not os.path.exists(input_file):
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
@@ -146,7 +187,14 @@ def delete_duplicates(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Delete same-folder duplicate files from detected duplicates."""
+    """Apply a duplicate report only where copies share a parent folder.
+
+    Args:
+        input_file: Duplicate report to apply.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
+        verbose: Whether to print selected settings.
+    """
     if verbose:
         typer.echo(f"Processing input file: {input_file}")
         typer.echo(f"Force mode: {force}")
@@ -161,7 +209,13 @@ def batch_delete(
     force: bool = FORCE_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
-    """Delete duplicates from multiple input files."""
+    """Apply same-folder cleanup to several reviewed reports.
+
+    Args:
+        input_files: Duplicate reports to apply.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
+    """
     for input_file in input_files:
         if not os.path.exists(input_file):
             typer.echo(
@@ -175,8 +229,8 @@ def batch_delete(
 
 
 def main() -> None:
-    """Entry point for the script to delete same-folder duplicate files."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible cleanup of the historical hardcoded reports."""
+    # Legacy behaviour for backwards compatibility
     input_files = ["duplicate_files_acfm.txt", "duplicate_files_lcfm.txt"]
 
     for input_file in input_files:

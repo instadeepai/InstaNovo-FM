@@ -1,3 +1,17 @@
+"""Find empty IPC files before they cause failures in later preprocessing.
+
+Run this validation after collecting IPC data and before conversion; reports can
+also be generated for several dataset directories in one invocation.
+
+CLI::
+
+    python scripts/preprocessing/find_empty_files.py --help
+    python scripts/preprocessing/find_empty_files.py find-empty <data-root>/acfm
+    python scripts/preprocessing/find_empty_files.py batch-find-empty <data-root>/acfm <data-root>/lcfm
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import polars as pl
 from tqdm import tqdm
 import logging
@@ -35,14 +49,30 @@ PREFIX_OPTION = typer.Option(
 
 
 def find_files(input_dir: str, file_pattern: str) -> list[str]:
-    """Find files in a local directory that match a specified pattern."""
+    """Provide the candidate files that an emptiness check should inspect.
+
+    Args:
+        input_dir: Root directory for the search.
+        file_pattern: Recursive glob selecting candidate files.
+
+    Returns:
+        Paths matching the requested pattern.
+    """
     search_pattern = Path(input_dir) / file_pattern
     matched_files = glob.glob(str(search_pattern), recursive=True)
     return matched_files
 
 
 def check_if_empty(file_path: str, flagged_files: list[str]) -> list[str]:
-    """Check if the file is empty."""
+    """Accumulate empty IPC paths for a report without interrupting the scan.
+
+    Args:
+        file_path: IPC file to inspect.
+        flagged_files: Existing collection of empty file paths.
+
+    Returns:
+        The collection, including the input path when its IPC table is empty.
+    """
     lf = pl.scan_ipc(file_path)
     if lf.first().collect().is_empty():  # an empty file
         flagged_files.append(file_path)
@@ -56,14 +86,14 @@ def flag_small_files_in_dir(
     min_size_bytes: int = 0,
     verbose: bool = False,
 ) -> None:
-    """Flags IPC files smaller than a specified size threshold in a directory recursively.
+    """Create an actionable report of empty IPC files before conversion.
 
     Args:
-        source_dir (str): Path to the source directory to search for files.
-        output_file (str): Path to the output file to save flagged file details.
-        file_pattern (str): Glob pattern for file matching
-        min_size_bytes (int): Minimum file size in bytes
-        verbose (bool): Enable verbose output
+        source_dir: Directory tree containing IPC files.
+        output_file: Destination for paths that require removal or replacement.
+        file_pattern: Glob selecting files to inspect.
+        min_size_bytes: Requested size threshold retained for CLI compatibility.
+        verbose: Whether to print scan details.
     """
     # Check if directory exists
     if not os.path.exists(source_dir):
@@ -117,7 +147,15 @@ def find_empty(
     min_size: int = MIN_SIZE_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Find empty or small files in local directories."""
+    """Report unusable IPC files in one dataset directory before conversion.
+
+    Args:
+        source_dir: Directory tree containing IPC files.
+        output_file: Destination for flagged paths.
+        file_pattern: Glob selecting IPC files.
+        min_size: Requested size threshold retained for CLI compatibility.
+        verbose: Whether to print scan details.
+    """
     flag_small_files_in_dir(
         source_dir=source_dir,
         output_file=output_file,
@@ -134,7 +172,14 @@ def batch_find_empty(
     file_pattern: str = FILE_PATTERN_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Find empty files in multiple directories."""
+    """Generate separate empty-file reports for several dataset directories.
+
+    Args:
+        directories: Dataset directories to inspect.
+        output_dir: Directory that receives the reports.
+        file_pattern: Glob selecting IPC files.
+        prefix: Prefix used for each report filename.
+    """
     from pathlib import Path
 
     output_path = Path(output_dir)
@@ -151,8 +196,8 @@ def batch_find_empty(
 
 
 def main() -> None:
-    """Entry point for the script to find empty ipc files."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible scans of the historical hardcoded paths."""
+    # Legacy behaviour for backwards compatibility
     directories = ["hcfm", "mcfm", "lcfm", "acfm"]
     output_dir = "output_files"
 

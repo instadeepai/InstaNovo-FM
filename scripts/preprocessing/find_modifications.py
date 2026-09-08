@@ -1,3 +1,18 @@
+"""Inventory unique EncyclopeDIA modification labels in Parquet datasets.
+
+Run this before validating or translating modification mappings so observed
+labels and representative spectrum metadata are available in an Excel report.
+Batch mode keeps reports separate across dataset roots.
+
+CLI::
+
+    python scripts/preprocessing/find_modifications.py --help
+    python scripts/preprocessing/find_modifications.py find-mods <data-root>/lcfm
+    python scripts/preprocessing/find_modifications.py batch-find-mods <data-root>/lcfm <data-root>/hcfm
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import polars as pl
 import os
 import re
@@ -35,7 +50,15 @@ PREFIX_OPTION = typer.Option(
 
 
 def find_files(input_dir: str, file_pattern: str) -> List[str]:
-    """Find files in a local directory that match a specified pattern."""
+    """Provide the Parquet files whose modification labels should be inventoried.
+
+    Args:
+        input_dir: Root directory for the search.
+        file_pattern: Recursive glob selecting files.
+
+    Returns:
+        Paths matching the requested pattern.
+    """
     search_pattern = Path(input_dir) / file_pattern
     matched_files = glob.glob(str(search_pattern), recursive=True)
     return matched_files
@@ -44,7 +67,15 @@ def find_files(input_dir: str, file_pattern: str) -> List[str]:
 def extract_modifications(
     file: str, mod_pattern: re.Pattern
 ) -> Union[pl.DataFrame, None]:
-    """Extract unique modifications from a single file's DataFrame."""
+    """Retain one evidence row per observed label for mapping review.
+
+    Args:
+        file: Parquet file containing modified peptide annotations.
+        mod_pattern: Pattern that extracts supported modification forms.
+
+    Returns:
+        Unique labels with source metadata, or null when none are present.
+    """
     # Extract filename and parent subfolder
     file_name = os.path.basename(file)
     project_name = os.path.basename(os.path.dirname(file))
@@ -105,13 +136,13 @@ def find_modifications(
     file_pattern: str = "**/*.parquet",
     verbose: bool = False,
 ) -> None:
-    """Find modifications in parquet files.
+    """Create the modification inventory needed to audit translation mappings.
 
     Args:
-        input_dir (str): Input directory to process
-        output_path (str): Output file path
-        file_pattern (str): File pattern to match
-        verbose (bool): Enable verbose output
+        input_dir: Dataset directory to inspect.
+        output_path: Excel destination for unique labels and evidence.
+        file_pattern: Glob selecting Parquet files.
+        verbose: Whether to print scan details.
     """
     if verbose:
         typer.echo(f"Processing directory: {input_dir}")
@@ -204,7 +235,14 @@ def find_mods(
     file_pattern: str = FILE_PATTERN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Find modifications in parquet files."""
+    """Inventory observed labels before checking or applying modification mappings.
+
+    Args:
+        input_dir: Dataset directory to inspect.
+        output_file: Excel destination for the inventory.
+        file_pattern: Glob selecting Parquet files.
+        verbose: Whether to print scan details.
+    """
     find_modifications(
         input_dir=input_dir,
         output_path=output_file,
@@ -220,7 +258,14 @@ def batch_find_mods(
     file_pattern: str = FILE_PATTERN_OPTION,
     prefix: str = PREFIX_OPTION,
 ) -> None:
-    """Find modifications in multiple directories."""
+    """Create separate modification inventories for several datasets.
+
+    Args:
+        input_dirs: Dataset directories to inspect.
+        output_dir: Directory that receives Excel reports.
+        file_pattern: Glob selecting Parquet files.
+        prefix: Prefix used for each report filename.
+    """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -235,8 +280,8 @@ def batch_find_mods(
 
 
 def main() -> None:
-    """Entry point for collecting unique modifications across globbed files."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible inventory of the historical hardcoded path."""
+    # Legacy behaviour for backwards compatibility
     input_dir = "<data-root>/lcfm"  # Local mounted filesystem path
     output_path = "output_files/modifications.xlsx"
 

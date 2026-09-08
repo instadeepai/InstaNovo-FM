@@ -1,7 +1,8 @@
-"""Translate sequences with EncyclopeDIA modifications to Proforma format.
+"""Translate EncyclopeDIA peptide modifications into ProForma UNIMOD labels.
 
-This script is specific to the LCFM dataset and its projects.
-It uses the gold standard modifications file and the PXD009449 ambiguous modifications file to label the modifications.
+Run this after modification inventories pass ``check_modifications.py`` so
+training sequences use canonical labels. It is specific to LCFM projects and
+combines gold-standard mappings with filename-dependent PXD009449 overrides.
 
 The gold standard modifications file is a Excel file that contains the gold standard modifications for the LCFM project.
 This means that the EncyclopeDIA modifications encountered in the LCFM project have a one-to-one or many-to-one mapping to UNIMOD modifications.
@@ -40,6 +41,14 @@ We expect the PXD009449 ambiguous modifications xlsx file to contain the columns
 We expect the parquet files to contain the columns:
 - peptide: The peptide sequence
 - modified_peptide: The modified peptide sequence (can be None)
+
+CLI::
+
+    python scripts/preprocessing/label_modifications.py --help
+    python scripts/preprocessing/label_modifications.py label-mods <subfolder> <gold-standard.xlsx> <pxd009449-ambiguous.xlsx>
+    python scripts/preprocessing/label_modifications.py batch-label-mods <subfolder-a> <subfolder-b> <gold-standard.xlsx> <pxd009449-ambiguous.xlsx>
+
+Use ``python script.py command --help`` for flags.
 """
 
 import polars as pl
@@ -86,33 +95,41 @@ DROP_OLD_MODIFICATIONS_OPTION = typer.Option(
 
 
 def read_gold_standard_modifications(file_path: str) -> pl.DataFrame:
-    """Read the gold standard modifications file and return a DataFrame."""
+    """Load authoritative mappings before translating peptide annotations.
+
+    Args:
+        file_path: Gold-standard Excel workbook.
+
+    Returns:
+        Mapping rows used as defaults for all projects.
+    """
     return pl.read_excel(file_path)
 
 
 def read_pxd009449_ambiguous_modifications(file_path: str) -> pl.DataFrame:
-    """Read the PXD009449 ambiguous modifications file and return a DataFrame."""
+    """Load filename-dependent overrides needed for ambiguous PXD009449 labels.
+
+    Args:
+        file_path: PXD009449 override Excel workbook.
+
+    Returns:
+        Mapping rows used only when filenames match their patterns.
+    """
     return pl.read_excel(file_path)
 
 
 def create_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
-    """Create a dictionary of residue modifications from the gold standard modifications DataFrame.
-
-    Since residue modifications are encoded without any associated amino acid residue, we need to add the amino acid residue to the UNIMOD encoding for string replacement.
+    """Attach residues to UNIMOD labels so residue modifications can be replaced safely.
 
     Args:
-        modification_df: The DataFrame containing the modifications
-        The DataFrame should contain the columns:
-        - modification: The EncyclopeDIA modification, additionally containing the associated amino acid residue and optionally an "n" or "c" to indicate an N-terminal or C-terminal modification
-        - proposed_unimod_encoding: The proposed UNIMOD encoding, without any associated amino acid residue or "n" or "c"
+        modification_df: Rows containing ``modification`` and
+            ``proposed_unimod_encoding`` columns.
 
     Returns:
-        A dictionary of residue modifications
-        If no residue modifications are found, returns an empty dictionary
+        EncyclopeDIA residue labels mapped to residue-qualified UNIMOD labels.
 
     Raises:
-        ValueError: If any residue modifications with multiple modifications on a single amino acid are found.
-            These are not supported as they require mapping multiple mods.
+        ValueError: If one residue contains multiple unsupported modifications.
     """
     if modification_df.height == 0:
         return {}
@@ -167,19 +184,13 @@ def create_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
 
 
 def create_n_term_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
-    """Create a dictionary of N-terminal modifications from the gold standard modifications DataFrame.
-
-    Since N-terminal modifications are encoded with a trailing hyphen, we need to add a training hyphen to the UNIMOD encoding before we add the trailing amino acid residue.
+    """Add ProForma separators so N-terminal labels retain peptide boundaries.
 
     Args:
-        modification_df: The DataFrame containing the modifications
-        The DataFrame should contain the columns:
-        - modification: The EncyclopeDIA modification, additionally containing the associated amino acid residue and optionally an "n" or "c" to indicate an N-terminal or C-terminal modification
-        - proposed_unimod_encoding: The proposed UNIMOD encoding, without any associated amino acid residue or "n" or "c"
+        modification_df: Rows containing terminal labels and UNIMOD encodings.
 
     Returns:
-        A dictionary of N-terminal modifications
-        If no N-terminal modifications are found, returns an empty dictionary
+        EncyclopeDIA N-terminal labels mapped to ProForma replacements.
     """
     if modification_df.height == 0:
         return {}
@@ -218,23 +229,16 @@ def create_n_term_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
 
 
 def create_c_term_mod_dict(modification_df: pl.DataFrame) -> dict[str, str]:
-    """Create a dictionary of C-terminal modifications from the gold standard modifications DataFrame.
-
-    Since C-terminal modifications are encoded with a leading hyphen, we need to add a leading hyphen to the UNIMOD encoding after we add the leading amino acid residue.
+    """Add ProForma separators so C-terminal labels retain peptide boundaries.
 
     Args:
-        modification_df: The DataFrame containing the modifications
-        The DataFrame should contain the columns:
-        - modification: The EncyclopeDIA modification, additionally containing the associated amino acid residue and optionally an "n" or "c" to indicate an N-terminal or C-terminal modification
-        - proposed_unimod_encoding: The proposed UNIMOD encoding, without any associated amino acid residue or "n" or "c"
+        modification_df: Rows containing terminal labels and UNIMOD encodings.
 
     Returns:
-        A dictionary of C-terminal modifications
-        If no C-terminal modifications are found, returns an empty dictionary
+        EncyclopeDIA C-terminal labels mapped to ProForma replacements.
 
     Raises:
-        ValueError: If any C-terminal modifications with preceding residue modifications are found.
-            These are not supported as they require mapping two mods.
+        ValueError: If a C-terminal label also contains an unsupported residue modification.
     """
     if modification_df.height == 0:
         return {}
@@ -292,23 +296,20 @@ def replace_modifications(
     n_term_dict: dict[str, str],
     c_term_dict: dict[str, str],
 ) -> str:
-    """Replace modifications in a peptide string using Python's string replace.
+    """Apply residue and terminal mappings in an order that preserves ProForma syntax.
 
     Terminal modifications are separated from the peptide by hyphens:
     - N-terminal: n[43]MPEPTIDE -> [UNIMOD:1]-MPEPTIDE
     - C-terminal: PEPTIDEc[45] -> PEPTIDE-[UNIMOD:xxx]
 
     Args:
-        peptide: The peptide string to process.
-        modification_dict: Dictionary of residue modifications to apply.
-            The dictionary should map the EncyclopeDIA modification to the UNIMOD encoding including any associated amino acid residue.
-        n_term_dict: Dictionary of N-terminal modifications.
-            The dictionary should map the EncyclopeDIA modification to the UNIMOD encoding including any associated amino acid residue and a trailing hyphen.
-        c_term_dict: Dictionary of C-terminal modifications.
-            The dictionary should map the EncyclopeDIA modification to the UNIMOD encoding including any associated amino acid residue and a leading hyphen.
+        peptide: EncyclopeDIA-annotated peptide string.
+        modification_dict: Residue-level replacement mapping.
+        n_term_dict: N-terminal replacement mapping with separators.
+        c_term_dict: C-terminal replacement mapping with separators.
 
     Returns:
-        The processed peptide string
+        Peptide string using ProForma UNIMOD labels.
     """
     result = peptide
 
@@ -331,20 +332,18 @@ def create_file_specific_mod_dicts(
     file_name: str,
     pxd009449_ambiguous_modifications_df: pl.DataFrame,
 ) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
-    """Create modification dictionaries for a specific file based on filename matching.
+    """Resolve ambiguous PXD009449 labels from filename context before replacement.
 
     Filters the ambiguous modifications DataFrame to find rows where the file name
     contains the modification_in_file_name, then creates modification dictionaries
     from those matching rows.
 
     Args:
-        file_name: The name of the file to process
-        pxd009449_ambiguous_modifications_df: DataFrame with ambiguous modifications
-            containing columns: modification, modification_in_file_name, proposed_unimod_encoding
+        file_name: Parquet filename carrying disambiguating context.
+        pxd009449_ambiguous_modifications_df: Override rows with filename patterns.
 
     Returns:
-        Tuple of (mod_dict, n_term_mod_dict, c_term_mod_dict) for this file.
-        Returns empty dicts if no matching modifications are found.
+        File-specific residue, N-terminal, and C-terminal mappings.
     """
     # Filter modifications where the file name contains modification_in_file_name
     # Use map_elements to check if modification_in_file_name is a substring of file_name
@@ -372,15 +371,15 @@ def create_replacement_function(
     n_term_dict: dict[str, str],
     c_term_dict: dict[str, str],
 ) -> Callable[[str], str]:
-    """Create a replacement function with bound modification dictionaries.
+    """Bind validated mappings once for efficient Polars element conversion.
 
     Args:
-        modification_dict: Dictionary of residue modifications to apply
-        n_term_dict: Dictionary of N-terminal modifications.
-        c_term_dict: Dictionary of C-terminal modifications.
+        modification_dict: Residue-level replacement mapping.
+        n_term_dict: N-terminal replacement mapping.
+        c_term_dict: C-terminal replacement mapping.
 
     Returns:
-        A function that takes a peptide string and applies the modifications
+        Callable that translates one peptide string.
     """
     return lambda peptide: replace_modifications(
         peptide, modification_dict, n_term_dict, c_term_dict
@@ -397,17 +396,17 @@ def create_unimod_column(
     modified_sequence_col: str = "modified_peptide",
     drop_old_modifications: bool = False,
 ) -> None:
-    """Create a single sequence column by merging sequence and modified_sequence columns.
+    """Rewrite Parquet sequences into the canonical training representation.
 
     Args:
-        subfolder: The subfolder to process
-        mod_dict: Dictionary of residue modifications to apply (gold standard)
-        n_term_mod_dict: Dictionary of N-terminal modifications (gold standard)
-        c_term_mod_dict: Dictionary of C-terminal modifications (gold standard)
-        pxd009449_ambiguous_modifications_df: DataFrame with ambiguous modifications for PXD009449.
-        sequence_col: Name of the unmodified sequence column
-        modified_sequence_col: Name of the modified sequence column
-        drop_old_modifications: Whether to drop the old modifications column
+        subfolder: Dataset tree containing Parquet files.
+        mod_dict: Default residue-level mappings.
+        n_term_mod_dict: Default N-terminal mappings.
+        c_term_mod_dict: Default C-terminal mappings.
+        pxd009449_ambiguous_modifications_df: Filename-dependent PXD009449 overrides.
+        sequence_col: Column containing unmodified peptide sequences.
+        modified_sequence_col: Column containing EncyclopeDIA annotations.
+        drop_old_modifications: Whether to remove the source annotation column.
     """
     files = glob.glob(f"{subfolder}/**/*.parquet", recursive=True)
     logger.info(f"Found {len(files)} files to process in {subfolder}")
@@ -477,7 +476,16 @@ def label_mods(
     modified_sequence_col: str = MODIFIED_SEQUENCE_COL_OPTION,
     drop_old_modifications: bool = DROP_OLD_MODIFICATIONS_OPTION,
 ) -> None:
-    """Label modifications in parquet files."""
+    """Translate one dataset only after its modification mappings are validated.
+
+    Args:
+        subfolder: Dataset tree containing Parquet files.
+        gold_standard_modifications_file: Workbook containing default mappings.
+        pxd009449_ambiguous_modifications_file: Workbook containing filename overrides.
+        sequence_col: Column containing unmodified peptide sequences.
+        modified_sequence_col: Column containing EncyclopeDIA annotations.
+        drop_old_modifications: Whether to remove the source annotation column.
+    """
     gold_standard_modifications_df = read_gold_standard_modifications(
         gold_standard_modifications_file
     )
@@ -510,7 +518,16 @@ def batch_label_mods(
     modified_sequence_col: str = MODIFIED_SEQUENCE_COL_OPTION,
     drop_old_modifications: bool = DROP_OLD_MODIFICATIONS_OPTION,
 ) -> None:
-    """Label modifications in multiple subfolders."""
+    """Apply one validated mapping set consistently across several datasets.
+
+    Args:
+        subfolders: Dataset trees containing Parquet files.
+        gold_standard_modifications_file: Workbook containing default mappings.
+        pxd009449_ambiguous_modifications_file: Workbook containing filename overrides.
+        sequence_col: Column containing unmodified peptide sequences.
+        modified_sequence_col: Column containing EncyclopeDIA annotations.
+        drop_old_modifications: Whether to remove the source annotation column.
+    """
     gold_standard_modifications_df = read_gold_standard_modifications(
         gold_standard_modifications_file
     )
@@ -537,8 +554,8 @@ def batch_label_mods(
 
 
 def main() -> None:
-    """Main function to process multiple subfolders."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible labelling of historical hardcoded subfolders."""
+    # Legacy behaviour for backwards compatibility
     subfolders = ["lcfm_splits", "mcfm_splits", "hcfm_splits"]
 
     gold_standard_modifications_df = read_gold_standard_modifications(

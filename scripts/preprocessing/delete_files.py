@@ -1,3 +1,18 @@
+"""Delete IPC and Parquet variants listed by a preprocessing validation report.
+
+Run this after reviewing a file list such as the output from
+``find_empty_files.py``; dry-run is available to verify the expanded paths
+before deletion.
+
+CLI::
+
+    python scripts/preprocessing/delete_files.py --help
+    python scripts/preprocessing/delete_files.py delete output_files/small_files_hcfm.txt --dry-run
+    python scripts/preprocessing/delete_files.py batch-delete report_a.txt report_b.txt --dry-run
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import logging
 from pathlib import Path
 import typer
@@ -31,12 +46,15 @@ BATCH_ERROR_LOG_OPTION = typer.Option(
 def delete_files_from_list(
     file_list_path: str, error_log_path: str, dry_run: bool = False
 ) -> None:
-    """Deletes files listed in a given text file from the local filesystem and logs errors to a file.
+    """Remove both stored variants of reviewed bad inputs while retaining an audit log.
 
     Args:
-        file_list_path (str): Path to the text file containing file paths to delete.
-        error_log_path (str): Path to the error log file.
-        dry_run (bool): If True, only show what would be deleted without actually deleting.
+        file_list_path: Text file containing paths selected for cleanup.
+        error_log_path: Destination for missing paths and deletion failures.
+        dry_run: Whether to preview without deleting files.
+
+    Raises:
+        typer.Exit: If the input list does not exist.
     """
     if not Path(file_list_path).exists():
         typer.echo(f"Error: File list '{file_list_path}' does not exist", err=True)
@@ -85,7 +103,14 @@ def delete(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Delete files from a list."""
+    """Apply a reviewed cleanup list to its IPC and Parquet variants.
+
+    Args:
+        file_list: Text file containing paths selected for cleanup.
+        error_log: Destination for skipped paths and errors.
+        dry_run: Whether to preview without deleting files.
+        verbose: Whether to print selected settings.
+    """
     if verbose:
         typer.echo(f"File list: {file_list}")
         typer.echo(f"Error log: {error_log}")
@@ -100,7 +125,13 @@ def batch_delete(
     error_log: str = BATCH_ERROR_LOG_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
-    """Delete files from multiple lists."""
+    """Apply several reviewed cleanup lists in one run.
+
+    Args:
+        file_lists: Text files containing paths selected for cleanup.
+        error_log: Shared destination for skipped paths and errors.
+        dry_run: Whether to preview without deleting files.
+    """
     for file_list in file_lists:
         if not Path(file_list).exists():
             typer.echo(
@@ -114,8 +145,8 @@ def batch_delete(
 
 
 def main() -> None:
-    """Entry point for deleting empty files."""
-    # Legacy behavior for backward compatibility
+    """Preserve backwards-compatible cleanup of the historical hardcoded lists."""
+    # Legacy behaviour for backwards compatibility
     empty_files_lists = [
         "output_files/small_files_hcfm.txt",
         "output_files/small_files_mcfm.txt",

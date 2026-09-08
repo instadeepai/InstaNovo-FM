@@ -1,4 +1,23 @@
-"""Build medium- and high-confidence parquet subsets from scored PSM tables."""
+"""Build medium- and high-confidence parquet subsets from scored PSM tables.
+
+Search engines report several partly redundant confidence measures (expectation,
+hyperscore, nextscore, probability), none of which is comparable across peptide
+lengths. This script combines them into a single composite score that is
+percentile-ranked within each peptide length, then applies two *global*
+quantile cutoffs (top 10% and top 2%) across every input file so the resulting
+subsets are consistent between datasets rather than per-file. The output mirrors
+the input subfolder layout, so downstream splitting can be pointed at either
+tree unchanged.
+
+CLI::
+
+    python scripts/splitting/create_subsets.py --help
+    python scripts/splitting/create_subsets.py \
+        --input-dir psms \
+        --medium-output-dir subsets/medium \
+        --high-output-dir subsets/high \
+        --hold-back-modified-rows
+"""
 
 from __future__ import annotations
 
@@ -18,22 +37,23 @@ _TEMP_SCORING_COLS = ("_composite_score", "_peptide_length")
 
 
 def get_reference_schema() -> dict[str, pl.DataType]:
-    """Get the reference schema for the dataframe."""
+    """Get the canonical column schema so subsets stay compatible with the split pipeline.
+
+    Returns:
+        The same reference schema used by ``split_labelled_data``, suitable for
+        passing to schema normalisation before writing a subset.
+    """
     result: dict[str, pl.DataType] = REFERENCE_SCHEMA
     return result
 
 
 def _drop_temp_scoring_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """Drop the temporary scoring columns from the dataframe."""
+    """Keep scoring internals out of the written subsets."""
     return df.drop(*_TEMP_SCORING_COLS)
 
 
 def _find_column(columns: Iterable[str], candidates: list[str]) -> str | None:
-    """Find the column in the dataframe with the given candidates.
-
-    Searches in the columns list for the given candidates and returns the first column that matches.
-    Case-insensitive.g
-    """
+    """Tolerate the case and naming variations search engines use for the same field."""
     lower_to_original = {c.lower(): c for c in columns}
     for candidate in candidates:
         col = lower_to_original.get(candidate.lower())
@@ -43,12 +63,7 @@ def _find_column(columns: Iterable[str], candidates: list[str]) -> str | None:
 
 
 def _pct_rank_avg_over(value: pl.Expr, by: pl.Expr) -> pl.Expr:
-    """Min-max percentile rank within ``by``, mapped to [0, 1] with mean 0.5 for all group sizes.
-
-    Uses ``(rank - 1) / (count - 1)`` so that the best item gets 1.0, the worst gets 0.0,
-    and singletons (where ranking is meaningless) default to 0.5.  This avoids the upward
-    bias of ``rank / count`` for small groups (e.g. singletons always scoring 1.0).
-    """
+    """Rank within ``by`` as ``(rank - 1) / (count - 1)``, giving singletons 0.5 instead of the upward bias of ``rank / count``."""
     rank = value.rank(method="average").over(by)
     cnt = value.count().over(by)
     pct = pl.when(cnt <= 1).then(pl.lit(0.5)).otherwise((rank - 1) / (cnt - 1))
@@ -56,7 +71,7 @@ def _pct_rank_avg_over(value: pl.Expr, by: pl.Expr) -> pl.Expr:
 
 
 def _peptide_length_expr(df: pl.DataFrame) -> pl.Expr:
-    """Get the peptide length expression for the dataframe."""
+    """Recover peptide length from whichever column carries it, so scores can be length-normalised."""
     cols = list(df.columns)
     length_name = _find_column(cols, ["peptide_length", "peptide length"])
     if length_name is not None:
@@ -73,7 +88,21 @@ def _peptide_length_expr(df: pl.DataFrame) -> pl.Expr:
 
 
 def with_composite_score(df: pl.DataFrame) -> pl.DataFrame:
-    """Return ``df`` with ``_peptide_length`` and ``_composite_score`` columns added."""
+    """Collapse the search engine's several confidence metrics into one comparable score.
+
+    Each metric is percentile-ranked within its peptide-length group before
+    averaging, so long and short peptides compete on equal terms. The
+    hyperscore-minus-nextscore margin is folded in when ``nextscore`` is
+    available.
+
+    Args:
+        df: PSM table carrying ``expectation``, ``probability`` and
+            ``hyperscore`` (plus optionally ``nextscore``).
+
+    Returns:
+        The input frame with ``_peptide_length`` and ``_composite_score``
+        added, ready for thresholding.
+    """
     out = df.with_columns(_peptide_length_expr(df).alias("_peptide_length"))
     plen = pl.col("_peptide_length")
     expectation = pl.col("expectation").cast(pl.Float64, strict=False)
@@ -94,7 +123,7 @@ def with_composite_score(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def _sequence_contains_glyco_mods(df: pl.DataFrame) -> pl.Expr:
-    """True for rows to exclude: internal ``[IN:<int>]`` in sequence."""
+    """Flag internal ``[IN:<int>]`` modification tokens, so those rows can be held back on request."""
     seq_name = _find_column(df.columns, ["sequence"])
     if seq_name is None:
         return pl.lit(False)
@@ -103,20 +132,37 @@ def _sequence_contains_glyco_mods(df: pl.DataFrame) -> pl.Expr:
 
 
 def _filter_out_glyco_sequences(df: pl.DataFrame, enabled: bool) -> pl.DataFrame:
-    """Filter out rows with glyco sequences if enabled."""
+    """Optionally hold back glyco rows so they skew neither the thresholds nor the outputs."""
     if not enabled:
         return df
     return df.filter(~_sequence_contains_glyco_mods(df))
 
 
 def filter_df(df: pl.DataFrame, score: float) -> pl.DataFrame:
-    """Return rows whose composite score is strictly above ``score`` (temporary columns dropped)."""
+    """Select the confident rows of a single table against a known score cutoff.
+
+    Args:
+        df: PSM table to score and filter.
+        score: Composite-score cutoff; rows must score strictly above it.
+
+    Returns:
+        The surviving rows with the temporary scoring columns removed, so the
+        result is writable as-is.
+    """
     scored = with_composite_score(df)
     return _drop_temp_scoring_columns(scored.filter(pl.col("_composite_score") > score))
 
 
 def iter_parquet_files(input_root: str) -> Iterator[tuple[str, str, str]]:
-    """Yield ``(subfolder_name, file_name, path)`` for each parquet file under ``input_root``."""
+    """Walk the one-subfolder-per-dataset layout in a stable order so runs are reproducible.
+
+    Args:
+        input_root: Root directory holding one subfolder per dataset.
+
+    Yields:
+        ``(subfolder_name, file_name, path)`` triples, carrying the subfolder
+        so the output tree can mirror the input layout.
+    """
     for subfolder in sorted(os.listdir(input_root)):
         subfolder_path = os.path.join(input_root, subfolder)
         if not os.path.isdir(subfolder_path):
@@ -130,7 +176,14 @@ def iter_parquet_files(input_root: str) -> Iterator[tuple[str, str, str]]:
 
 
 def main() -> None:
-    """Read all input parquets, set global score cutoffs, and write filtered outputs."""
+    """Carve a PSM corpus into medium- and high-confidence subsets with corpus-wide cutoffs.
+
+    Run this when you need consistently-filtered training tiers across many
+    datasets: pass 1 scores every input file to find the global top-10% and
+    top-2% thresholds, and pass 2 re-applies those thresholds so no file is
+    judged against its own local score distribution. Outputs mirror the input
+    subfolder layout.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Score PSM tables and write medium- (global top 10%%) and high-confidence "

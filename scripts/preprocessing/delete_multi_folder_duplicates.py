@@ -1,3 +1,18 @@
+"""Delete selected cross-folder duplicates after their ownership is resolved.
+
+Run this only after reviewing a report from
+``detect_multi_folder_duplicates.py``; use dry-run when validating the selected
+target folder, especially for batch deletion.
+
+CLI::
+
+    python scripts/preprocessing/delete_multi_folder_duplicates.py --help
+    python scripts/preprocessing/delete_multi_folder_duplicates.py delete-duplicates multi_folder_duplicates.txt <target-folder> --dry-run
+    python scripts/preprocessing/delete_multi_folder_duplicates.py batch-delete report_a.txt report_b.txt <target-folder> --dry-run
+
+Use ``python script.py command --help`` for flags.
+"""
+
 import os
 from pathlib import Path
 import typer
@@ -25,7 +40,14 @@ INPUT_FILES_ARG = typer.Argument(
 
 
 def delete_files_safely(files_to_delete: list) -> int:
-    """Delete files safely and return the count of successfully deleted files."""
+    """Continue a reviewed deletion set even when individual paths cannot be removed.
+
+    Args:
+        files_to_delete: Paths approved for removal.
+
+    Returns:
+        Number of files removed successfully.
+    """
     deleted_count = 0
     for file_path in files_to_delete:
         try:
@@ -43,7 +65,12 @@ def delete_files_safely(files_to_delete: list) -> int:
 
 
 def check_delete_with_user(files_to_delete: list, force: bool = False) -> None:
-    """Check the files to be deleted with the user before deletion."""
+    """Require confirmation so an ambiguous duplicate is not removed accidentally.
+
+    Args:
+        files_to_delete: Paths proposed for removal.
+        force: Whether prior approval allows bypassing the interactive prompt.
+    """
     # Safety check: Print files to be deleted
     typer.echo(f"The following {len(files_to_delete)} files will be deleted:")
     for file_path in files_to_delete:
@@ -65,7 +92,18 @@ def check_delete_with_user(files_to_delete: list, force: bool = False) -> None:
 
 
 def parse_files_to_delete(input_file: str, target_folder: str) -> list:
-    """Parse the duplicates report to find files in the target folder."""
+    """Limit deletion to reviewed duplicates under the chosen target folder.
+
+    Args:
+        input_file: Cross-folder duplicate report to interpret.
+        target_folder: Folder whose copies should be selected.
+
+    Returns:
+        Concrete IPC paths selected for deletion.
+
+    Raises:
+        typer.Exit: If the report does not exist.
+    """
     files_to_delete = []
     if not Path(input_file).exists():
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
@@ -91,7 +129,14 @@ def parse_files_to_delete(input_file: str, target_folder: str) -> list:
 def delete_multi_folder_duplicates(
     input_file: str, target_folder: str, force: bool = False, dry_run: bool = False
 ) -> None:
-    """Deletes multi-folder duplicate files from 'target_folder'."""
+    """Remove only the reviewed duplicate copies assigned to one target folder.
+
+    Args:
+        input_file: Cross-folder duplicate report to apply.
+        target_folder: Folder whose duplicate copies should be removed.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
+    """
     files_to_delete = parse_files_to_delete(input_file, target_folder)
 
     if dry_run:
@@ -115,7 +160,15 @@ def delete_duplicates(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Delete multi-folder duplicate files."""
+    """Apply a reviewed cross-folder deletion report with safety controls.
+
+    Args:
+        input_file: Cross-folder duplicate report to apply.
+        target_folder: Folder whose copies should be removed.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
+        verbose: Whether to print selected settings.
+    """
     if verbose:
         typer.echo(f"Input file: {input_file}")
         typer.echo(f"Target folder: {target_folder}")
@@ -134,7 +187,14 @@ def batch_delete(
     force: bool = FORCE_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
-    """Delete multi-folder duplicates from multiple input files."""
+    """Apply several reviewed reports to the same target folder.
+
+    Args:
+        input_files: Cross-folder duplicate reports to apply.
+        target_folder: Folder whose copies should be removed.
+        force: Whether to bypass interactive confirmation.
+        dry_run: Whether to preview without deleting files.
+    """
     for input_file in input_files:
         if not Path(input_file).exists():
             typer.echo(

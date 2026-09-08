@@ -49,3 +49,24 @@ def test_distinct_folders_are_multi_folder(tmp_path: Path) -> None:
     assert result == {
         "sample": ["/data/acfm/PXD000001", "/data/acfm/PXD000002"],
     }
+
+
+def test_dotted_experiment_names_are_not_collapsed(tmp_path: Path) -> None:
+    """run.v1 and run.v2 in the same folder are not one multi-folder group."""
+    report = tmp_path / "duplicates.txt"
+    report.write_text(
+        "\n".join(
+            [
+                "/data/acfm/PXD000001/run.v1.ipc",
+                "/data/acfm/PXD000001/run.v2.ipc",
+                "",
+            ]
+        )
+    )
+
+    file_map = parse_duplicate_report(report)
+    assert file_map == {
+        "run.v1": ["/data/acfm/PXD000001"],
+        "run.v2": ["/data/acfm/PXD000001"],
+    }
+    assert classify_multi_folder_duplicates(file_map) == {}

@@ -63,3 +63,22 @@ def test_extensions_filters_to_parquet_only(tmp_path: Path) -> None:
     by_default = group_files_by_base_name(str(root))
     assert "sample" in by_default
     assert all(p.endswith(".ipc") for paths in by_default.values() for p in paths)
+
+
+def test_dotted_experiment_names_are_not_collapsed(tmp_path: Path) -> None:
+    """run.v1.ipc and run.v2.ipc are distinct experiments; ipc/mzML.ipc still pair."""
+    root = tmp_path / "data"
+    root.mkdir()
+    (root / "run.v1.ipc").write_text("a")
+    (root / "run.v2.ipc").write_text("b")
+    (root / "sample.ipc").write_text("c")
+    (root / "sample.mzML.ipc").write_text("d")
+
+    grouped = group_files_by_base_name(str(root))
+    assert set(grouped) == {"run.v1", "run.v2", "sample"}
+    assert grouped["run.v1"] == [str(root / "run.v1.ipc")]
+    assert grouped["run.v2"] == [str(root / "run.v2.ipc")]
+    assert set(grouped["sample"]) == {
+        str(root / "sample.ipc"),
+        str(root / "sample.mzML.ipc"),
+    }

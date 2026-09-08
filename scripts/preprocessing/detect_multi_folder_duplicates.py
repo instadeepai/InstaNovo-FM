@@ -22,6 +22,7 @@ from typing import Annotated, Dict, List
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def parse_duplicate_report(input_file: str | Path) -> Dict[str, List[str]]:
             if not line:
                 continue
             folder, file_name = line.rsplit("/", 1)
-            base_name = file_name.split(".", 1)[0]
+            base_name = strip_known_data_suffix(file_name)
             if folder not in file_map[base_name]:
                 file_map[base_name].append(folder)
     return dict(file_map)

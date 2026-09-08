@@ -24,6 +24,7 @@ from typing import Annotated, List
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ def parse_input_file(input_file: str) -> defaultdict:
             line = line.strip()
             if line:
                 folder, file_name = os.path.split(line)
-                base_name = file_name.rsplit(".", maxsplit=2)[0]
+                base_name = strip_known_data_suffix(file_name)
                 file_map[base_name].append((folder, line))
 
     return file_map

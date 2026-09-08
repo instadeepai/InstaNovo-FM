@@ -101,6 +101,8 @@ def experiment_name_from_path(path_str: str) -> str:
 
 
 _COMPOUND_SUFFIXES = (".mzml.ipc", ".mzml.gz", ".mzml.parquet")
+# Longest known data suffixes first so ``sample.mzML.ipc`` is not truncated to ``sample.mzML``.
+_KNOWN_DATA_SUFFIXES = (".mzml.ipc", ".parquet", ".ipc")
 
 
 def search_data_lookup_key(path_str: str) -> str:
@@ -120,6 +122,26 @@ def search_data_lookup_key(path_str: str) -> str:
         if name.lower().endswith(suffix):
             return normalize_experiment_stem(name[: -len(suffix)])
     return normalize_experiment_stem(Path(name).stem)
+
+
+def strip_known_data_suffix(filename: str) -> str:
+    """Identify an experiment by removing only known data-file suffixes.
+
+    Dotted names such as ``run.v1.ipc`` stay ``run.v1`` instead of collapsing
+    to ``run``.
+
+    Args:
+        filename: Basename or path of a candidate data file.
+
+    Returns:
+        Experiment identity used for duplicate grouping.
+    """
+    name = Path(filename).name
+    lower = name.lower()
+    for suffix in _KNOWN_DATA_SUFFIXES:
+        if lower.endswith(suffix):
+            return name[: -len(suffix)]
+    return Path(name).stem
 
 
 def parse_shard_suffix(filename: str) -> Optional[Tuple[int, int]]:

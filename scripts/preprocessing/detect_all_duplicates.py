@@ -22,6 +22,7 @@ from typing import Annotated, Dict, List, Optional
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def group_files_by_base_name(
     for root, _, files in os.walk(source_dir):
         for file in files:
             if any(file.endswith(ext) for ext in extensions):
-                base_name = file.split(".")[0]
+                base_name = strip_known_data_suffix(file)
                 if base_name not in file_dict:
                     file_dict[base_name] = []
                 file_dict[base_name].append(os.path.join(root, file))

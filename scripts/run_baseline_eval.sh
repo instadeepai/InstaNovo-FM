@@ -15,6 +15,11 @@
 #   EVAL_DATASET      dataset-config name               (default: lcfm)
 #                     The literal filename of src/instanovo_fm/configs/dataset/<EVAL_DATASET>.yaml
 #                     (e.g. lcfm, mcfm, hcfm)
+#   TASKS             space-separated task names        (default: linearprobetask)
+#                     e.g. TASKS="linearprobetask duplicateretrievaltask". Names come from
+#                     the TASK_REGISTRY / the evaluation config's task_configs block.
+#                     linearprobetask additionally extracts the probe train/val/test splits;
+#                     every other task runs on the single SPLIT pool only.
 #   SPLIT             valid | test | train                (default: valid)
 #                     Which split the SINGLE-split tasks (duplicateretrievaltask,
 #                     umapvisualisationtask, …) run on. The linear-probe train/val/test

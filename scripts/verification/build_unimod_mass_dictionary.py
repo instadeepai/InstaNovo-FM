@@ -12,9 +12,9 @@ CLI::
 
     python scripts/verification/build_unimod_mass_dictionary.py --help
     python scripts/verification/build_unimod_mass_dictionary.py \
-        --gold-standard-mods mod_dicts/gold_standard_modifications.xlsx \
-        --ambiguous-mods mod_dicts/PXD009449_ambiguous_mods.xlsx \
-        --output-dir mod_dicts
+        --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+        --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx \
+        --output-dir assets/mod_dicts
 """
 
 import re
@@ -32,17 +32,17 @@ from lxml import etree
 from pyteomics import mass
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import (
+    DEFAULT_AMBIGUOUS_MODS,
+    DEFAULT_GOLD_STANDARD_MODS,
+    DEFAULT_MOD_DICTS_DIR,
+)
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for clarity
 ModificationInfo = Dict[str, Any]
 SpecificityInfo = Dict[str, Any]
-
-# Default paths
-DEFAULT_GOLD_STANDARD = Path("mod_dicts/gold_standard_modifications.xlsx")
-DEFAULT_AMBIGUOUS_MODS = Path("mod_dicts/PXD009449_ambiguous_mods.xlsx")
-DEFAULT_OUTPUT_DIR = Path("mod_dicts")
 
 # UNIMOD namespace for XML parsing
 UNIMOD_NS = {"umod": "http://www.unimod.org/xmlns/schema/unimod_tables_1"}
@@ -908,7 +908,7 @@ def main(
             exists=True,
             dir_okay=False,
         ),
-    ] = DEFAULT_GOLD_STANDARD,
+    ] = DEFAULT_GOLD_STANDARD_MODS,
     ambiguous_mods: Annotated[
         Path,
         typer.Option(
@@ -925,7 +925,7 @@ def main(
             help="Output directory for generated files.",
             file_okay=False,
         ),
-    ] = DEFAULT_OUTPUT_DIR,
+    ] = DEFAULT_MOD_DICTS_DIR,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable DEBUG logging"),

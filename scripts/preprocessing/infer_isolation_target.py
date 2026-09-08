@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import glob
 import logging
-import os
-import re
 from pathlib import Path
-from typing import Annotated, List, Tuple
+from typing import Annotated, List
 
 import polars as pl
 import typer
@@ -55,84 +53,6 @@ def check_for_empty_it(ldf: pl.LazyFrame) -> bool:
         Whether at least one isolation target needs inference.
     """
     return bool(ldf.select(_isolation_target_missing().any()).collect().item())
-
-
-def extract_file_name(file_path: str) -> Tuple[str, str]:
-    """Build the project and experiment key needed for metadata matching.
-
-    Args:
-        file_path: Parquet path organised beneath its project directory.
-
-    Returns:
-        Project name and normalised experiment basename.
-    """
-    filename = os.path.basename(file_path)
-    project = os.path.basename(os.path.dirname(file_path))
-    # Strip anything after a full stop
-    filename = filename.split(".")[0]
-    # Strip sharding, if it occurs
-    shard_pattern = re.compile(r".+_\d{4}-\d{4}$")
-    if shard_pattern.match(filename):
-        filename = filename[:-10]
-    return project, filename
-
-
-def check_search_data_value(
-    file_path: str,
-    search_data: pl.DataFrame,
-    column: str,
-    show_duplicate_warnings: bool = False,
-) -> str:
-    """Require an unambiguous metadata match before trusting a search-data value.
-
-    Args:
-        file_path: Data file whose metadata is needed.
-        search_data: Table containing file paths and metadata.
-        column: Metadata field to retrieve.
-        show_duplicate_warnings: Whether to report equivalent duplicate rows.
-
-    Returns:
-        The unique matching metadata value.
-
-    Raises:
-        ValueError: If no row matches or matching rows disagree.
-    """
-    project, filename = extract_file_name(file_path)
-    search_path = (
-        project + "/" + filename + r"\."
-    )  # Add the full stop make sure we only match to a full file name
-
-    # Filter rows that match the current search path
-    search_data_match = search_data.filter(
-        search_data["file path"].str.contains(search_path)
-    )
-
-    # Error handling for no or multiple matches
-    match_count = len(search_data_match)
-    if match_count == 0:
-        raise ValueError(f"No matches found in search_data for phrase: {search_path}")
-    elif match_count > 1:
-        # Get unique values for the column in the matched rows
-        unique_column_values = (
-            search_data_match.select(column).unique()[column].to_list()
-        )
-        if len(unique_column_values) > 1:
-            # If there are differing column entries, raise an error
-            raise ValueError(
-                f"Conflicting column entries found in search_data for file name: {search_path}\n"
-                f"Conflicting values: {unique_column_values}\n"
-                f"Matched rows:\n{search_data_match.select(['file path', column]).to_pandas().to_string(index=False)}"
-            )
-        elif show_duplicate_warnings is True:
-            # If duplicates have the same column entry, count once and report
-            logger.warning(
-                f"Duplicate matches found in search_data for file name: {search_path}, "
-                f"but they have the same column value: {unique_column_values[0]}. Counting once."
-            )
-
-    value: str = search_data_match[column][0]
-
-    return value
 
 
 def infer_it_from_precursor_mz(ldf: pl.LazyFrame) -> pl.LazyFrame:

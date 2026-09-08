@@ -77,8 +77,8 @@ CLI::
     python scripts/verification/verify_calc_mz.py \
         --input-dir <data-root>/lcfm/ \
         --output-file calc_mz_verification.csv \
-        --search-data search_data_with_new_projects.xlsx \
-        --tmt-projects-yaml bad_tmt_projects.yaml \
+        --search-data data/search_data.xlsx \
+        --tmt-projects-yaml assets/bad_tmt_projects.yaml \
         --lysine-label-file-csv lysine_label_files.csv
 """
 
@@ -90,13 +90,14 @@ import logging
 import time
 from datetime import timedelta
 from dataclasses import dataclass, field
-from pathlib import Path, PureWindowsPath
 from typing import Dict, List, Optional, Set, Tuple
 import typer
 
 from instanovo.utils.residues import ResidueSet, H2O_MASS, PROTON_MASS_AMU
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_RESIDUE_MASSES, DEFAULT_TMT_PROJECTS_YAML
+from scripts.preprocessing.parquet_io import search_data_lookup_key
 
 
 app = typer.Typer(
@@ -115,7 +116,7 @@ INPUT_DIR_OPTION = typer.Option(
     help="Input directory containing parquet files organised by project subfolders",
 )
 RESIDUE_MASSES_FILE_OPTION = typer.Option(
-    "mod_dicts/residue_masses.yaml",
+    str(DEFAULT_RESIDUE_MASSES),
     "--residue-masses-file",
     help="Path to residue masses YAML",
 )
@@ -139,10 +140,13 @@ VERBOSE_OPTION = typer.Option(
 SEARCH_DATA_OPTION = typer.Option(
     None,
     "--search-data",
-    help="Search data Excel with project, file path, acquisition, quant, modifications",
+    help=(
+        "Optional search-data Excel (project, raw-filename file path, "
+        "acquisition, quant, modifications) for TMT/iTRAQ lysine checks"
+    ),
 )
 TMT_PROJECTS_YAML_OPTION = typer.Option(
-    "bad_tmt_projects.yaml",
+    str(DEFAULT_TMT_PROJECTS_YAML),
     "--tmt-projects-yaml",
     help="YAML mapping TMT multiplex groups to projects (tmt_6_8_10 / tmt_16_18)",
 )
@@ -156,26 +160,16 @@ LYSINE_LABEL_FILE_CSV_OPTION = typer.Option(
 def extract_file_name(path_str: str) -> str:
     """Join search-data and parquet paths using the same experiment stem.
 
+    Thin wrapper around ``search_data_lookup_key`` kept for call sites that
+    still use this name.
+
     Args:
-        path_str: File path that may include compound suffixes such as ``.mzML.ipc``.
+        path_str: Raw search-data filename or on-disk data path.
 
     Returns:
         Filename stem used as the TMT/iTRAQ file key.
     """
-    path_obj = PureWindowsPath(path_str)
-    name = path_obj.name
-    compound_suffixes = [
-        ".mzML.ipc",
-        ".mzml.ipc",
-        ".mzML.gz",
-        ".mzml.gz",
-        ".mzml.parquet",
-        ".mzML.parquet",
-    ]
-    for suffix in compound_suffixes:
-        if name.lower().endswith(suffix.lower()):
-            return name[: -len(suffix)]
-    return Path(name).stem
+    return search_data_lookup_key(path_str)
 
 
 def load_residue_masses(residue_masses_file: str) -> dict[str, float]:
@@ -412,7 +406,8 @@ def load_search_data_lysine_maps(
     """Build TMT/iTRAQ file maps for optional lysine checks (DIA excluded).
 
     Args:
-        search_data_path: Excel with project, file path, acquisition, quant, modifications.
+        search_data_path: Excel with project, raw-filename file path, acquisition,
+            quant, and modifications.
         tmt_projects_yaml: YAML mapping TMT multiplex groups to projects.
 
     Returns:
@@ -1093,7 +1088,7 @@ def run_verification(
     output_csv: str,
     verbose: bool = False,
     search_data: Optional[str] = None,
-    tmt_projects_yaml: str = "bad_tmt_projects.yaml",
+    tmt_projects_yaml: str = str(DEFAULT_TMT_PROJECTS_YAML),
     lysine_label_file_csv: Optional[str] = None,
 ) -> None:
     """Run the full carbamidomethylation (and optional TMT/iTRAQ) calc_mz report over a parquet tree.
@@ -1179,7 +1174,8 @@ def main(
         tolerance: PPM tolerance for m/z matching.
         output_csv: Path to write the output CSV report.
         verbose: Enable verbose logging.
-        search_data: Search data Excel with project, file path, acquisition, quant, modifications.
+        search_data: Optional search-data Excel with project, raw-filename file path,
+            acquisition, quant, and modifications.
         tmt_projects_yaml: YAML mapping TMT multiplex groups to projects (tmt_6_8_10 / tmt_16_18).
         lysine_label_file_csv: Optional per-file TMT/iTRAQ lysine report (requires --search-data).
     """

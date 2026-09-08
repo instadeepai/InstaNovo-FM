@@ -460,7 +460,11 @@ def main(
         Optional[Path],
         typer.Option(
             "--search-data",
-            help="Search metadata Excel for acquisition lookup (enables ACFM metadata)",
+            help=(
+                "Optional search-data Excel (project, raw-filename file path, "
+                "acquisition) for ACFM metadata enrichment; "
+                "typically data/search_data.xlsx"
+            ),
         ),
     ] = None,
     add_usi: Annotated[

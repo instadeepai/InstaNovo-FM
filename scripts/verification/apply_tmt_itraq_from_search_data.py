@@ -31,12 +31,11 @@ CLI::
 
     python scripts/verification/apply_tmt_itraq_from_search_data.py --help
     python scripts/verification/apply_tmt_itraq_from_search_data.py \
-        --search-data search_data.xlsx \
         --input-dir <data-root>/lcfm/ \
         --spec PXD001:TMT_6_8_10 \
         --dry-run
     python scripts/verification/apply_tmt_itraq_from_search_data.py \
-        --search-data search_data.xlsx \
+        --search-data data/search_data.xlsx \
         --input-dir <data-root>/lcfm/ \
         --spec-file tags.yaml
 """
@@ -58,8 +57,9 @@ import typer
 import yaml
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_SEARCH_DATA
+from scripts.preprocessing.parquet_io import search_data_lookup_key
 from scripts.verification.verify_calc_mz import (
-    extract_file_name,
     find_parquet_files_in_project,
     is_tmt_quant,
     label_unmodified_lysines,
@@ -217,7 +217,8 @@ def load_search_data(path: str | Path) -> pl.DataFrame:
     """Load search Excel so file stems can be joined to parquet trees.
 
     Args:
-        path: Search-data workbook with project, file path, acquisition, quant, modifications.
+        path: Search-data workbook with project, raw-filename file path,
+            acquisition, quant, and modifications.
 
     Returns:
         The validated search table.
@@ -271,7 +272,7 @@ def collect_stems_for_predicate(
             continue
         if not predicate(row):
             continue
-        stems.add(extract_file_name(str(fp)))
+        stems.add(search_data_lookup_key(str(fp)))
     return stems
 
 
@@ -294,7 +295,7 @@ def parquet_paths_for_stems(
     out: List[Path] = []
     for fp_str in find_parquet_files_in_project(str(input_dir), project):
         p = Path(fp_str)
-        stem = extract_file_name(str(p))
+        stem = search_data_lookup_key(str(p))
         if stem in want:
             out.append(p)
     return sorted(out)
@@ -377,7 +378,7 @@ def build_quant_summary(df: pl.DataFrame, project: str) -> QuantSummary:
         fp = row.get("file path")
         if fp is None:
             continue
-        stem = extract_file_name(str(fp))
+        stem = search_data_lookup_key(str(fp))
         _record_quant_file_sets(
             row,
             stem,
@@ -710,14 +711,6 @@ def run_apply_labels(
 
 @app.command()
 def main(
-    search_data: Annotated[
-        Path,
-        typer.Option(
-            "--search-data",
-            "-s",
-            help="Search data Excel (project, file path, acquisition, quant, modifications)",
-        ),
-    ],
     input_dir: Annotated[
         Path,
         typer.Option(
@@ -726,6 +719,17 @@ def main(
             help="Root directory with per-project parquet subfolders",
         ),
     ],
+    search_data: Annotated[
+        Path,
+        typer.Option(
+            "--search-data",
+            "-s",
+            help=(
+                "Search-data Excel with project, raw-filename file path, "
+                "acquisition, quant, and modifications"
+            ),
+        ),
+    ] = DEFAULT_SEARCH_DATA,
     spec: Annotated[
         Optional[List[str]],
         typer.Option(
@@ -759,8 +763,9 @@ def main(
     """Label unmodified lysines with TMT or iTRAQ UNIMOD accessions using search-data multiplex rules (and optional quant fallback).
 
     Args:
-        search_data: Search data Excel (project, file path, acquisition, quant, modifications).
         input_dir: Root directory with per-project parquet subfolders.
+        search_data: Search-data Excel with project, raw-filename file path,
+            acquisition, quant, and modifications.
         spec: Repeatable ``PROJECT:TAG_KIND`` (TMT_6_8_10, TMT_16_18, ITRAQ).
         spec_file: YAML mapping project id to tag kind (one entry per project).
         dry_run: Log actions without writing files.

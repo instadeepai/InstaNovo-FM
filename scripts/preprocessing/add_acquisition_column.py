@@ -7,7 +7,8 @@ and supports local trees or S3 listings.
 CLI::
 
     python scripts/preprocessing/add_acquisition_column.py --help
-    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/ --search-data search_data_with_new_projects.xlsx
+    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/
+    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/ --search-data data/search_data.xlsx
 """
 
 import logging
@@ -21,6 +22,7 @@ import typer
 from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_SEARCH_DATA
 from scripts.preprocessing.parquet_io import search_data_lookup_key
 
 logger = logging.getLogger(__name__)
@@ -167,7 +169,8 @@ def load_acquisitions_from_search_data(
     """Build an unambiguous lookup before any Parquet files are modified.
 
     Args:
-        search_data_path: Excel workbook containing project, file path, and acquisition.
+        search_data_path: Excel workbook containing project, raw-filename
+            ``file path``, and acquisition.
 
     Returns:
         Project and filename keys mapped to acquisition type.
@@ -351,9 +354,12 @@ def main(
         Path,
         typer.Option(
             "--search-data",
-            help="Search-data Excel (project, file path, acquisition)",
+            help=(
+                "Search-data Excel with project, raw-filename file path, "
+                "and acquisition columns"
+            ),
         ),
-    ],
+    ] = DEFAULT_SEARCH_DATA,
     aws_profile: Annotated[
         Optional[str],
         typer.Option("--aws-profile", help="AWS profile name for S3 access"),

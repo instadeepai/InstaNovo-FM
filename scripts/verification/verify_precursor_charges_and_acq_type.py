@@ -20,11 +20,10 @@ CLI::
     python scripts/verification/verify_precursor_charges_and_acq_type.py --help
     python scripts/verification/verify_precursor_charges_and_acq_type.py \
         --input-dir <data-root>/lcfm/ \
-        --search-data search_data_with_new_projects.xlsx \
         --output-dir lcfm
     python scripts/verification/verify_precursor_charges_and_acq_type.py \
         --input-dir s3://<your-bucket>/acfm/ \
-        --search-data search_data_with_new_projects.xlsx \
+        --search-data data/search_data.xlsx \
         --output-dir acfm \
         --aws-profile <your-aws-profile>
 """
@@ -41,6 +40,8 @@ from typing import List, Optional, Tuple
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_SEARCH_DATA
+from scripts.preprocessing.parquet_io import search_data_lookup_key
 
 app = typer.Typer(
     help="Verify precursor charges against acquisition type",
@@ -58,9 +59,12 @@ INPUT_DIR_OPTION = typer.Option(
     help="Input directory containing parquet files organised by project subfolders",
 )
 SEARCH_DATA_OPTION = typer.Option(
-    ...,
+    str(DEFAULT_SEARCH_DATA),
     "--search-data",
-    help="Search-data Excel with project and acquisition columns",
+    help=(
+        "Search-data Excel with project, raw-filename file path, "
+        "and acquisition columns"
+    ),
 )
 OUTPUT_DIR_OPTION = typer.Option(
     ...,
@@ -310,9 +314,7 @@ def extract_file_name(path_str: str) -> str:
     Returns:
         Canonical experiment basename for matching ``file path`` in search data.
     """
-    from scripts.preprocessing.parquet_io import search_data_lookup_key
-
-    return str(search_data_lookup_key(path_str))
+    return search_data_lookup_key(path_str)
 
 
 def extract_project(path: str) -> str:
@@ -364,7 +366,7 @@ def load_aquisitions_from_search_data(
     """Split search-data files into DIA vs DDA so each can use the matching charge policy.
 
     Args:
-        search_data_path: Excel with project, acquisition, and file path columns.
+        search_data_path: Excel with project, raw-filename file path, and acquisition.
 
     Returns:
         Unique DIA and DDA tables with project, filename, and acquisition.

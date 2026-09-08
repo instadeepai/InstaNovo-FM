@@ -45,8 +45,10 @@ We expect the parquet files to contain the columns:
 CLI::
 
     python scripts/preprocessing/label_modifications.py --help
-    python scripts/preprocessing/label_modifications.py --input-dir <subfolder> --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
-    python scripts/preprocessing/label_modifications.py --input-dir <subfolder-a> --input-dir <subfolder-b> --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+    python scripts/preprocessing/label_modifications.py --input-dir <subfolder>
+    python scripts/preprocessing/label_modifications.py --input-dir <subfolder-a> --input-dir <subfolder-b> \
+        --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+        --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 
 Use ``python script.py --help`` for flags.
 """
@@ -64,6 +66,7 @@ import typer
 from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_AMBIGUOUS_MODS, DEFAULT_GOLD_STANDARD_MODS
 
 logger = logging.getLogger(__name__)
 
@@ -463,14 +466,14 @@ def main(
             "--gold-standard-mods",
             help="Gold standard modifications Excel file",
         ),
-    ],
+    ] = DEFAULT_GOLD_STANDARD_MODS,
     ambiguous_mods: Annotated[
         Path,
         typer.Option(
             "--ambiguous-mods",
             help="PXD009449 ambiguous modifications Excel file",
         ),
-    ],
+    ] = DEFAULT_AMBIGUOUS_MODS,
     sequence_col: Annotated[
         str,
         typer.Option("--sequence-col", help="Name of the unmodified sequence column"),

@@ -104,17 +104,18 @@ _COMPOUND_SUFFIXES = (".mzml.ipc", ".mzml.gz", ".mzml.parquet")
 
 
 def search_data_lookup_key(path_str: str) -> str:
-    """Match platform-specific data paths to Excel search-data entries.
+    """Match on-disk data paths to Excel search-data ``file path`` basenames.
+
+    Both Excel raw filenames (e.g. ``foo.mzML.gz``) and parquet/IPC paths
+    (including shard suffixes) reduce to the same experiment stem.
 
     Args:
-        path_str: POSIX or Windows-style path from data or metadata.
+        path_str: Raw filename from search data, or a POSIX path to a data file.
 
     Returns:
         Canonical filename key for metadata lookup.
     """
-    from pathlib import PureWindowsPath
-
-    name = PureWindowsPath(path_str).name
+    name = Path(path_str).name
     for suffix in _COMPOUND_SUFFIXES:
         if name.lower().endswith(suffix):
             return normalize_experiment_stem(name[: -len(suffix)])

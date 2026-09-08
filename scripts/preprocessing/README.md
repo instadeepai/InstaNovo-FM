@@ -117,42 +117,44 @@ python infer_isolation_target.py --input-dir "./data1/**/*.parquet" --input-dir 
 ### 12. Label modifications (`label_modifications.py`)
 
 ```bash
-python label_modifications.py --input-dir subfolder_name \
-    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+python label_modifications.py --input-dir subfolder_name
 python label_modifications.py --input-dir subfolder1 --input-dir subfolder2 \
-    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+    --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+    --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 ```
 
 `check_modifications.py` compares inventories against the same mapping tables:
 
 ```bash
+python check_modifications.py --input-file modifications.xlsx
 python check_modifications.py --input-file modifications.xlsx \
-    --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+    --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+    --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 ```
 
 ### 13. Add acquisition column (`add_acquisition_column.py`)
 
 Adds an `acquisition` column (DIA/DDA) from search-data Excel.
+Defaults to `data/search_data.xlsx`.
 
 ```bash
 python add_acquisition_column.py \
-    --input-dir <data-root>/lcfm/ \
-    --search-data search_data.xlsx
+    --input-dir <data-root>/lcfm/
 
 python add_acquisition_column.py \
     --input-dir s3://bucket/acfm/ \
-    --search-data search_data.xlsx \
+    --search-data data/search_data.xlsx \
     --aws-profile <your-aws-profile>
 
 python add_acquisition_column.py \
     --input-dir <data-root>/lcfm/ \
-    --search-data search_data.xlsx \
+    --search-data data/search_data.xlsx \
     --dry-run --verbose
 ```
 
 **Key features:**
 
-- Reads acquisition type from the search data Excel file (`project`, `file path`, `acquisition`)
+- Reads acquisition type from the search data Excel file (`project`, raw-filename `file path`, `acquisition`)
 - Skips files that already have an `acquisition` column
 - Supports local directories and S3 buckets
 - Dry-run mode for previewing changes

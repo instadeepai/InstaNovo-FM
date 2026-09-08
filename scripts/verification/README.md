@@ -69,12 +69,11 @@ Verifies that precursor charge values are consistent with the acquisition type.
 ```bash
 python scripts/verification/verify_precursor_charges_and_acq_type.py \
     --input-dir <data-root>/lcfm/ \
-    --search-data search_data_with_new_projects.xlsx \
     --output-dir lcfm
 
 python scripts/verification/verify_precursor_charges_and_acq_type.py \
     --input-dir s3://bucket/acfm/ \
-    --search-data search_data.xlsx \
+    --search-data data/search_data.xlsx \
     --output-dir acfm \
     --aws-profile <your-aws-profile>
 ```
@@ -106,8 +105,8 @@ This identifies four problems:
 python scripts/verification/verify_calc_mz.py \
     --input-dir <data-root>/lcfm/ \
     --output-file calc_mz_verification.csv \
-    --search-data search_data_with_new_projects.xlsx \
-    --tmt-projects-yaml bad_tmt_projects.yaml \
+    --search-data data/search_data.xlsx \
+    --tmt-projects-yaml assets/bad_tmt_projects.yaml \
     --lysine-label-file-csv lysine_label_files.csv
 ```
 
@@ -123,9 +122,9 @@ It does not walk parquet files, but instead starts from the same gold-standard a
 
 ```bash
 python scripts/verification/build_unimod_mass_dictionary.py \
-    --gold-standard-mods mod_dicts/gold_standard_modifications.xlsx \
-    --ambiguous-mods mod_dicts/PXD009449_ambiguous_mods.xlsx \
-    --output-dir mod_dicts
+    --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+    --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx \
+    --output-dir assets/mod_dicts
 ```
 
 #### What it does
@@ -136,7 +135,7 @@ python scripts/verification/build_unimod_mass_dictionary.py \
 4. Warn when an observed amino acid is not a known UNIMOD site for that modification, which can mean a mapping error in the Excel tables.
 5. Write masses for the 20 standard amino acids plus each observed token. Residue mods are `K[UNIMOD:121]` (amino-acid mass plus delta). N-terminal mods are `[UNIMOD:1]` (delta only). `J` is omitted because I and L are collapsed elsewhere.
 
-#### Outputs (under `--output-dir`, default `mod_dicts/`)
+#### Outputs (under `--output-dir`, default `assets/mod_dicts/`)
 
 - `residue_masses.yaml` — token to monoisotopic mass, consumed by `verify_calc_mz.py --residue-masses-file`.
 - `modification_validation_report.md` — human-readable list of each UNIMOD id, observed sites, masses, and any suspect site pairings.
@@ -156,4 +155,4 @@ Charge and calculated-m/z checks also need the search-data Excel used to assign 
 | `intensity` / intensity array, `scale_factor` | Intensity normalisation | Maximum intensity should be stored in `scale_factor` |
 | `precursor_charge`, acquisition type | Charge checks | DDA: non-zero charges; DIA: zero charges |
 | `peptide_calc_mz` | Calculated m/z | Compared with a mass recomputed from `sequence` |
-| Search-data Excel | Charge checks, calculated m/z, TMT/iTRAQ repair | Must include project, file path and acquisition |
+| Search-data Excel | Charge checks, calculated m/z, TMT/iTRAQ repair | Must include `project`, raw-filename `file path`, and `acquisition` (defaults to `data/search_data.xlsx`) |

@@ -7,8 +7,10 @@ identified before Parquet sequences are rewritten.
 CLI::
 
     python scripts/preprocessing/check_modifications.py --help
-    python scripts/preprocessing/check_modifications.py --input-file modifications.xlsx --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
-    python scripts/preprocessing/check_modifications.py --input-file mods_a.xlsx --input-file mods_b.xlsx --gold-standard-mods gold.xlsx --ambiguous-mods pxd009449.xlsx
+    python scripts/preprocessing/check_modifications.py --input-file modifications.xlsx
+    python scripts/preprocessing/check_modifications.py --input-file mods_a.xlsx --input-file mods_b.xlsx \
+        --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+        --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 
 Use ``python script.py --help`` for flags.
 """
@@ -24,6 +26,7 @@ import polars as pl
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_AMBIGUOUS_MODS, DEFAULT_GOLD_STANDARD_MODS
 
 try:
     from label_modifications import (
@@ -201,14 +204,14 @@ def main(
             "--gold-standard-mods",
             help="Gold standard modifications Excel file",
         ),
-    ],
+    ] = DEFAULT_GOLD_STANDARD_MODS,
     ambiguous_mods: Annotated[
         Path,
         typer.Option(
             "--ambiguous-mods",
             help="PXD009449 ambiguous modifications Excel file",
         ),
-    ],
+    ] = DEFAULT_AMBIGUOUS_MODS,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),

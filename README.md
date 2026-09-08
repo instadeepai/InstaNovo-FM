@@ -103,6 +103,19 @@ FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")
 FoundationModel.describe_pretrained()          # every checkpoint, keyed by id
 ```
 
+The `corpus` field names a confidence tier of the pretraining corpus. They nest, from
+everything that was collected down to only the most confidently identified spectra:
+
+| tier | what it is |
+|---|---|
+| **ACFM** | *All Confidence* — every MS/MS scan in the corpus, ~1.63B, the vast majority with no peptide annotation at all. What the self-supervised objective can learn from. |
+| **LCFM** | *Low Confidence* — the labelled subset: 184.6M PSMs at run-specific 1% FDR. "Low" means least-stringently filtered, not unreliable, and it is the broadest labelled tier. |
+| **MCFM** | *Medium Confidence* — a nested subset of LCFM, ranked by a composite confidence score and thresholded. |
+| **HCFM** | *High Confidence* — the strictest subset, nested inside MCFM. |
+
+The released checkpoints are trained on LCFM, with one MCFM model for the corpus-scale
+comparison. HCFM is used for evaluation rather than pretraining, and ACFM is not released.
+
 | id | corpus | masking | PA bias | layers | params |
 |---|---|---|---|---|---|
 | `instanovo-fm-v0.1.0` | LCFM | Thompson-span | no | 12 | 89.5M |
@@ -188,9 +201,9 @@ the paper:
   on HuggingFace, under [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use/).
   Assembled from 92 public PRIDE submissions, with accessions in
   [`assets/table_s1_accessions.txt`](assets/table_s1_accessions.txt), and uniformly reprocessed
-  with FragPipe (v22.0) / MSFragger (v4.1). Confidence tiers: **ACFM** (~1.63B spectra,
-  unlabelled), **LCFM** (184.6M PSMs at 1% FDR), **MCFM** and **HCFM** (progressively stricter
-  subsets). Each of the three *labelled* tiers ships in two forms: `splits/` holds the
+  with FragPipe (v22.0) / MSFragger (v4.1). The confidence tiers are described under
+  [Load a pretrained checkpoint](#load-a-pretrained-checkpoint). Each of the three *labelled*
+  tiers — LCFM, MCFM and HCFM — ships in two forms: `splits/` holds the
   quality-filtered, peptide-disjoint 80/10/10 partitions the model was trained and evaluated on,
   and `by_project/` holds the tier before filtering and splitting, one directory per accession,
   so alternative partitions can be derived. The central peptide registry of split assignments

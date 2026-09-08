@@ -124,11 +124,11 @@ def find_duplicates_to_delete(file_map: defaultdict) -> list:
         for _folder, file_paths in folder_groups.items():
             if len(file_paths) > 1:
                 file_paths.sort()
-                second_file = file_paths[1]
-                files_to_delete.append(second_file)
-                parquet_file = second_file.rsplit(".", maxsplit=1)[0] + ".parquet"
-                if os.path.exists(parquet_file):
-                    files_to_delete.append(parquet_file)
+                for redundant in file_paths[1:]:
+                    files_to_delete.append(redundant)
+                    parquet_file = redundant.rsplit(".", maxsplit=1)[0] + ".parquet"
+                    if os.path.exists(parquet_file):
+                        files_to_delete.append(parquet_file)
 
     return files_to_delete
 

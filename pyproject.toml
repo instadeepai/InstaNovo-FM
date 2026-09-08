@@ -126,13 +126,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/instanovo_fm"]
 
-# No force-include table. `packages` already takes everything inside the package
-# directory, data files included, so listing configs/ or models.json again made
-# hatchling add them twice and fail the wheel build outright:
+# No force-include table here. `packages` above already takes everything inside
+# the package directory, data files included, so naming configs/ or models.json
+# again would add them twice and hatchling fails the wheel build on that:
 #   ValueError: A second file is being added to the wheel archive at the same
 #   path: `instanovo_fm/configs/denovo.yaml`
-# tests/test_wheel_contents.py checks they are in the wheel, which is what the
-# table was trying to guarantee.
+# tests/test_wheel_contents.py checks they reach the wheel.
 
 [tool.ruff]
 line-length = 100

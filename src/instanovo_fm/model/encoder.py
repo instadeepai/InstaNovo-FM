@@ -1542,9 +1542,9 @@ class FoundationModel(nn.Module, PadTokenMixin):
             else:
                 raise FileNotFoundError(f"No file found at path: {model_id}")
 
-        # This package's own registry. It used to read the one inside the
-        # installed `instanovo` package, which has only `transformer` and
-        # `diffusion` keys, so every by-id lookup here reported no models at all.
+        # This package's own registry, not the one inside the installed
+        # `instanovo` package: that has only `transformer` and `diffusion` keys
+        # and nothing under MODEL_TYPE.
         with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 

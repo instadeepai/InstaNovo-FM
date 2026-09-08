@@ -1,16 +1,11 @@
 """The wheel has to build, and has to carry the package's data files.
 
-Neither was true before this test existed. ``[tool.hatch.build.targets.wheel]``
-listed ``packages = ["src/instanovo_fm"]`` *and* force-included ``configs/``,
-which adds every config twice and makes hatchling refuse:
-
-    ValueError: A second file is being added to the wheel archive at the same
-    path: `instanovo_fm/configs/denovo.yaml`
-
-An editable install never exercises that path, so the failure only showed up on
-``uv build`` -- which is what a publish workflow does. The data files still have
-to be present, since ``from_pretrained`` reads ``models.json`` and the CLI
-composes the Hydra configs through ``importlib.resources``.
+An editable install exercises neither, so only ``uv build`` -- what the publish
+workflow runs -- catches a broken one. Two ways it breaks: naming a data
+directory in both ``packages`` and ``force-include`` adds every file twice and
+hatchling refuses outright, and omitting the data files entirely leaves a wheel
+that imports but cannot run, since ``from_pretrained`` reads ``models.json`` and
+the CLI composes the Hydra configs through ``importlib.resources``.
 """
 
 from __future__ import annotations
@@ -61,7 +56,7 @@ def test_wheel_carries_the_data_files(wheel: zipfile.ZipFile) -> None:
 
 @pytest.mark.slow
 def test_wheel_has_no_duplicate_entries(wheel: zipfile.ZipFile) -> None:
-    """Duplicates are what force-include caused, and they fail the build outright."""
+    """A file added twice fails the build outright, so catch it as a duplicate first."""
     names = wheel.namelist()
     duplicates = sorted({name for name in names if names.count(name) > 1})
     assert not duplicates, f"added to the wheel more than once: {duplicates}"

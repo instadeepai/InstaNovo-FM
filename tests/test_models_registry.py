@@ -1,11 +1,10 @@
 """The pretrained-checkpoint registry, and the wiring that reads it.
 
-``from_pretrained`` used to read ``models.json`` out of the installed
-``instanovo`` package, whose registry has only ``transformer`` and ``diffusion``
-keys, so every by-id lookup here found nothing. These tests hold the fixed
-wiring in place: the registry ships with *this* package, the classes look for
-their own key in it, and nothing about the cluster the checkpoints were trained
-on reaches the published file.
+Holds four things in place: the registry ships with *this* package rather than
+resolving to the one inside the installed ``instanovo``, which has no key under
+either MODEL_TYPE; each class looks up a key that exists; what the registry
+records about a checkpoint matches the paper; and nothing about the cluster the
+checkpoints were trained on reaches the published file.
 """
 
 from __future__ import annotations
@@ -38,11 +37,10 @@ def test_registry_ships_with_the_package(registry: dict[str, Any]) -> None:
 
 
 def test_model_types_have_a_registry_key(registry: dict[str, Any]) -> None:
-    """Each class looks up its own MODEL_TYPE, so a typo there silently finds nothing.
+    """Each class looks up its own MODEL_TYPE, so a key that is absent finds nothing.
 
-    This is the bug the wiring had: the downstream model's MODEL_TYPE was
-    "transformer", so it offered InstaNovo's checkpoints for an architecture its
-    own ``load`` does not build.
+    A MODEL_TYPE naming another class's family is worse than one naming nothing:
+    it offers checkpoints of an architecture this class's ``load`` cannot build.
     """
     for model_type in (FOUNDATION_MODEL_TYPE, DENOVO_MODEL_TYPE):
         assert model_type in registry, f"MODEL_TYPE {model_type!r} has no key in models.json"
@@ -114,9 +112,8 @@ def test_a_path_that_does_not_exist_is_reported_as_such(tmp_path: Any) -> None:
 def test_version_is_not_written_twice() -> None:
     """pyproject.toml is the only place a version is declared.
 
-    ``__version__`` was a second literal in ``__init__.py`` and the two had
-    already drifted: pyproject said 0.1.0 while the package still said
-    0.1.0.dev0.
+    ``__version__`` derives from the installed distribution, so a second literal
+    cannot creep back in and disagree with it.
     """
     import importlib.metadata
 

@@ -42,9 +42,9 @@ from instanovo.utils.colorlogging import ColorLog
 from instanovo.utils.file_downloader import download_file
 from instanovo.utils.residues import ResidueSet
 
-# This model has its own checkpoint family. It was "transformer", inherited from
-# the class this was derived from, which made from_pretrained offer InstaNovo's
-# checkpoints -- a different architecture from the one load() builds.
+# This model's own checkpoint family in models.json. It must not be the
+# `transformer` family, which holds InstaNovo's checkpoints -- a different
+# architecture from the one load() builds.
 MODEL_TYPE = "downstream_denovo"
 
 

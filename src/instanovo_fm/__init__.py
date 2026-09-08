@@ -5,8 +5,8 @@ from importlib.metadata import PackageNotFoundError, version
 from omegaconf import OmegaConf
 
 # Derived from the installed distribution so pyproject.toml is the only place a
-# version is written. It used to be a second literal here, and the two had
-# already drifted apart.
+# version is written. A literal here would be a second source of truth, free to
+# disagree with it.
 try:
     __version__ = version("instanovo-fm")
 except PackageNotFoundError:  # running from a source tree without an install

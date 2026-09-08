@@ -1,14 +1,12 @@
-from pathlib import Path
 from typing import List, Optional
 
 import typer
-from omegaconf import DictConfig
 from typing_extensions import Annotated
 
 from instanovo.__init__ import console
-from instanovo.utils.cli_utils import compose_config
-from instanovo.constants import DEFAULT_TRAIN_CONFIG_PATH
 from instanovo.utils.colorlogging import ColorLog
+
+from instanovo_fm.utils.hydra_config import compose_fm_config
 
 logger = ColorLog(console, __name__).logger
 
@@ -38,15 +36,13 @@ def foundational_train(
     """Train the InstaNovo Foundation Model."""
     logger.info("Initializing InstaNovo Foundation Model training.")
 
-    if config_path is None:
-        config_path = DEFAULT_TRAIN_CONFIG_PATH
     if config_name is None:
         config_name = "foundational"
 
-    config = compose_config(
-        config_path=config_path,
+    config = compose_fm_config(
         config_name=config_name,
         overrides=overrides,
+        config_dir=config_path,
     )
 
     logger.info("Starting InstaNovo Foundation Model training.")
@@ -57,6 +53,7 @@ def foundational_train(
 
     # Save MLflow run ID alongside checkpoint for post-training eval to pick up
     import os
+
     if trainer.tracker is not None and hasattr(trainer.tracker, "run_id"):
         checkpoint_dir = config.model.get("model_save_folder_path", "./checkpoints")
         run_id_path = os.path.join(checkpoint_dir, "mlflow_run_id.txt")
@@ -110,8 +107,6 @@ def foundational_evaluate(
     """
     logger.info("Initializing InstaNovo Foundation Model evaluation.")
 
-    if config_path is None:
-        config_path = DEFAULT_TRAIN_CONFIG_PATH
     if config_name is None:
         config_name = "foundational_local"
 
@@ -124,16 +119,25 @@ def foundational_evaluate(
     if split is not None:
         overrides.append(f"evaluation.split={split}")
 
-    config = compose_config(
-        config_path=config_path,
+    config = compose_fm_config(
         config_name=config_name,
         overrides=overrides,
+        config_dir=config_path,
     )
 
     logger.info("Starting InstaNovo Foundation Model evaluation.")
     from instanovo_fm.eval.embed_evaluation import run_evaluation
 
     run_evaluation(config)
+
+
+from instanovo_fm.downstream.de_novo_sequencing.cli import cli as _denovo_cli
+
+cli.add_typer(
+    _denovo_cli,
+    name="denovo",
+    help="Downstream de novo sequencing: the FM encoder plus an InstaNovo decoder.",
+)
 
 
 if __name__ == "__main__":

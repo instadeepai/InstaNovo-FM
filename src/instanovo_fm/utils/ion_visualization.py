@@ -120,17 +120,35 @@ CATEGORY_COLORS: dict[str, tuple[str, float]] = {
 # Darkened text colours for annotation labels (readable on white background)
 TEXT_COLORS: dict[str, str] = {
     "unannotated": "olive",
-    "B-ion": "darkblue", "B-ion (Loss)": "darkblue", "B-ion (Isotope)": "darkblue",
-    "Y-ion": "darkred", "Y-ion (Loss)": "darkred", "Y-ion (Isotope)": "darkred",
-    "A-ion": "darkgreen", "A-ion (Loss)": "darkgreen", "A-ion (Isotope)": "darkgreen",
-    "C-ion": "darkviolet", "C-ion (Loss)": "darkviolet", "C-ion (Isotope)": "darkviolet",
-    "X-ion": "saddlebrown", "X-ion (Loss)": "saddlebrown", "X-ion (Isotope)": "saddlebrown",
-    "Z-ion": "deeppink", "Z-ion (Loss)": "deeppink", "Z-ion (Isotope)": "deeppink",
-    "Precursor": "black", "Precursor (Isotope)": "#4a4a4a",
-    "Loss": "darkgreen", "Isotope": "dimgray",
-    "Immonium": "saddlebrown", "Glycan": "deeppink",
-    "Phospho": "darkorange", "Sulfate": "darkorange",
-    "Reporter": "darkcyan", "Custom": "darkviolet", "Other": "olive",
+    "B-ion": "darkblue",
+    "B-ion (Loss)": "darkblue",
+    "B-ion (Isotope)": "darkblue",
+    "Y-ion": "darkred",
+    "Y-ion (Loss)": "darkred",
+    "Y-ion (Isotope)": "darkred",
+    "A-ion": "darkgreen",
+    "A-ion (Loss)": "darkgreen",
+    "A-ion (Isotope)": "darkgreen",
+    "C-ion": "darkviolet",
+    "C-ion (Loss)": "darkviolet",
+    "C-ion (Isotope)": "darkviolet",
+    "X-ion": "saddlebrown",
+    "X-ion (Loss)": "saddlebrown",
+    "X-ion (Isotope)": "saddlebrown",
+    "Z-ion": "deeppink",
+    "Z-ion (Loss)": "deeppink",
+    "Z-ion (Isotope)": "deeppink",
+    "Precursor": "black",
+    "Precursor (Isotope)": "#4a4a4a",
+    "Loss": "darkgreen",
+    "Isotope": "dimgray",
+    "Immonium": "saddlebrown",
+    "Glycan": "deeppink",
+    "Phospho": "darkorange",
+    "Sulfate": "darkorange",
+    "Reporter": "darkcyan",
+    "Custom": "darkviolet",
+    "Other": "olive",
 }
 
 
@@ -161,8 +179,8 @@ def format_annotation_display(annotation: str) -> str:
                 display = ion_name
     else:
         # Clean rustyms-style annotations: "b3-H2O1+" -> "b3-H2O+"
-        display = re.sub(r'([A-Z]+)(\d+)(\+)', r'\1\3', display)
-        display = re.sub(r'([A-Z]+)(\d+)(\+\+)', r'\1\3', display)
-        display = re.sub(r'([A-Z]+)(\d+)$', r'\1', display)
+        display = re.sub(r"([A-Z]+)(\d+)(\+)", r"\1\3", display)
+        display = re.sub(r"([A-Z]+)(\d+)(\+\+)", r"\1\3", display)
+        display = re.sub(r"([A-Z]+)(\d+)$", r"\1", display)
 
     return display

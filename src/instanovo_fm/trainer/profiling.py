@@ -17,7 +17,6 @@ Validation components (2):
 
 import contextlib
 import json
-import os
 import time
 import warnings
 from collections import deque
@@ -42,7 +41,8 @@ class ComponentTimer:
     (to avoid first-step JIT/CUDA compilation distorting means/percentiles).
     """
 
-    def __init__(self, name: str, max_history: int = 1000, warmup_steps: int = 0):
+    def __init__(self, name: str, max_history: int = 1000, warmup_steps: int = 0) -> None:
+        """Initialise the input."""
         self.name = name
         self.max_history = max_history
         self.warmup_steps = warmup_steps
@@ -52,11 +52,11 @@ class ComponentTimer:
         self.count = 0
         self._warmup_count = 0  # Separate counter for warmup steps
 
-    def __enter__(self):
+    def __enter__(self) -> Any:
         self.start_time = time.perf_counter()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if self.start_time is not None:
             elapsed = time.perf_counter() - self.start_time
 
@@ -76,9 +76,18 @@ class ComponentTimer:
     def get_stats(self) -> Dict[str, float]:
         """Get timing statistics for this component (excluding warmup)."""
         if not self.times:
-            return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "total": 0.0,
-                    "count": self.count, "warmup_skipped": self._warmup_count,
-                    "p50": 0.0, "p95": 0.0, "p99": 0.0}
+            return {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "total": 0.0,
+                "count": self.count,
+                "warmup_skipped": self._warmup_count,
+                "p50": 0.0,
+                "p95": 0.0,
+                "p99": 0.0,
+            }
 
         times_array = np.array(self.times)
         return {
@@ -98,39 +107,44 @@ class ComponentTimer:
 class MemoryProfiler:
     """Memory usage profiler for GPU and CPU memory."""
 
-    def __init__(self, track_gpu: bool = True, track_cpu: bool = True):
+    def __init__(self, track_gpu: bool = True, track_cpu: bool = True) -> None:
+        """Initialise the input."""
         self.track_gpu = track_gpu and torch.cuda.is_available()
         self.track_cpu = track_cpu
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset memory tracking."""
-        self.gpu_memory_history = []
-        self.cpu_memory_history = []
+        self.gpu_memory_history: list[Any] = []
+        self.cpu_memory_history: list[Any] = []
         if self.track_gpu:
             torch.cuda.reset_peak_memory_stats()
 
-    def snapshot(self, label: str = ""):
+    def snapshot(self, label: str = "") -> Any:
         """Take a memory snapshot."""
-        snapshot = {"label": label, "timestamp": time.time()}
+        snapshot: dict[str, Any] = {"label": label, "timestamp": time.time()}
 
         if self.track_gpu:
-            snapshot.update({
-                "gpu_allocated_mb": torch.cuda.memory_allocated() / 1024**2,
-                "gpu_reserved_mb": torch.cuda.memory_reserved() / 1024**2,
-                "gpu_max_allocated_mb": torch.cuda.max_memory_allocated() / 1024**2,
-                "gpu_max_reserved_mb": torch.cuda.max_memory_reserved() / 1024**2,
-            })
+            snapshot.update(
+                {
+                    "gpu_allocated_mb": torch.cuda.memory_allocated() / 1024**2,
+                    "gpu_reserved_mb": torch.cuda.memory_reserved() / 1024**2,
+                    "gpu_max_allocated_mb": torch.cuda.max_memory_allocated() / 1024**2,
+                    "gpu_max_reserved_mb": torch.cuda.max_memory_reserved() / 1024**2,
+                }
+            )
             self.gpu_memory_history.append(snapshot.copy())
 
         if self.track_cpu:
             process = psutil.Process()
             memory_info = process.memory_info()
-            snapshot.update({
-                "cpu_rss_mb": memory_info.rss / 1024**2,
-                "cpu_vms_mb": memory_info.vms / 1024**2,
-                "cpu_percent": process.memory_percent(),
-            })
+            snapshot.update(
+                {
+                    "cpu_rss_mb": memory_info.rss / 1024**2,
+                    "cpu_vms_mb": memory_info.vms / 1024**2,
+                    "cpu_percent": process.memory_percent(),
+                }
+            )
             self.cpu_memory_history.append(snapshot.copy())
 
         return snapshot
@@ -142,20 +156,24 @@ class MemoryProfiler:
         if self.track_gpu and self.gpu_memory_history:
             gpu_allocated = [s["gpu_allocated_mb"] for s in self.gpu_memory_history]
             gpu_reserved = [s["gpu_reserved_mb"] for s in self.gpu_memory_history]
-            stats.update({
-                "peak_gpu_allocated_mb": max(gpu_allocated),
-                "peak_gpu_reserved_mb": max(gpu_reserved),
-                "current_gpu_allocated_mb": torch.cuda.memory_allocated() / 1024**2,
-                "current_gpu_reserved_mb": torch.cuda.memory_reserved() / 1024**2,
-            })
+            stats.update(
+                {
+                    "peak_gpu_allocated_mb": max(gpu_allocated),
+                    "peak_gpu_reserved_mb": max(gpu_reserved),
+                    "current_gpu_allocated_mb": torch.cuda.memory_allocated() / 1024**2,
+                    "current_gpu_reserved_mb": torch.cuda.memory_reserved() / 1024**2,
+                }
+            )
 
         if self.track_cpu and self.cpu_memory_history:
             cpu_rss = [s["cpu_rss_mb"] for s in self.cpu_memory_history]
             cpu_percent = [s["cpu_percent"] for s in self.cpu_memory_history]
-            stats.update({
-                "peak_cpu_rss_mb": max(cpu_rss),
-                "peak_cpu_percent": max(cpu_percent),
-            })
+            stats.update(
+                {
+                    "peak_cpu_rss_mb": max(cpu_rss),
+                    "peak_cpu_percent": max(cpu_percent),
+                }
+            )
 
         return stats
 
@@ -174,7 +192,8 @@ class TrainingProfiler:
     STEP_COMPONENT = "step"
     ALL_COMPONENTS = TRAINING_COMPONENTS + VALIDATION_COMPONENTS + (STEP_COMPONENT,)
 
-    def __init__(self, config: Dict[str, Any], output_dir: str = "./profiling_results"):
+    def __init__(self, config: Dict[str, Any], output_dir: str = "./profiling_results") -> None:
+        """Initialise the input."""
         self.config = config
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -190,9 +209,7 @@ class TrainingProfiler:
 
         # Torch profiler configuration
         self.torch_profiler_config = config.get("torch_profiler", {})
-        self.profiler_schedule = self.torch_profiler_config.get("schedule", {
-            "wait": 1, "warmup": 1, "active": 3, "repeat": 2
-        })
+        self.profiler_schedule = self.torch_profiler_config.get("schedule", {"wait": 1, "warmup": 1, "active": 3, "repeat": 2})
 
         # Component timing
         self.component_timers: Dict[str, ComponentTimer] = {}
@@ -234,8 +251,7 @@ class TrainingProfiler:
 
         if name not in self.ALL_COMPONENTS:
             warnings.warn(
-                f"Unknown profiling component '{name}'. "
-                f"Allowed: {self.ALL_COMPONENTS}. Returning nullcontext().",
+                f"Unknown profiling component '{name}'. Allowed: {self.ALL_COMPONENTS}. Returning nullcontext().",
                 stacklevel=2,
             )
             return contextlib.nullcontext()
@@ -271,7 +287,7 @@ class TrainingProfiler:
             result["step"] = self._step_times[-1]
         return result
 
-    def setup_torch_profiler(self):
+    def setup_torch_profiler(self) -> None:
         """Setup PyTorch profiler with appropriate configuration."""
         if not (self.enabled and self.use_torch_profiler):
             return
@@ -300,7 +316,7 @@ class TrainingProfiler:
 
         logger.info("PyTorch profiler configured and ready")
 
-    def _on_trace_ready(self, prof):
+    def _on_trace_ready(self, prof: Any) -> None:
         """Callback when PyTorch profiler trace is ready."""
         try:
             trace_file = self.output_dir / f"torch_trace_step_{self.profiler_step_count}.json"
@@ -308,21 +324,23 @@ class TrainingProfiler:
 
             stats_file = self.output_dir / f"torch_stats_step_{self.profiler_step_count}.txt"
             key_averages = prof.key_averages()
-            with open(stats_file, 'w') as f:
+            with open(stats_file, "w") as f:
                 f.write(key_averages.table(sort_by="cuda_time_total", row_limit=50))
 
-            self.results["torch_profiler_traces"].append({
-                "step": self.profiler_step_count,
-                "trace_file": str(trace_file),
-                "stats_file": str(stats_file),
-            })
+            self.results["torch_profiler_traces"].append(
+                {
+                    "step": self.profiler_step_count,
+                    "trace_file": str(trace_file),
+                    "stats_file": str(stats_file),
+                }
+            )
 
             logger.info(f"PyTorch profiler trace saved: {trace_file}")
 
         except Exception as e:
             logger.warning(f"Failed to save PyTorch profiler trace: {e}")
 
-    def start_profiling(self):
+    def start_profiling(self) -> None:
         """Start profiling session."""
         if not self.enabled:
             return
@@ -337,7 +355,7 @@ class TrainingProfiler:
 
         logger.info("Profiling session started")
 
-    def step(self):
+    def step(self) -> None:
         """Step the profiler (call this each training step)."""
         if not self.enabled:
             return
@@ -349,7 +367,7 @@ class TrainingProfiler:
         if self.memory_profiler:
             self.memory_profiler.snapshot(f"step_{self.profiler_step_count}")
 
-    def stop_profiling(self):
+    def stop_profiling(self) -> None:
         """Stop profiling and save results."""
         if not self.enabled:
             return
@@ -369,16 +387,16 @@ class TrainingProfiler:
         self._save_results()
         logger.info("Profiling session completed and results saved")
 
-    def _save_results(self):
+    def _save_results(self) -> None:
         """Save profiling results to disk."""
         try:
             summary_file = self.output_dir / "profiling_summary.json"
-            with open(summary_file, 'w') as f:
+            with open(summary_file, "w") as f:
                 json.dump(self.results, f, indent=2, default=str)
 
             if self.results["component_timing"]:
                 timing_file = self.output_dir / "component_timing_detailed.json"
-                with open(timing_file, 'w') as f:
+                with open(timing_file, "w") as f:
                     json.dump(self.results["component_timing"], f, indent=2)
 
             self._generate_report()
@@ -388,7 +406,7 @@ class TrainingProfiler:
         except Exception as e:
             logger.error(f"Failed to save profiling results: {e}")
 
-    def _generate_report(self):
+    def _generate_report(self) -> None:
         """Generate a human-readable profiling report with percentages and throughput."""
         report_file = self.output_dir / "profiling_report.txt"
 
@@ -398,7 +416,7 @@ class TrainingProfiler:
         step_mean = float(np.mean(step_times)) if step_times is not None and len(step_times) > 0 else 0.0
         step_p95 = float(np.percentile(step_times, 95)) if step_times is not None and len(step_times) > 0 else 0.0
 
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             # Training step profile
             if self.warmup_steps > 0:
                 f.write(f"TRAINING STEP PROFILE ({step_count} steps, {self._step_warmup_count} warmup skipped)\n")
@@ -481,7 +499,7 @@ class TrainingProfiler:
                 f.write("-" * 30 + "\n")
                 for trace in self.results["torch_profiler_traces"]:
                     f.write(f"Step {trace['step']}: {trace['trace_file']}\n")
-                f.write(f"\nView traces in Chrome by opening chrome://tracing/ and loading the .json files\n")
+                f.write("\nView traces in Chrome by opening chrome://tracing/ and loading the .json files\n")
 
     def get_timing_summary(self) -> Dict[str, Any]:
         """Get a summary of current timing statistics."""
@@ -502,8 +520,8 @@ class TrainingProfiler:
 
 
 # Context manager for easy profiling
-@contextlib.contextmanager
-def profile_component(profiler: Optional[TrainingProfiler], component_name: str):
+@contextlib.contextmanager  # type: ignore[arg-type]
+def profile_component(profiler: Optional[TrainingProfiler], component_name: str) -> None:  # type: ignore[misc]
     """Context manager for profiling a specific component.
 
     Routes through TrainingProfiler.time_component() for validation.
@@ -517,5 +535,5 @@ def profile_component(profiler: Optional[TrainingProfiler], component_name: str)
 
 def create_profiler_from_config(config: Any, output_dir: str = "./profiling_results") -> TrainingProfiler:
     """Create a profiler instance from configuration."""
-    profiling_config = config.get("profiling", {}) if hasattr(config, 'get') else {}
+    profiling_config = config.get("profiling", {}) if hasattr(config, "get") else {}
     return TrainingProfiler(profiling_config, output_dir)

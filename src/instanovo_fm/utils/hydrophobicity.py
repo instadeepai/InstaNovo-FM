@@ -19,31 +19,31 @@ from typing import Optional
 
 import numpy as np
 
-from instanovo.common.dataset import DataProcessor
+from instanovo_fm.common.dataset import DataProcessor
 
 # Kyte-Doolittle hydrophobicity scale
 # Values represent the hydropathic index for each amino acid
 KYTE_DOOLITTLE_SCALE = {
-    'A': 1.8,   # Alanine
-    'C': 2.5,   # Cysteine
-    'D': -3.5,  # Aspartic acid
-    'E': -3.5,  # Glutamic acid
-    'F': 2.8,   # Phenylalanine
-    'G': -0.4,  # Glycine
-    'H': -3.2,  # Histidine
-    'I': 4.5,   # Isoleucine (most hydrophobic)
-    'K': -3.9,  # Lysine
-    'L': 3.8,   # Leucine
-    'M': 1.9,   # Methionine
-    'N': -3.5,  # Asparagine
-    'P': -1.6,  # Proline
-    'Q': -3.5,  # Glutamine
-    'R': -4.5,  # Arginine (most hydrophilic)
-    'S': -0.8,  # Serine
-    'T': -0.7,  # Threonine
-    'V': 4.2,   # Valine
-    'W': -0.9,  # Tryptophan
-    'Y': -1.3,  # Tyrosine
+    "A": 1.8,  # Alanine
+    "C": 2.5,  # Cysteine
+    "D": -3.5,  # Aspartic acid
+    "E": -3.5,  # Glutamic acid
+    "F": 2.8,  # Phenylalanine
+    "G": -0.4,  # Glycine
+    "H": -3.2,  # Histidine
+    "I": 4.5,  # Isoleucine (most hydrophobic)
+    "K": -3.9,  # Lysine
+    "L": 3.8,  # Leucine
+    "M": 1.9,  # Methionine
+    "N": -3.5,  # Asparagine
+    "P": -1.6,  # Proline
+    "Q": -3.5,  # Glutamine
+    "R": -4.5,  # Arginine (most hydrophilic)
+    "S": -0.8,  # Serine
+    "T": -0.7,  # Threonine
+    "V": 4.2,  # Valine
+    "W": -0.9,  # Tryptophan
+    "Y": -1.3,  # Tyrosine
 }
 
 
@@ -94,10 +94,7 @@ def compute_hydrophobicity(
 
         # Clean the peptide sequence if requested
         if remove_modifications:
-            clean_peptide = DataProcessor.remove_modifications(
-                peptide,
-                replace_isoleucine_with_leucine=False
-            )
+            clean_peptide = DataProcessor.remove_modifications(peptide, replace_isoleucine_with_leucine=False)
             if not clean_peptide:
                 hydrophobicity_values.append(np.nan)
                 continue
@@ -169,10 +166,10 @@ def get_scale_statistics(scale: dict[str, float] = KYTE_DOOLITTLE_SCALE) -> dict
     values = list(scale.values())
 
     return {
-        'mean': float(np.mean(values)),
-        'std': float(np.std(values)),
-        'min': float(np.min(values)),
-        'max': float(np.max(values)),
-        'range': float(np.max(values) - np.min(values)),
-        'n_amino_acids': len(values),
+        "mean": float(np.mean(values)),
+        "std": float(np.std(values)),
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+        "range": float(np.max(values) - np.min(values)),
+        "n_amino_acids": len(values),
     }

@@ -1,5 +1,4 @@
-"""
-Positional encoding implementations for the InstaNovo model.
+"""Positional encoding implementations for the InstaNovo model.
 
 This module provides various positional encoding methods:
 - Sinusoidal positional encoding
@@ -8,10 +7,10 @@ This module provides various positional encoding methods:
 - Relative positional encoding (RPE)
 """
 
-from .sinusoidal import PositionalEncoding
-from .rotary import SimpleRotaryEmbedding
 from .alibi import ALiBi
 from .relative import RelativePositionalEncoding
+from .rotary import SimpleRotaryEmbedding
+from .sinusoidal import PositionalEncoding
 
 __all__ = [
     "PositionalEncoding",

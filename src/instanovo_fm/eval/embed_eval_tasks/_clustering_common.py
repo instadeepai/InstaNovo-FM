@@ -74,6 +74,7 @@ DEFAULT_CATEGORICAL_FIELDS: List[str] = [
 # EVōC clustering
 # ----------------------------------------------------------------------------
 
+
 class EVoCResult:
     """Container for EVōC outputs aligned to the (subsampled) embedding rows."""
 
@@ -85,6 +86,7 @@ class EVoCResult:
         duplicates: Optional[set] = None,
         persistence_scores: Optional[List[float]] = None,
     ) -> None:
+        """Initialise the input."""
         self.labels = labels
         self.cluster_layers = cluster_layers
         self.cluster_tree = cluster_tree
@@ -93,10 +95,12 @@ class EVoCResult:
 
     @property
     def n_clusters(self) -> int:
+        """N clusters."""
         return int(len(np.unique(self.labels[self.labels >= 0])))
 
     @property
     def noise_fraction(self) -> float:
+        """Noise fraction."""
         if len(self.labels) == 0:
             return 0.0
         return float((self.labels < 0).mean())
@@ -126,11 +130,11 @@ def run_evoc(
     """
     import evoc  # noqa: F401  (raises ImportError -> caller degrades gracefully)
 
-    X = np.ascontiguousarray(emb, dtype=np.float32)
+    X = np.ascontiguousarray(emb, dtype=np.float32)  # noqa: N806
     if normalize:
         norms = np.linalg.norm(X, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
-        X = X / norms
+        X = X / norms  # noqa: N806
 
     clusterer = evoc.EVoC(random_state=random_state, **evoc_kwargs)
     labels = np.asarray(clusterer.fit_predict(X))
@@ -148,6 +152,7 @@ def run_evoc(
 # ----------------------------------------------------------------------------
 # Metadata field extraction
 # ----------------------------------------------------------------------------
+
 
 def _as_1d(data: Any, n: int) -> Optional[np.ndarray]:
     """Coerce a metadata entry to a length-``n`` 1-D array, else None."""
@@ -189,6 +194,7 @@ def get_categorical_field(meta: Dict[str, Any], field: str, n: int) -> Optional[
 # ----------------------------------------------------------------------------
 # Interpretable descriptor matrix (for Glass Box UMAP)
 # ----------------------------------------------------------------------------
+
 
 def build_descriptor_matrix(
     meta: Dict[str, Any],
@@ -245,17 +251,18 @@ def build_descriptor_matrix(
     if not cols:
         return np.empty((n, 0), dtype=np.float32), []
 
-    X = np.stack(cols, axis=1).astype(np.float32)
+    X = np.stack(cols, axis=1).astype(np.float32)  # noqa: N806
     mean = X.mean(axis=0)
     std = X.std(axis=0)
     std[std == 0] = 1.0
-    X = (X - mean) / std
+    X = (X - mean) / std  # noqa: N806
     return X, names
 
 
 # ----------------------------------------------------------------------------
 # Cluster enrichment
 # ----------------------------------------------------------------------------
+
 
 def compute_cluster_enrichment(
     labels: np.ndarray,
@@ -285,7 +292,7 @@ def compute_cluster_enrichment(
         if vals is None:
             continue
         uniq, counts = np.unique(vals, return_counts=True)
-        global_rate = {str(u): float(c) / n for u, c in zip(uniq, counts)}
+        global_rate = {str(u): float(c) / n for u, c in zip(uniq, counts, strict=False)}
         clusters: Dict[int, Any] = {}
         for c in cluster_ids:
             mask = labels == c
@@ -354,6 +361,7 @@ def enrichment_effect_matrix(
 # Data-driven level selection (for the zoom cascade)
 # ----------------------------------------------------------------------------
 
+
 def select_discriminative_field(
     child_assignment: np.ndarray,
     meta_subset: Dict[str, Any],
@@ -400,6 +408,7 @@ def select_discriminative_field(
 # ----------------------------------------------------------------------------
 # EVōC hierarchy navigation (for the zoom cascade)
 # ----------------------------------------------------------------------------
+
 
 def find_root(tree: Dict[Any, List[Any]]) -> Optional[Any]:
     """Return the root node of the EVōC cluster tree (the key that is no one's child)."""

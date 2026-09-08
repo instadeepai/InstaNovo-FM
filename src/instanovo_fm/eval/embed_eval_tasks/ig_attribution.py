@@ -29,17 +29,11 @@ from instanovo_fm.eval.embed_eval_tasks import BaseTask
 from instanovo.utils.colorlogging import ColorLog
 
 logger = ColorLog(console, __name__).logger
-from instanovo_fm.utils.extended_chemistry import (
-    build_extended_chemistry_library,
-    compute_immonium_related_negative_control,
-    match_peak_to_extended_chemistry,
-    ExtendedChemistryLibrary,
-)
-from instanovo_fm.eval.embed_eval_tasks.ig_attribution_helper import (
+from instanovo_fm.eval.embed_eval_tasks.ig_attribution_helper import (  # noqa: E402
     AMINO_ACID_MASSES,
     EXTENDED_CHEMISTRY_CATEGORIES,
-    NEUTRAL_LOSS_MASSES,
     ISOTOPE_SPACING,
+    NEUTRAL_LOSS_MASSES,
     PROTON_MASS,
     SHIFT_NULL_DISTANCES,
     STRUCTURAL_CATEGORIES,
@@ -64,6 +58,12 @@ from instanovo_fm.eval.embed_eval_tasks.ig_attribution_helper import (
     reduce_attributions_to_peaks,
     sweep_pa_per_head_bias,
     sweep_pa_response,
+)
+from instanovo_fm.utils.extended_chemistry import (  # noqa: E402
+    ExtendedChemistryLibrary,
+    build_extended_chemistry_library,
+    compute_immonium_related_negative_control,
+    match_peak_to_extended_chemistry,
 )
 
 try:
@@ -117,8 +117,9 @@ class IGAttributionTask(BaseTask):
         # Reproducibility
         deterministic_mode: bool = True,
         deterministic_seed: int = 42,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
         self.output_dir = Path(output_dir)
         self.enable_prediction_attribution = enable_prediction_attribution
@@ -183,9 +184,7 @@ class IGAttributionTask(BaseTask):
             elif dataloader is None:
                 results["prediction_attribution"] = {"error": "dataloader required"}
             else:
-                attr_results = self._run_prediction_attribution(
-                    model, meta, dataloader, device
-                )
+                attr_results = self._run_prediction_attribution(model, meta, dataloader, device)
                 results["prediction_attribution"] = attr_results
 
         results["execution_time_s"] = time.time() - t0
@@ -197,9 +196,7 @@ class IGAttributionTask(BaseTask):
     # Analysis 2: PA Bias Dissection
     # ------------------------------------------------------------------
 
-    def _run_pa_dissection(
-        self, model: nn.Module, device: torch.device
-    ) -> Dict[str, Any]:
+    def _run_pa_dissection(self, model: nn.Module, device: torch.device) -> Dict[str, Any]:
         """Run pairwise attention bias dissection analysis."""
         pa_results: Dict[str, Any] = {"success": False}
         pa_module = model.pairwise_bias
@@ -224,19 +221,19 @@ class IGAttributionTask(BaseTask):
         pa_results["hidden_dim"] = pa_module.hidden_dim
 
         plot_pa_response_spectrum(
-            dmz, response,
+            dmz,
+            response,
             save_path=self.output_dir / "pa_response_spectrum.png",
             dpi=self.dpi,
         )
-        pa_results["response_spectrum_path"] = str(
-            self.output_dir / "pa_response_spectrum.png"
-        )
+        pa_results["response_spectrum_path"] = str(self.output_dir / "pa_response_spectrum.png")
 
         # --- Per-head bias sweep ---
         if pw_projection is not None:
             logger.info("Sweeping per-head PA bias...")
             dmz_h, per_head = sweep_pa_per_head_bias(
-                pa_module, pw_projection,
+                pa_module,
+                pw_projection,
                 dmz_min=self.pa_dmz_min,
                 dmz_max=self.pa_dmz_max,
                 resolution=self.pa_resolution,
@@ -246,14 +243,14 @@ class IGAttributionTask(BaseTask):
             n_layers = getattr(model, "n_layers", 6)
 
             plot_pa_per_head_heatmap(
-                dmz_h, per_head,
-                n_heads=n_heads, n_layers=n_layers,
+                dmz_h,
+                per_head,
+                n_heads=n_heads,
+                n_layers=n_layers,
                 save_path=self.output_dir / "pa_per_head_heatmap.png",
                 dpi=self.dpi,
             )
-            pa_results["per_head_heatmap_path"] = str(
-                self.output_dir / "pa_per_head_heatmap.png"
-            )
+            pa_results["per_head_heatmap_path"] = str(self.output_dir / "pa_per_head_heatmap.png")
 
         # --- Chemical alignment score ---
         pa_results["chemical_alignment"] = self._compute_chemical_alignment(dmz, response)
@@ -263,7 +260,7 @@ class IGAttributionTask(BaseTask):
         neg_mask = dmz <= 0
         dmz_neg = -dmz[neg_mask][::-1]
         resp_neg = response[neg_mask][::-1]
-        asymmetry = {}
+        asymmetry: dict[str, Any] = {}
         for name, mass in AMINO_ACID_MASSES.items():
             pos_idx = np.argmin(np.abs(dmz[dmz >= 0] - mass))
             neg_idx = np.argmin(np.abs(dmz_neg - mass))
@@ -279,12 +276,14 @@ class IGAttributionTask(BaseTask):
 
         pa_results["success"] = True
 
-        logger.info(f"PA dissection: {len(pa_peaks)} response peaks, "
-                    f"alignment score={pa_results['chemical_alignment']['overall_score']:.3f}")
+        logger.info(f"PA dissection: {len(pa_peaks)} response peaks, alignment score={pa_results['chemical_alignment']['overall_score']:.3f}")
         return pa_results
 
     def _find_response_peaks(
-        self, dmz: np.ndarray, response: np.ndarray, min_prominence: float = 0.1,
+        self,
+        dmz: np.ndarray,
+        response: np.ndarray,
+        min_prominence: float = 0.1,
     ) -> List[Dict[str, Any]]:
         """Find local maxima in the PA response spectrum."""
         try:
@@ -298,25 +297,28 @@ class IGAttributionTask(BaseTask):
         resp_norm = resp_pos / (resp_pos.max() + 1e-8)
 
         indices, _ = find_peaks(
-            resp_norm, prominence=min_prominence,
+            resp_norm,
+            prominence=min_prominence,
             distance=int(0.5 / self.pa_resolution),
         )
 
-        peaks = []
+        peaks: list[Any] = []
         for idx in indices:
             ref = self._closest_chemical_reference(float(dmz_pos[idx]))
-            peaks.append({
-                "mz": float(dmz_pos[idx]),
-                "response": float(resp_pos[idx]),
-                "response_normalized": float(resp_norm[idx]),
-                "closest_reference": ref,
-            })
+            peaks.append(
+                {
+                    "mz": float(dmz_pos[idx]),
+                    "response": float(resp_pos[idx]),
+                    "response_normalized": float(resp_norm[idx]),
+                    "closest_reference": ref,
+                }
+            )
         peaks.sort(key=lambda p: p["response"], reverse=True)
         return peaks[:50]
 
     def _closest_chemical_reference(self, mz: float) -> Dict[str, Any]:
         """Find the closest known chemical mass difference to a given m/z."""
-        best = {"type": "none", "name": "", "mass": 0.0, "delta": float("inf")}
+        best: dict[str, Any] = {"type": "none", "name": "", "mass": 0.0, "delta": float("inf")}
         for name, mass in AMINO_ACID_MASSES.items():
             delta = abs(mz - mass)
             if delta < best["delta"]:
@@ -332,9 +334,7 @@ class IGAttributionTask(BaseTask):
                 best = {"type": "isotope", "name": f"13C/z={z}", "mass": spacing, "delta": delta}
         return best
 
-    def _compute_chemical_alignment(
-        self, dmz: np.ndarray, response: np.ndarray
-    ) -> Dict[str, Any]:
+    def _compute_chemical_alignment(self, dmz: np.ndarray, response: np.ndarray) -> Dict[str, Any]:
         """Compute how well PA response aligns with known chemical masses.
 
         Control: shift all chemical masses by +3.7 Da (arbitrary offset that
@@ -346,13 +346,11 @@ class IGAttributionTask(BaseTask):
         resp_pos = response[pos_mask]
 
         chemical_masses = (
-            list(AMINO_ACID_MASSES.values())
-            + list(NEUTRAL_LOSS_MASSES.values())
-            + [ISOTOPE_SPACING, ISOTOPE_SPACING / 2, ISOTOPE_SPACING / 3]
+            list(AMINO_ACID_MASSES.values()) + list(NEUTRAL_LOSS_MASSES.values()) + [ISOTOPE_SPACING, ISOTOPE_SPACING / 2, ISOTOPE_SPACING / 3]
         )
 
         def _mean_response_at(masses: List[float]) -> float:
-            values = []
+            values: list[Any] = []
             for m in masses:
                 window = np.abs(dmz_pos - m) < 0.05
                 if window.sum() > 0:
@@ -366,10 +364,9 @@ class IGAttributionTask(BaseTask):
 
         # Also compute shifted control (multiple shifts averaged for robustness)
         control_shifts = list(SHIFT_NULL_DISTANCES)
-        shifted_responses = []
+        shifted_responses: list[Any] = []
         for shift in control_shifts:
-            shifted_masses = [m + shift for m in chemical_masses
-                              if 0.5 < m + shift < dmz_pos.max()]
+            shifted_masses = [m + shift for m in chemical_masses if 0.5 < m + shift < dmz_pos.max()]
             if shifted_masses:
                 shifted_responses.append(_mean_response_at(shifted_masses))
         mean_shifted = float(np.mean(shifted_responses)) if shifted_responses else mean_global
@@ -426,9 +423,7 @@ class IGAttributionTask(BaseTask):
         prev_det_algo = torch.are_deterministic_algorithms_enabled()
         prev_cublas_env = os.environ.get("CUBLAS_WORKSPACE_CONFIG")
         prev_cpu_state = torch.random.get_rng_state()
-        prev_cuda_state = (
-            torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
-        )
+        prev_cuda_state = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
         prev_np_state = np.random.get_state()
 
         if prev_cublas_env is None:
@@ -488,10 +483,7 @@ class IGAttributionTask(BaseTask):
         n_total = len(collected)
         log_interval = max(1, n_total // 5)  # Log at ~20% milestones
         if self.deterministic_mode:
-            logger.info(
-                "IG deterministic mode ON — SDPA=math, cuDNN deterministic, "
-                f"seed={self.deterministic_seed}"
-            )
+            logger.info(f"IG deterministic mode ON — SDPA=math, cuDNN deterministic, seed={self.deterministic_seed}")
         with self._deterministic_context():
             for si, spec_info in enumerate(collected):
                 if si > 0 and si % log_interval == 0:
@@ -532,9 +524,9 @@ class IGAttributionTask(BaseTask):
                 itype: {
                     "bin_accuracy": float(np.mean([p.correct_bin for p in ps])),
                     "group_bin_accuracy": (
-                        float(np.mean([p.group_bin_accuracy for p in ps
-                                       if p.group_bin_accuracy >= 0]))
-                        if any(p.group_bin_accuracy >= 0 for p in ps) else 0.0
+                        float(np.mean([p.group_bin_accuracy for p in ps if p.group_bin_accuracy >= 0]))
+                        if any(p.group_bin_accuracy >= 0 for p in ps)
+                        else 0.0
                     ),
                     "median_error_da": float(np.median([p.error_da for p in ps])),
                     "median_error_ppm": float(np.median([p.error_ppm for p in ps])),
@@ -595,9 +587,11 @@ class IGAttributionTask(BaseTask):
 
         # --- Summary ---
         if preds:
-            logger.info(f"  {len(all_results)} groups — bin_acc={np.mean(bin_correct)*100:.1f}%, "
-                        f"group_acc={np.mean(group_acc)*100:.1f}%, "
-                        f"median_err={np.median(errors):.3f}Da ({np.median(ppms):.1f}ppm)")
+            logger.info(
+                f"  {len(all_results)} groups — bin_acc={np.mean(bin_correct) * 100:.1f}%, "
+                f"group_acc={np.mean(group_acc) * 100:.1f}%, "
+                f"median_err={np.median(errors):.3f}Da ({np.median(ppms):.1f}ppm)"
+            )
         max_delta = float(np.max(deltas))
         if max_delta > 5.0:
             logger.warning(f"  Convergence delta max={max_delta:.2f} > 5.0 — consider increasing ig_n_steps")
@@ -606,32 +600,30 @@ class IGAttributionTask(BaseTask):
         if topk:
             t1 = topk.get("top1_distribution", {})
             ladder = topk.get("ladder_neighbor", {})
-            logger.info(f"  Top-1: ladder={t1.get('ladder_neighbor', 0):.0%}, "
-                        f"unannotated={t1.get('unannotated', 0):.0%} | "
-                        f"Ladder top-5 hit={ladder.get('top5_hit_rate', 0):.0%}")
+            logger.info(
+                f"  Top-1: ladder={t1.get('ladder_neighbor', 0):.0%}, "
+                f"unannotated={t1.get('unannotated', 0):.0%} | "
+                f"Ladder top-5 hit={ladder.get('top5_hit_rate', 0):.0%}"
+            )
 
         return attr_results
 
     @staticmethod
     def _select_hero_group(
-        spec_results: List[AttributionResult], hero_count: int,
+        spec_results: List[AttributionResult],
+        hero_count: int,
     ) -> AttributionResult:
-        """Alternate hero-selection policy — even heroes highlight "best
+        """Alternate hero-selection policy.
+
+        Alternate hero-selection policy — even heroes highlight "best
         ladder" (smallest ladder_neighbor_best_rank), odd heroes highlight
         "most interesting failure" (highest top-1 unannotated fraction).
         The alternation gives a balanced view of where the model uses
         canonical chemistry vs where it falls back on noise/leakage.
         """
         if hero_count % 2 == 0:
-            return max(spec_results, key=lambda r: (
-                -r.topk.ladder_neighbor_best_rank
-                if r.topk and r.topk.ladder_neighbor_best_rank > 0
-                else -999
-            ))
-        return max(spec_results, key=lambda r: (
-            r.topk.topk_fractions.get("1", {}).get("unannotated", 0)
-            if r.topk else 0
-        ))
+            return max(spec_results, key=lambda r: (-r.topk.ladder_neighbor_best_rank if r.topk and r.topk.ladder_neighbor_best_rank > 0 else -999))
+        return max(spec_results, key=lambda r: (r.topk.topk_fractions.get("1", {}).get("unannotated", 0) if r.topk else 0))
 
     def _emit_hero(
         self,
@@ -643,10 +635,7 @@ class IGAttributionTask(BaseTask):
         """Select, render, and persist a hero spectrum for this spectrum."""
         selected = self._select_hero_group(spec_results, hero_count)
         seq = spec_info.get("sequence", "")
-        seq_safe = (
-            seq.replace("/", "_").replace("\\", "_")
-               .replace("[", "(").replace("]", ")")[:30]
-        )
+        seq_safe = seq.replace("/", "_").replace("\\", "_").replace("[", "(").replace("]", ")")[:30]
         hero_stem = f"hero_{hero_count:03d}_{seq_safe}_{selected.masked_group.group_key}"
         frag = spec_info.get("fragmentation") or "?"
         inst = spec_info.get("instrument") or "?"
@@ -668,7 +657,9 @@ class IGAttributionTask(BaseTask):
             per_peak_confidence=spec_info.get("per_peak_confidence"),
         )
         self._save_hero_report(
-            hero_dir / f"{hero_stem}.json", selected, spec_info,
+            hero_dir / f"{hero_stem}.json",
+            selected,
+            spec_info,
         )
 
     # ------------------------------------------------------------------
@@ -685,7 +676,7 @@ class IGAttributionTask(BaseTask):
 
         Builds fragment ion groups from matched_annotation and parent_annotation.
         """
-        collected = []
+        collected: list[Any] = []
 
         matched_annotations = meta.get("matched_annotation")
         parent_annotations = meta.get("parent_annotation")
@@ -715,13 +706,15 @@ class IGAttributionTask(BaseTask):
         per_peak_conf_offset = meta.get("per_peak_conf_offset")
 
         if matched_annotations is None or spectra_data is None:
-            logger.warning(f"Missing metadata: matched_annotation={'present' if matched_annotations is not None else 'MISSING'}, "
-                          f"spectra={'present' if spectra_data is not None else 'MISSING'}")
+            logger.warning(
+                f"Missing metadata: matched_annotation={'present' if matched_annotations is not None else 'MISSING'}, "
+                f"spectra={'present' if spectra_data is not None else 'MISSING'}"
+            )
             return []
 
         n_skipped_low_quality = 0
 
-        def _meta_str(arr, idx):
+        def _meta_str(arr: Any, idx: int) -> Any:
             if arr is None or idx >= len(arr):
                 return None
             v = arr[idx]
@@ -731,7 +724,7 @@ class IGAttributionTask(BaseTask):
                 return v.decode("utf-8")
             return str(v) if v else None
 
-        def _meta_float(arr, idx):
+        def _meta_float(arr: Any, idx: int) -> Any:
             if arr is None or idx >= len(arr):
                 return None
             v = arr[idx]
@@ -796,46 +789,50 @@ class IGAttributionTask(BaseTask):
             conf_offset = None
             if per_peak_confidence is not None and i < len(per_peak_confidence):
                 raw = per_peak_confidence[i]
-                if raw is not None and hasattr(raw, '__len__') and len(raw) >= n_peaks:
+                if raw is not None and hasattr(raw, "__len__") and len(raw) >= n_peaks:
                     conf_joint = np.array(raw[:n_peaks], dtype=np.float64)
             if per_peak_conf_group is not None and i < len(per_peak_conf_group):
                 raw = per_peak_conf_group[i]
-                if raw is not None and hasattr(raw, '__len__') and len(raw) >= n_peaks:
+                if raw is not None and hasattr(raw, "__len__") and len(raw) >= n_peaks:
                     conf_group = np.array(raw[:n_peaks], dtype=np.float64)
             if per_peak_conf_offset is not None and i < len(per_peak_conf_offset):
                 raw = per_peak_conf_offset[i]
-                if raw is not None and hasattr(raw, '__len__') and len(raw) >= n_peaks:
+                if raw is not None and hasattr(raw, "__len__") and len(raw) >= n_peaks:
                     conf_offset = np.array(raw[:n_peaks], dtype=np.float64)
 
-            collected.append({
-                "idx": i,
-                "sequence": seq,
-                "spectrum": spectrum,
-                "mz": mz,
-                "intensity": np.array(intensity, dtype=np.float64),
-                "annotations": list(annotations),
-                "parent_annotations": list(parents) if parents is not None else None,
-                "all_groups": groups,
-                "backbone_groups": backbone_groups,
-                "precursor_mass": neutral_mass,
-                "precursor_charge": p_charge,
-                # Metadata for interpretation
-                "instrument": _meta_str(search_instrument, i),
-                "fragmentation": _meta_str(search_fragmentation, i),
-                "acquisition": _meta_str(search_acquisition, i),
-                "collision_energy": _meta_float(meta_collision_energy, i),
-                "modifications": _meta_str(modification_types, i),
-                "spectrum_quality": quality,
-                # Per-peak confidence (for novel chemistry probe)
-                "per_peak_confidence": conf_joint,
-                "per_peak_conf_group": conf_group,
-                "per_peak_conf_offset": conf_offset,
-            })
+            collected.append(
+                {
+                    "idx": i,
+                    "sequence": seq,
+                    "spectrum": spectrum,
+                    "mz": mz,
+                    "intensity": np.array(intensity, dtype=np.float64),
+                    "annotations": list(annotations),
+                    "parent_annotations": list(parents) if parents is not None else None,
+                    "all_groups": groups,
+                    "backbone_groups": backbone_groups,
+                    "precursor_mass": neutral_mass,
+                    "precursor_charge": p_charge,
+                    # Metadata for interpretation
+                    "instrument": _meta_str(search_instrument, i),
+                    "fragmentation": _meta_str(search_fragmentation, i),
+                    "acquisition": _meta_str(search_acquisition, i),
+                    "collision_energy": _meta_float(meta_collision_energy, i),
+                    "modifications": _meta_str(modification_types, i),
+                    "spectrum_quality": quality,
+                    # Per-peak confidence (for novel chemistry probe)
+                    "per_peak_confidence": conf_joint,
+                    "per_peak_conf_group": conf_group,
+                    "per_peak_conf_offset": conf_offset,
+                }
+            )
 
         if n_skipped_low_quality > 0:
-            logger.info(f"Quality gate: skipped {n_skipped_low_quality} spectra "
-                        f"(min_backbone_coverage={self.min_backbone_coverage}, "
-                        f"min_fragment_groups={self.min_fragment_groups})")
+            logger.info(
+                f"Quality gate: skipped {n_skipped_low_quality} spectra "
+                f"(min_backbone_coverage={self.min_backbone_coverage}, "
+                f"min_fragment_groups={self.min_fragment_groups})"
+            )
 
         return collected
 
@@ -854,6 +851,7 @@ class IGAttributionTask(BaseTask):
             return None
         try:
             from sklearn.metrics import roc_auc_score
+
             labels = np.concatenate([np.ones(len(matched)), np.zeros(len(unmatched))])
             scores = np.concatenate([matched, unmatched])
             return float(roc_auc_score(labels, scores))
@@ -862,25 +860,22 @@ class IGAttributionTask(BaseTask):
             return None
 
     def _novel_chem_match_kwargs(self, spec_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the ``ppm_tol`` / ``da_tol`` pair for
-        :func:`match_peak_to_extended_chemistry` given the spectrum's
-        fragmentation type. CID gets a Da tolerance (low-res ion trap);
-        HCD/ETD/UVPD get ppm only.
+        """Return the ``ppm_tol`` / ``da_tol`` pair for :func:`match_peak_to_extended_chemistry` given the spectrum's fragmentation type.
+
+        CID gets a Da tolerance (low-res ion trap); HCD/ETD/UVPD get ppm only.
         """
         frag = (spec_info.get("fragmentation") or "").strip().upper()
         da_tol = self.novel_chemistry_da_tol if frag == "CID" else None
         return {"ppm_tol": self.novel_chemistry_ppm_tol, "da_tol": da_tol}
 
     def _build_extended_chemistry_library(
-        self, spec_info: Dict[str, Any],
+        self,
+        spec_info: Dict[str, Any],
     ) -> Optional[Any]:
-        """Build (and cache on ``spec_info``) the extended-chemistry library
-        for the given spectrum. Returns ``None`` when the sequence is empty
-        or too short, or when library construction fails.
+        """Build (and cache on ``spec_info``) the extended-chemistry library for the given spectrum.
 
-        Shared by :meth:`_build_novel_chem_lookup` and
-        :meth:`_analyze_novel_chemistry` so the library is constructed
-        exactly once per spectrum.
+        Returns ``None`` when the sequence is empty or too short, or when library construction fails. Shared by :meth:`_build_novel_chem_lookup` and
+        :meth:`_analyze_novel_chemistry` so the library is constructed exactly once per spectrum.
         """
         if "novel_chem_library" in spec_info:
             return spec_info["novel_chem_library"]
@@ -896,10 +891,7 @@ class IGAttributionTask(BaseTask):
 
         precursor_charge = spec_info.get("precursor_charge", 2)
         prec_mass = spec_info.get("precursor_mass", 0.0)
-        prec_mz = (
-            (prec_mass + precursor_charge * PROTON_MASS) / precursor_charge
-            if prec_mass > 0 else 0.0
-        )
+        prec_mz = (prec_mass + precursor_charge * PROTON_MASS) / precursor_charge if prec_mass > 0 else 0.0
         try:
             library = build_extended_chemistry_library(
                 residues=residues,
@@ -911,7 +903,8 @@ class IGAttributionTask(BaseTask):
         except Exception as e:
             logger.debug(
                 "Extended-chemistry library build failed for spec %s: %s",
-                spec_info.get("idx"), e,
+                spec_info.get("idx"),
+                e,
             )
             spec_info["novel_chem_library"] = None
             return None
@@ -919,7 +912,8 @@ class IGAttributionTask(BaseTask):
         return library
 
     def _build_novel_chem_lookup(
-        self, spec_info: Dict[str, Any],
+        self,
+        spec_info: Dict[str, Any],
     ) -> Tuple[Dict[int, str], Dict[int, List[Dict[str, Any]]]]:
         """Precompute ``peak_idx → extended_chem_type`` for this spectrum.
 
@@ -1007,7 +1001,7 @@ class IGAttributionTask(BaseTask):
         device: torch.device,
     ) -> List[AttributionResult]:
         """Run IG attribution for selected fragment groups in a spectrum."""
-        results = []
+        results: list[Any] = []
 
         spectrum = spec_info["spectrum"]
         if isinstance(spectrum, np.ndarray):
@@ -1048,7 +1042,12 @@ class IGAttributionTask(BaseTask):
             masked_group = backbone_groups[gi]
             try:
                 result = self._ig_single_group(
-                    model, spectra, masked_group, spectra_mask, spec_info, device,
+                    model,
+                    spectra,
+                    masked_group,
+                    spectra_mask,
+                    spec_info,
+                    device,
                 )
                 if result is not None:
                     results.append(result)
@@ -1060,7 +1059,9 @@ class IGAttributionTask(BaseTask):
                 self._n_ig_failures += 1
                 logger.warning(
                     "IG failed for spec %s group %s: %s",
-                    spec_info.get("idx"), masked_group.group_key, e,
+                    spec_info.get("idx"),
+                    masked_group.group_key,
+                    e,
                 )
             finally:
                 if torch.cuda.is_available():
@@ -1098,8 +1099,10 @@ class IGAttributionTask(BaseTask):
         baseline[:, :, 1] = 0.0  # zero intensity, keep m/z
         ig = IntegratedGradients(target)
         attr_raw, delta = ig.attribute(
-            spectra, baselines=baseline,
-            n_steps=self.ig_n_steps, internal_batch_size=self.ig_internal_batch_size,
+            spectra,
+            baselines=baseline,
+            n_steps=self.ig_n_steps,
+            internal_batch_size=self.ig_internal_batch_size,
             return_convergence_delta=True,
         )
         attr = reduce_attributions_to_peaks(attr_raw, reduction="abs_sum")
@@ -1108,7 +1111,8 @@ class IGAttributionTask(BaseTask):
         # --- Extract prediction quality ---
         true_mz_all = {idx: float(spec_info["mz"][idx]) for idx in masked_group.peak_indices}
         prediction = extract_prediction(
-            model=model, spectra=spectra,
+            model=model,
+            spectra=spectra,
             masked_indices=masked_group.peak_indices,
             base_idx=base_idx,
             spectra_mask=spectra_mask,
@@ -1127,8 +1131,7 @@ class IGAttributionTask(BaseTask):
         # or y8++[+1] sitting exactly 0.5 Da off the base z=2) would otherwise
         # slip through and show up as "unannotated" high-attribution leakage.
         sibling_mz = [
-            float(spec_info["mz"][pi]) for pi in masked_group.peak_indices
-            if pi != masked_group.base_idx and 0 <= pi < len(spec_info["mz"])
+            float(spec_info["mz"][pi]) for pi in masked_group.peak_indices if pi != masked_group.base_idx and 0 <= pi < len(spec_info["mz"])
         ]
         charge_variant_indices = detect_charge_variant_indices(
             masked_base_mz=masked_group.base_mz,
@@ -1162,7 +1165,8 @@ class IGAttributionTask(BaseTask):
         )
 
     def _aggregate_topk(
-        self, results: List[AttributionResult],
+        self,
+        results: List[AttributionResult],
     ) -> Dict[str, Any]:
         """Aggregate top-k attribution analysis across all masked groups."""
         analyses = [r.topk for r in results if r.topk is not None]
@@ -1171,21 +1175,16 @@ class IGAttributionTask(BaseTask):
 
         top1_cats = [a.top1_category for a in analyses]
         categories = list(STRUCTURAL_CATEGORIES)
-        top1_dist = {c: sum(1 for t in top1_cats if t == c) / len(top1_cats)
-                     for c in categories}
+        top1_dist = {c: sum(1 for t in top1_cats if t == c) / len(top1_cats) for c in categories}
 
         k_values = list(analyses[0].topk_fractions.keys()) if analyses else []
         avg_topk: Dict[str, Dict[str, float]] = {}
         for k in k_values:
-            avg_topk[k] = {
-                cat: float(np.mean([a.topk_fractions[k].get(cat, 0.0) for a in analyses]))
-                for cat in categories
-            }
+            avg_topk[k] = {cat: float(np.mean([a.topk_fractions[k].get(cat, 0.0) for a in analyses])) for cat in categories}
 
         ladder_present = [a.ladder_neighbors_present for a in analyses]
         ladder_in_top5 = [a.ladder_neighbors_in_top5 for a in analyses]
-        ladder_best_ranks = [a.ladder_neighbor_best_rank for a in analyses
-                             if a.ladder_neighbor_best_rank > 0]
+        ladder_best_ranks = [a.ladder_neighbor_best_rank for a in analyses if a.ladder_neighbor_best_rank > 0]
         ladder_top5_hit_rate = sum(1 for a in analyses if a.ladder_neighbors_in_top5 > 0) / len(analyses)
 
         return {
@@ -1241,11 +1240,15 @@ class IGAttributionTask(BaseTask):
         acids *absent* from the sequence (only runs when both populations
         exist so the comparison is symmetric).
         """
-        counts = {
-            "shift_hits": 0, "shift_total": 0,
-            "scramble_hits": 0, "scramble_total": 0,
-            "immonium_true_hits": 0, "immonium_true_total": 0,
-            "immonium_null_hits": 0, "immonium_null_total": 0,
+        counts: dict[str, Any] = {
+            "shift_hits": 0,
+            "shift_total": 0,
+            "scramble_hits": 0,
+            "scramble_total": 0,
+            "immonium_true_hits": 0,
+            "immonium_true_total": 0,
+            "immonium_null_hits": 0,
+            "immonium_null_total": 0,
         }
 
         # Null 1 — shift
@@ -1277,15 +1280,20 @@ class IGAttributionTask(BaseTask):
         neg_control_ions = compute_immonium_related_negative_control(residues)
         if library.immonium_related and neg_control_ions:
             neg_lib = ExtendedChemistryLibrary(
-                sequence="", precursor_charge=0,
+                sequence="",
+                precursor_charge=0,
                 immonium_related=neg_control_ions,
             )
             for pi in unannotated_indices:
                 peak_mz_val = float(mz[pi])
                 true_matches = [
-                    m for m in match_peak_to_extended_chemistry(
-                        peak_mz_val, library, **match_kwargs,
-                    ) if m.hypothesis_type == "immonium_related"
+                    m
+                    for m in match_peak_to_extended_chemistry(
+                        peak_mz_val,
+                        library,
+                        **match_kwargs,
+                    )
+                    if m.hypothesis_type == "immonium_related"
                 ]
                 if true_matches:
                     counts["immonium_true_hits"] += 1
@@ -1323,12 +1331,11 @@ class IGAttributionTask(BaseTask):
         # Per-spectrum novel chemistry data (for hero reports)
         self._novel_chemistry_per_spectrum: Dict[int, Dict[str, Any]] = {}
 
-        ALL_TYPES = ["d_ion", "w_ion", "internal_fragment", "side_chain_loss",
-                     "immonium_related", "precursor_combined_loss"]
+        ALL_TYPES = ["d_ion", "w_ion", "internal_fragment", "side_chain_loss", "immonium_related", "precursor_combined_loss"]  # noqa: N806
 
         # Accumulators — operate on ALL unannotated peaks (no confidence pre-filter)
         n_leu_ile = 0
-        by_type: Dict[str, int] = {t: 0 for t in ALL_TYPES}
+        by_type: Dict[str, int] = dict.fromkeys(ALL_TYPES, 0)
         by_frag: Dict[str, Dict[str, int]] = {}
         # Unbiased confidence comparison (all unannotated peaks)
         conf_matched_all: List[float] = []
@@ -1390,9 +1397,7 @@ class IGAttributionTask(BaseTask):
             for r in spec_results:
                 if r.charge_variant_indices:
                     spec_charge_variants.update(r.charge_variant_indices)
-            unannotated_charge_variant_indices = [
-                int(pi) for pi in unannotated_indices if int(pi) in spec_charge_variants
-            ]
+            unannotated_charge_variant_indices = [int(pi) for pi in unannotated_indices if int(pi) in spec_charge_variants]
             total_charge_variant_peaks += len(unannotated_charge_variant_indices)
 
             if conf_joint is not None:
@@ -1416,10 +1421,7 @@ class IGAttributionTask(BaseTask):
             residues = self._parse_residues(spec_info.get("sequence", "") or "")
             precursor_charge = spec_info.get("precursor_charge", 2)
             prec_mass = spec_info.get("precursor_mass", 0.0)
-            prec_mz = (
-                (prec_mass + precursor_charge * PROTON_MASS) / precursor_charge
-                if prec_mass > 0 else 0.0
-            )
+            prec_mz = (prec_mass + precursor_charge * PROTON_MASS) / precursor_charge if prec_mass > 0 else 0.0
 
             # --- Match ALL unannotated peaks ---
             spec_matched_candidates: List[Dict[str, Any]] = []
@@ -1452,27 +1454,29 @@ class IGAttributionTask(BaseTask):
                         by_frag.setdefault(frag_key, {})
                         by_frag[frag_key][ht] = by_frag[frag_key].get(ht, 0) + 1
 
-                    spec_matched_candidates.append({
-                        "peak_idx": int(pi),
-                        "mz": peak_mz,
-                        "intensity": float(intensity[pi]),
-                        "confidence": peak_conf,
-                        "attribution_max_over_groups": peak_attr,
-                        "is_charge_variant_of_masked": is_charge_variant,
-                        "matches": [
-                            {
-                                "type": m.hypothesis_type,
-                                "label": m.hypothesis_label,
-                                "expected_mz": round(m.expected_mz, 5),
-                                "error_da": round(m.error_da, 5),
-                                "error_ppm": round(m.error_ppm, 2),
-                                "residue": m.residue,
-                                "position": m.position,
-                                "discriminates_leu_ile": m.discriminates_leu_ile,
-                            }
-                            for m in matches
-                        ],
-                    })
+                    spec_matched_candidates.append(
+                        {
+                            "peak_idx": int(pi),
+                            "mz": peak_mz,
+                            "intensity": float(intensity[pi]),
+                            "confidence": peak_conf,
+                            "attribution_max_over_groups": peak_attr,
+                            "is_charge_variant_of_masked": is_charge_variant,
+                            "matches": [
+                                {
+                                    "type": m.hypothesis_type,
+                                    "label": m.hypothesis_label,
+                                    "expected_mz": round(m.expected_mz, 5),
+                                    "error_da": round(m.error_da, 5),
+                                    "error_ppm": round(m.error_ppm, 2),
+                                    "residue": m.residue,
+                                    "position": m.position,
+                                    "discriminates_leu_ile": m.discriminates_leu_ile,
+                                }
+                                for m in matches
+                            ],
+                        }
+                    )
                 else:
                     if peak_conf is not None:
                         conf_unmatched_all.append(peak_conf)
@@ -1539,8 +1543,11 @@ class IGAttributionTask(BaseTask):
         conf_str = f", conf_auroc={conf_auroc:.4f}" if conf_auroc is not None else ""
         logger.info(
             "  Novel chemistry: %d/%d matched (%.1f%%), scramble enrichment=%.1fx%s",
-            total_matched, total_unannotated, result["overall_hit_rate"] * 100,
-            result["null_models"]["scramble"]["enrichment"], conf_str,
+            total_matched,
+            total_unannotated,
+            result["overall_hit_rate"] * 100,
+            result["null_models"]["scramble"]["enrichment"],
+            conf_str,
         )
         return result
 
@@ -1575,6 +1582,7 @@ class IGAttributionTask(BaseTask):
         Pure aggregation (no iteration over spectra) — safe to test in
         isolation with synthetic counts.
         """
+
         def _rate(hits: int, total: int) -> float:
             return hits / total if total > 0 else 0.0
 
@@ -1648,8 +1656,9 @@ class IGAttributionTask(BaseTask):
         unmatched: np.ndarray,
         prefix: str,
     ) -> Dict[str, Any]:
-        """Mean/median/AUROC summary over two score populations (matched=1
-        vs unmatched=0). Returns an empty dict if both are empty.
+        """Mean/median/AUROC summary over two score populations (matched=1 vs unmatched=0).
+
+        Returns an empty dict if both are empty.
         """
         if len(matched) == 0 and len(unmatched) == 0:
             return {}
@@ -1676,7 +1685,7 @@ class IGAttributionTask(BaseTask):
 
         Returns a list of residue strings, e.g. ["V", "C[UNIMOD:4]", "E", "D"].
         """
-        residues = []
+        residues: list[Any] = []
         i = 0
         while i < len(sequence):
             if sequence[i].isupper():
@@ -1684,7 +1693,7 @@ class IGAttributionTask(BaseTask):
                 # Check for modification bracket
                 if i + 1 < len(sequence) and sequence[i + 1] == "[":
                     end = sequence.index("]", i + 1)
-                    res += sequence[i + 1:end + 1]
+                    res += sequence[i + 1 : end + 1]
                     i = end + 1
                 else:
                     i += 1
@@ -1697,13 +1706,13 @@ class IGAttributionTask(BaseTask):
     def _residue_mass(residue: str) -> float:
         """Get mass for a residue, including UNIMOD modifications."""
         # Known UNIMOD mass shifts
-        unimod_masses = {
-            "4": 57.021464,    # Carbamidomethyl (C)
-            "35": 15.994915,   # Oxidation (M)
-            "1": 42.010565,    # Acetyl (N-term)
-            "21": 79.966331,   # Phospho (S/T/Y)
-            "259": 8.014199,   # Label:13C(6)15N(2) (K/R)
-            "7": 0.984016,     # Deamidated (N/Q)
+        unimod_masses: dict[str, Any] = {
+            "4": 57.021464,  # Carbamidomethyl (C)
+            "35": 15.994915,  # Oxidation (M)
+            "1": 42.010565,  # Acetyl (N-term)
+            "21": 79.966331,  # Phospho (S/T/Y)
+            "259": 8.014199,  # Label:13C(6)15N(2) (K/R)
+            "7": 0.984016,  # Deamidated (N/Q)
             "28": -17.026549,  # Glu->pyro-Glu
             "27": -18.010565,  # Gln->pyro-Glu
         }
@@ -1725,14 +1734,17 @@ class IGAttributionTask(BaseTask):
     # ------------------------------------------------------------------
 
     def _compute_sequence_context(
-        self, masked_group: 'FragmentGroup', sequence: str, precursor_mass: float,
+        self,
+        masked_group: "FragmentGroup",
+        sequence: str,
+        precursor_mass: float,
     ) -> Optional[Dict[str, Any]]:
         """Compute sequence context for a masked fragment group.
 
         Returns cleavage site info, expected ladder neighbors, and complementary ion.
         """
         residues = self._parse_residues(sequence)
-        L = len(residues)
+        L = len(residues)  # noqa: N806
         if L < 2:
             return None
 
@@ -1775,7 +1787,7 @@ class IGAttributionTask(BaseTask):
         elif ion_type == "y":
             if position < 1 or position > L:
                 return None
-            spanned = residues[L - position:]
+            spanned = residues[L - position :]
             cleavage_left = residues[L - position - 1][0] if L - position - 1 >= 0 else "?"
             cleavage_right = residues[L - position][0] if L - position < L else "?"
             cleavage_pos = L - position + 1  # 1-indexed
@@ -1799,7 +1811,7 @@ class IGAttributionTask(BaseTask):
         else:
             return None
 
-        context = {
+        context: dict[str, Any] = {
             "peptide_length": L,
             "cleavage_position": cleavage_pos,
             "cleavage_left_residue": cleavage_left,
@@ -1836,7 +1848,7 @@ class IGAttributionTask(BaseTask):
         if cfg is None:
             return {}
 
-        def _get(obj, *keys, default=None):
+        def _get(obj: Any, *keys, default: Any = None) -> Any:  # type: ignore[no-untyped-def]
             """Safely traverse nested config (works with OmegaConf and dicts)."""
             for key in keys:
                 if obj is None:
@@ -1862,7 +1874,8 @@ class IGAttributionTask(BaseTask):
 
     @staticmethod
     def _compute_idx_to_mz_rank(
-        mz: Sequence[float], intensity: Sequence[float],
+        mz: Sequence[float],
+        intensity: Sequence[float],
     ) -> Dict[int, int]:
         """Return ``peak_idx → rank`` in m/z-sorted order, skipping padding."""
         valid = [i for i in range(len(mz)) if intensity[i] > 0]
@@ -1891,7 +1904,7 @@ class IGAttributionTask(BaseTask):
             if i in masked_set or spec_info["intensity"][i] <= 0:
                 continue
             ann = str(annotations[i]) if i < len(annotations) and annotations[i] else None
-            entry = {
+            entry: dict[str, Any] = {
                 "peak_idx": i,
                 "mz": float(spec_info["mz"][i]),
                 "intensity": float(spec_info["intensity"][i]),
@@ -1904,15 +1917,13 @@ class IGAttributionTask(BaseTask):
         peaks.sort(key=lambda p: p["attribution_for_this_group"], reverse=True)
         for vp in peaks:
             vp["rank_position"] = idx_to_rank.get(vp["peak_idx"], -1)
-            vp["rank_distance"] = (
-                abs(vp["rank_position"] - masked_base_rank)
-                if masked_base_rank >= 0 and vp["rank_position"] >= 0 else -1
-            )
+            vp["rank_distance"] = abs(vp["rank_position"] - masked_base_rank) if masked_base_rank >= 0 and vp["rank_position"] >= 0 else -1
         return peaks
 
     @staticmethod
     def _build_charge_state_variants_report(
-        result: AttributionResult, visible_peaks: List[Dict[str, Any]],
+        result: AttributionResult,
+        visible_peaks: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Structured list of the masked group's charge-state variants.
 
@@ -1928,7 +1939,8 @@ class IGAttributionTask(BaseTask):
             return []
 
         expected_at_charge = expected_mz_at_other_charges(
-            result.masked_group.base_mz, current_charge,
+            result.masked_group.base_mz,
+            current_charge,
         )
         vp_by_idx = {vp["peak_idx"]: vp for vp in visible_peaks}
         variants: List[Dict[str, Any]] = []
@@ -1943,14 +1955,16 @@ class IGAttributionTask(BaseTask):
                     best_z, best_exp, best_delta = z, exp_mz, d
             if best_z is None:
                 continue
-            variants.append({
-                "annotation": vp["annotation"] or f"{base_ion}{'+' * best_z} (inferred)",
-                "charge_state": best_z,
-                "mz": vp["mz"],
-                "expected_mz": round(best_exp, 4),
-                "attribution_for_this_group": vp["attribution_for_this_group"],
-                "rank_distance": vp.get("rank_distance", -1),
-            })
+            variants.append(
+                {
+                    "annotation": vp["annotation"] or f"{base_ion}{'+' * best_z} (inferred)",
+                    "charge_state": best_z,
+                    "mz": vp["mz"],
+                    "expected_mz": round(best_exp, 4),  # type: ignore[arg-type]
+                    "attribution_for_this_group": vp["attribution_for_this_group"],
+                    "rank_distance": vp.get("rank_distance", -1),
+                }
+            )
         return variants
 
     def _build_ranked_groups_report(
@@ -1960,10 +1974,10 @@ class IGAttributionTask(BaseTask):
         idx_to_rank: Dict[int, int],
         masked_base_rank: int,
     ) -> List[Dict[str, Any]]:
-        """Hero-JSON ``ranked_groups`` list. For same-series ladder/near-
-        ladder peaks with parseable annotations, decompose the gap into the
-        actual skipped residues from the peptide sequence (authoritative).
-        Falls back to closest-AA mass matching when unparseable.
+        """Hero-JSON ``ranked_groups`` list.
+
+        For same-series ladder/near- ladder peaks with parseable annotations, decompose the gap into the actual skipped residues from the peptide
+        sequence (authoritative). Falls back to closest-AA mass matching when unparseable.
         """
         topk = result.topk
         if topk is None or not topk.ranked_peaks:
@@ -1982,14 +1996,15 @@ class IGAttributionTask(BaseTask):
                 "category": rp.category,
                 "attribution_for_this_group": rp.attribution,
                 "is_group": rp.is_group,
-                "rank_distance": (
-                    abs(rp_rank_pos - masked_base_rank)
-                    if rp_rank_pos >= 0 and masked_base_rank >= 0 else -1
-                ),
+                "rank_distance": (abs(rp_rank_pos - masked_base_rank) if rp_rank_pos >= 0 and masked_base_rank >= 0 else -1),
             }
             if rp.category in ("ladder_neighbor", "near_ladder") and rp.mz > 0:
                 self._annotate_ladder_gap(
-                    entry, rp, masked_mz, masked_series_info, sequence_residues,
+                    entry,
+                    rp,
+                    masked_mz,
+                    masked_series_info,
+                    sequence_residues,
                 )
             if rp.category in EXTENDED_CHEMISTRY_CATEGORIES:
                 matches = novel_full_matches.get(rp.peak_idx)
@@ -2006,19 +2021,19 @@ class IGAttributionTask(BaseTask):
         masked_series_info: Optional[Tuple[str, int, int]],
         sequence_residues: List[str],
     ) -> None:
-        """Fill ``gap_da`` / ``gap_residues`` / ``resolved_by`` on a ranked-
-        peak dict. Prefers sequence-based decomposition (authoritative) when
-        both endpoints parse; falls back to closest-AA mass matching.
+        """Fill ``gap_da`` / ``gap_residues`` / ``resolved_by`` on a ranked- peak dict.
+
+        Prefers sequence-based decomposition (authoritative) when both endpoints parse; falls back to closest-AA mass matching.
         """
         gap = abs(rp.mz - masked_mz)
         entry["gap_da"] = round(gap, 4)
         peak_series_info = _parse_series_info(rp.annotation)
-        if (masked_series_info is not None and peak_series_info is not None
-                and masked_series_info[0] == peak_series_info[0]
-                and sequence_residues):
+        if masked_series_info is not None and peak_series_info is not None and masked_series_info[0] == peak_series_info[0] and sequence_residues:
             gap_residues = _gap_residues_from_sequence(
-                sequence_residues, masked_series_info[0],
-                masked_series_info[1], peak_series_info[1],
+                sequence_residues,
+                masked_series_info[0],
+                masked_series_info[1],
+                peak_series_info[1],
             )
             if gap_residues:
                 entry["gap_residues"] = "".join(gap_residues)
@@ -2026,7 +2041,8 @@ class IGAttributionTask(BaseTask):
                 if len(gap_residues) == 1:
                     entry["gap_residue"] = gap_residues[0]
                     entry["gap_residue_mass"] = round(
-                        AMINO_ACID_MASSES.get(gap_residues[0], 0.0), 5,
+                        AMINO_ACID_MASSES.get(gap_residues[0], 0.0),
+                        5,
                     )
                 return
         # Fallback: closest-AA mass match (ambiguous — interpret as a hint).
@@ -2048,24 +2064,29 @@ class IGAttributionTask(BaseTask):
         annotations = spec_info.get("annotations", [])
         masked_set = set(result.masked_group.peak_indices)
         n_peaks = len(spec_info["mz"])
-        n_annotated = sum(
-            1 for i, a in enumerate(annotations)
-            if a is not None and i not in masked_set and spec_info["intensity"][i] > 0
-        )
+        n_annotated = sum(1 for i, a in enumerate(annotations) if a is not None and i not in masked_set and spec_info["intensity"][i] > 0)
 
         idx_to_rank = self._compute_idx_to_mz_rank(
-            spec_info["mz"], spec_info["intensity"],
+            spec_info["mz"],
+            spec_info["intensity"],
         )
-        masked_base_rank = idx_to_rank.get(result.masked_group.base_idx, -1)
+        masked_base_rank = idx_to_rank.get(result.masked_group.base_idx, -1)  # type: ignore[arg-type]
 
         visible_peaks = self._build_visible_peaks_report(
-            result, spec_info, idx_to_rank, masked_base_rank,
+            result,
+            spec_info,
+            idx_to_rank,
+            masked_base_rank,
         )
         charge_state_variants = self._build_charge_state_variants_report(
-            result, visible_peaks,
+            result,
+            visible_peaks,
         )
         ranked_with_gaps = self._build_ranked_groups_report(
-            result, spec_info, idx_to_rank, masked_base_rank,
+            result,
+            spec_info,
+            idx_to_rank,
+            masked_base_rank,
         )
 
         quality = spec_info.get("spectrum_quality")
@@ -2075,7 +2096,8 @@ class IGAttributionTask(BaseTask):
                 "n_fragment_groups": quality.get("n_fragment_groups"),
                 "n_cleavage_sites": quality.get("n_cleavage_sites"),
             }
-            if quality and isinstance(quality, dict) else {}
+            if quality and isinstance(quality, dict)
+            else {}
         )
 
         seq_context = self._compute_sequence_context(
@@ -2084,7 +2106,7 @@ class IGAttributionTask(BaseTask):
             float(spec_info.get("precursor_mass", 0)),
         )
 
-        report = {
+        report: dict[str, Any] = {
             "spectrum": {
                 "_spec_idx": spec_info.get("idx"),
                 "sequence": spec_info.get("sequence", ""),
@@ -2107,15 +2129,10 @@ class IGAttributionTask(BaseTask):
                 "n_peaks": len(result.masked_group.peak_indices),
                 "peak_indices": result.masked_group.peak_indices,
                 "peak_annotations": [
-                    str(annotations[i]) if i < len(annotations) and annotations[i] else None
-                    for i in result.masked_group.peak_indices
+                    str(annotations[i]) if i < len(annotations) and annotations[i] else None for i in result.masked_group.peak_indices
                 ],
-                "peak_mz": [
-                    float(spec_info["mz"][i]) for i in result.masked_group.peak_indices
-                ],
-                "peak_intensity": [
-                    float(spec_info["intensity"][i]) for i in result.masked_group.peak_indices
-                ],
+                "peak_mz": [float(spec_info["mz"][i]) for i in result.masked_group.peak_indices],
+                "peak_intensity": [float(spec_info["intensity"][i]) for i in result.masked_group.peak_indices],
                 "rank_position": masked_base_rank,
             },
             "sequence_context": seq_context,
@@ -2140,10 +2157,7 @@ class IGAttributionTask(BaseTask):
                         "true_group_bin": pp.true_group_bin,
                         "true_offset_bin": pp.true_offset_bin,
                         "group_bin_distance": pp.group_bin_distance,
-                        "top5_candidates": [
-                            {"group_bin": g, "offset_bin": o, "mz": mz, "log_prob": lp}
-                            for g, o, mz, lp in pp.top_candidates
-                        ],
+                        "top5_candidates": [{"group_bin": g, "offset_bin": o, "mz": mz, "log_prob": lp} for g, o, mz, lp in pp.top_candidates],
                     }
                     for pp in (pred.peak_predictions if pred else [])
                 ],
@@ -2185,7 +2199,8 @@ class IGAttributionTask(BaseTask):
 
     def _save_results(self, results: Dict[str, Any]) -> None:
         """Save results to JSON."""
-        def _serialize(obj):
+
+        def _serialize(obj: Any) -> Any:
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             if isinstance(obj, (np.float32, np.float64)):
@@ -2195,12 +2210,18 @@ class IGAttributionTask(BaseTask):
             if isinstance(obj, Path):
                 return str(obj)
             if isinstance(obj, AttributionResult):
-                def _pred_dict(p):
+
+                def _pred_dict(p: PredictionInfo | None) -> Any:
                     if p is None:
                         return None
-                    return {"predicted_mz": p.predicted_mz_da, "true_mz": p.true_mz_da,
-                            "error_da": p.error_da, "error_ppm": p.error_ppm,
-                            "confidence": p.confidence}
+                    return {
+                        "predicted_mz": p.predicted_mz_da,
+                        "true_mz": p.true_mz_da,
+                        "error_da": p.error_da,
+                        "error_ppm": p.error_ppm,
+                        "confidence": p.confidence,
+                    }
+
                 return {
                     "spectrum_idx": obj.spectrum_idx,
                     "masked_group": obj.masked_group.group_key,
@@ -2208,11 +2229,9 @@ class IGAttributionTask(BaseTask):
                     "prediction": _pred_dict(obj.prediction),
                 }
             if isinstance(obj, PredictionInfo):
-                return {"predicted_mz": obj.predicted_mz_da, "true_mz": obj.true_mz_da,
-                        "error_da": obj.error_da, "error_ppm": obj.error_ppm}
+                return {"predicted_mz": obj.predicted_mz_da, "true_mz": obj.true_mz_da, "error_da": obj.error_da, "error_ppm": obj.error_ppm}
             if isinstance(obj, FragmentGroup):
-                return {"group_key": obj.group_key, "base_mz": obj.base_mz,
-                        "n_peaks": len(obj.peak_indices)}
+                return {"group_key": obj.group_key, "base_mz": obj.base_mz, "n_peaks": len(obj.peak_indices)}
             if isinstance(obj, TopKAnalysis):
                 return {
                     "top1_category": obj.top1_category,
@@ -2239,7 +2258,7 @@ class IGAttributionTask(BaseTask):
         - Novel chemistry: novel_overall_hit_rate, novel_scramble_enrichment,
           novel_conf_auroc
         """
-        metrics = {}
+        metrics: dict[str, Any] = {}
 
         # PA dissection: has the model learned structural priors?
         pa = task_results.get("pa_dissection", {})
@@ -2273,7 +2292,8 @@ class IGAttributionTask(BaseTask):
                 # the masked group from the denominator — the more honest
                 # number when ranking ablations for "real" chemistry discovery.
                 metrics["novel_overall_hit_rate_deleakage"] = novel.get(
-                    "overall_hit_rate_deleakage", 0.0,
+                    "overall_hit_rate_deleakage",
+                    0.0,
                 )
                 nulls = novel.get("null_models", {})
                 metrics["novel_scramble_enrichment"] = nulls.get("scramble", {}).get("enrichment", 0.0)

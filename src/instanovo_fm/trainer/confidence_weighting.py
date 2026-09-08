@@ -7,9 +7,9 @@ normalization to focus on high-confidence peaks within each spectrum.
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
-import torch.nn.functional as F
-from typing import Optional, Literal
 
 
 class ConfidenceWeightingStrategy:
@@ -35,7 +35,7 @@ class ConfidenceWeightingStrategy:
         blend_factor: float = 0.5,
         min_weight: float = 0.1,
         max_weight: float = 10.0,
-    ):
+    ) -> None:
         """Initialize confidence weighting strategy.
 
         Args:
@@ -81,7 +81,7 @@ class ConfidenceWeightingStrategy:
         Returns:
             Normalized confidence scores (B, L), centered around 0
         """
-        B, L = confidence.shape
+        B, L = confidence.shape  # noqa: N806
         normalized = torch.zeros_like(confidence)
 
         for i in range(B):
@@ -130,9 +130,7 @@ class ConfidenceWeightingStrategy:
         if self.weighting_function == "sigmoid":
             # Sigmoid: smooth transition around center
             # sigmoid(sharpness * (conf - center))
-            weights = torch.sigmoid(
-                self.sigmoid_sharpness * (normalized_confidence - self.sigmoid_center)
-            )
+            weights = torch.sigmoid(self.sigmoid_sharpness * (normalized_confidence - self.sigmoid_center))
 
         elif self.weighting_function == "linear":
             # Linear: clamp to [0, 1]
@@ -152,7 +150,7 @@ class ConfidenceWeightingStrategy:
     def compute_weights(
         self,
         confidence: torch.Tensor,  # (B, L) - raw confidence scores
-        intensity: torch.Tensor,   # (B, L) - peak intensities
+        intensity: torch.Tensor,  # (B, L) - peak intensities
         valid_mask: torch.Tensor,  # (B, L) - mask for valid peaks
         warmup_factor: float = 1.0,  # 0.0 = stage1, 1.0 = full stage2
     ) -> torch.Tensor:
@@ -190,16 +188,10 @@ class ConfidenceWeightingStrategy:
         # blend_factor = 0: intensity only
         # blend_factor = 1: confidence only
         # blend_factor = 0.5: equal blend
-        blended_weights = (
-            (1.0 - self.blend_factor) * intensity_weights +
-            self.blend_factor * conf_weights
-        )
+        blended_weights = (1.0 - self.blend_factor) * intensity_weights + self.blend_factor * conf_weights
 
         # 4. Gradual warmup: transition from intensity-only to blended
-        final_weights = (
-            (1.0 - warmup_factor) * intensity_weights +
-            warmup_factor * blended_weights
-        )
+        final_weights = (1.0 - warmup_factor) * intensity_weights + warmup_factor * blended_weights
 
         # 5. Apply safety bounds
         final_weights = final_weights.clamp(self.min_weight, self.max_weight)

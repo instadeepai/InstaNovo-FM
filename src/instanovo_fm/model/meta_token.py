@@ -8,7 +8,7 @@ on specific acquisition parameters and instrument settings.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import torch
 import torch.nn as nn
@@ -24,7 +24,8 @@ class FourierScalarEncoder(nn.Module):
         logspace: Use log-spaced frequencies (default: True).
     """
 
-    def __init__(self, n_freq: int = 16, logspace: bool = True):
+    def __init__(self, n_freq: int = 16, logspace: bool = True) -> None:
+        """Initialise the input."""
         super().__init__()
         if logspace:
             freqs = torch.logspace(0, math.log10(n_freq), n_freq)
@@ -33,12 +34,9 @@ class FourierScalarEncoder(nn.Module):
         self.register_buffer("freqs", freqs * 2 * math.pi)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: Scalar values in [0, 1] range, shape (B,).
+        """Args: x: Scalar values in [0, 1] range, shape (B,).
 
-        Returns:
-            Fourier features, shape (B, 2*n_freq).
+        Returns: Fourier features, shape (B, 2*n_freq).
         """
         freqs: torch.Tensor = self.freqs.to(dtype=x.dtype, device=x.device)  # type: ignore[assignment]
         x_expanded = x.unsqueeze(-1) * freqs  # (B, n_freq)
@@ -111,7 +109,8 @@ class MetaTokenEmbed(nn.Module):
         include_precursor_charge: bool = True,
         include_precursor_mass: bool = True,
         include_collision_energy: bool = True,
-    ):
+    ) -> None:
+        """Initialise the input."""
         super().__init__()
 
         # Store configuration
@@ -138,7 +137,7 @@ class MetaTokenEmbed(nn.Module):
 
         # Categorical field embeddings
         if include_frag_type:
-            self.token_embeddings['frag_type'] = nn.Sequential(
+            self.token_embeddings["frag_type"] = nn.Sequential(
                 nn.Embedding(n_frag, 64),
                 nn.Linear(64, proj_dim),
                 nn.GELU(),
@@ -146,7 +145,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_instrument:
-            self.token_embeddings['instrument'] = nn.Sequential(
+            self.token_embeddings["instrument"] = nn.Sequential(
                 nn.Embedding(n_instrument, 128),
                 nn.Linear(128, proj_dim),
                 nn.GELU(),
@@ -154,7 +153,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_acquisition:
-            self.token_embeddings['acquisition'] = nn.Sequential(
+            self.token_embeddings["acquisition"] = nn.Sequential(
                 nn.Embedding(n_acquisition, 32),
                 nn.Linear(32, proj_dim),
                 nn.GELU(),
@@ -162,7 +161,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_detector:
-            self.token_embeddings['detector'] = nn.Sequential(
+            self.token_embeddings["detector"] = nn.Sequential(
                 nn.Embedding(n_detector, 64),
                 nn.Linear(64, proj_dim),
                 nn.GELU(),
@@ -170,7 +169,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_enzyme:
-            self.token_embeddings['enzyme'] = nn.Sequential(
+            self.token_embeddings["enzyme"] = nn.Sequential(
                 nn.Embedding(n_enzyme, 64),
                 nn.Linear(64, proj_dim),
                 nn.GELU(),
@@ -178,7 +177,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_quant:
-            self.token_embeddings['quant'] = nn.Sequential(
+            self.token_embeddings["quant"] = nn.Sequential(
                 nn.Embedding(n_quant, 32),
                 nn.Linear(32, proj_dim),
                 nn.GELU(),
@@ -186,7 +185,7 @@ class MetaTokenEmbed(nn.Module):
             )
 
         if include_precursor_charge:
-            self.token_embeddings['precursor_charge'] = nn.Sequential(
+            self.token_embeddings["precursor_charge"] = nn.Sequential(
                 nn.Embedding(n_charge, 64),
                 nn.Linear(64, proj_dim),
                 nn.GELU(),
@@ -197,14 +196,14 @@ class MetaTokenEmbed(nn.Module):
         fourier_dim = 2 * n_freq  # sin + cos components
 
         if include_precursor_mass:
-            self.token_embeddings['precursor_mass'] = nn.Sequential(
+            self.token_embeddings["precursor_mass"] = nn.Sequential(
                 nn.Linear(fourier_dim, proj_dim),
                 nn.GELU(),
                 nn.LayerNorm(proj_dim),
             )
 
         if include_collision_energy:
-            self.token_embeddings['collision_energy'] = nn.Sequential(
+            self.token_embeddings["collision_energy"] = nn.Sequential(
                 nn.Linear(fourier_dim, proj_dim),
                 nn.GELU(),
                 nn.LayerNorm(proj_dim),
@@ -213,23 +212,23 @@ class MetaTokenEmbed(nn.Module):
         # Store enabled fields in order (for consistent token ordering)
         self.enabled_fields: List[str] = []
         if include_frag_type:
-            self.enabled_fields.append('frag_type')
+            self.enabled_fields.append("frag_type")
         if include_instrument:
-            self.enabled_fields.append('instrument')
+            self.enabled_fields.append("instrument")
         if include_acquisition:
-            self.enabled_fields.append('acquisition')
+            self.enabled_fields.append("acquisition")
         if include_detector:
-            self.enabled_fields.append('detector')
+            self.enabled_fields.append("detector")
         if include_enzyme:
-            self.enabled_fields.append('enzyme')
+            self.enabled_fields.append("enzyme")
         if include_quant:
-            self.enabled_fields.append('quant')
+            self.enabled_fields.append("quant")
         if include_precursor_charge:
-            self.enabled_fields.append('precursor_charge')
+            self.enabled_fields.append("precursor_charge")
         if include_precursor_mass:
-            self.enabled_fields.append('precursor_mass')
+            self.enabled_fields.append("precursor_mass")
         if include_collision_energy:
-            self.enabled_fields.append('collision_energy')
+            self.enabled_fields.append("collision_energy")
 
     def _normalize_continuous(self, x: torch.Tensor, max_val: float) -> torch.Tensor:
         """Normalize continuous feature to [0, 1] range.
@@ -277,8 +276,7 @@ class MetaTokenEmbed(nn.Module):
         return ids
 
     def forward(self, meta: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        Encode metadata into separate token embeddings, one per field.
+        """Encode metadata into separate token embeddings, one per field.
 
         Args:
             meta: Metadata dictionary with fields:
@@ -309,15 +307,15 @@ class MetaTokenEmbed(nn.Module):
 
         # Map metadata keys to field names
         meta_key_mapping = {
-            'frag_type': 'frag_type',
-            'instrument': 'search_instrument',
-            'acquisition': 'search_acquisition',
-            'detector': 'search_detector',
-            'enzyme': 'search_enzyme',
-            'quant': 'search_quant',
-            'precursor_charge': 'precursor_charge',
-            'precursor_mass': 'precursor_mass',
-            'collision_energy': 'collision_energy',
+            "frag_type": "frag_type",
+            "instrument": "search_instrument",
+            "acquisition": "search_acquisition",
+            "detector": "search_detector",
+            "enzyme": "search_enzyme",
+            "quant": "search_quant",
+            "precursor_charge": "precursor_charge",
+            "precursor_mass": "precursor_mass",
+            "collision_energy": "collision_energy",
         }
 
         # Process each enabled field in order
@@ -325,11 +323,11 @@ class MetaTokenEmbed(nn.Module):
             if field_name not in self.token_embeddings:
                 continue
 
-            if field_name in ['precursor_mass', 'collision_energy']:
+            if field_name in ["precursor_mass", "collision_energy"]:
                 # Continuous field: Fourier encode then project
                 meta_key = meta_key_mapping[field_name]
 
-                if field_name == 'precursor_mass':
+                if field_name == "precursor_mass":
                     if meta_key in meta:
                         normalized = self._normalize_continuous(meta[meta_key], self.precursor_mass_max)
                     else:
@@ -375,7 +373,7 @@ class MetaTokenEmbed(nn.Module):
         categorical_features = []
 
         for field_name in self.enabled_fields:
-            if field_name in ['precursor_mass', 'collision_energy']:
+            if field_name in ["precursor_mass", "collision_energy"]:
                 continuous_features.append(field_name)
             else:
                 categorical_features.append(field_name)

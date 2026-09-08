@@ -1,28 +1,25 @@
-"""
-Metrics computation for foundational pre-training.
+"""Metrics computation for foundational pre-training.
 
 This module contains streaming metrics computation for validation,
 including MAE in Daltons, cosine similarity, and auxiliary task metrics.
 """
 
 import random
+from typing import Any, Dict, Optional
 
 import numpy as np
-from typing import Dict, Any, Optional
-
 import torch
 import torch.nn.functional as F
 
 
 class StreamingMetrics:
-    """
-    Streaming metrics computation for validation to prevent OOM on large datasets.
+    """Streaming metrics computation for validation to prevent OOM on large datasets.
 
     Computes MAE in Daltons, percentage within thresholds,
     and auxiliary task metrics in a memory-efficient streaming fashion.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize streaming metrics accumulators."""
         # Core metrics
         self.running_loss = 0.0
@@ -30,11 +27,7 @@ class StreamingMetrics:
         self.running_mae_squared = 0.0  # For std calculation
 
         # Counters
-        self.running_counts = {
-            'losses': 0,
-            'tokens': 0,
-            'spectra': 0
-        }
+        self.running_counts: dict[str, Any] = {"losses": 0, "tokens": 0, "spectra": 0}
 
         # Percentage counters
         self.tokens_within_1da = 0
@@ -49,40 +42,40 @@ class StreamingMetrics:
         self.spectrum_std_sum = 0.0
 
         # Limited accumulator for median calculation (reservoir sampling)
-        self.running_median_accumulator = []
-        self.running_median_ppm_accumulator = []  # For PPM median
+        self.running_median_accumulator: list[Any] = []
+        self.running_median_ppm_accumulator: list[Any] = []  # For PPM median
         self.max_median_samples = 50000
         self._median_total_seen = 0  # Reservoir sampling index for Da
         self._median_ppm_total_seen = 0  # Reservoir sampling index for PPM
 
         # Auxiliary metrics (intensity only)
-        self.aux_intensity_preds = []  # Regression predictions (continuous)
-        self.aux_intensity_targets = []  # Regression targets (continuous)
+        self.aux_intensity_preds: list[Any] = []  # Regression predictions (continuous)
+        self.aux_intensity_targets: list[Any] = []  # Regression targets (continuous)
 
         # Per-spectrum intensity ranking metrics (annotation-free, capped)
-        self.intensity_spearman_scores = []  # Per-spectrum Spearman rank correlations
-        self.intensity_topk_recalls = {5: [], 10: []}  # Per-spectrum Top-K recall
+        self.intensity_spearman_scores: list[Any] = []  # Per-spectrum Spearman rank correlations
+        self.intensity_topk_recalls: dict[int, Any] = {5: [], 10: []}  # Per-spectrum Top-K recall
         self.max_spearman_spectra = 10_000  # Cap to avoid per-spectrum loop over entire validation set
         self._spearman_spectra_seen = 0
 
         # Entropy metrics for epistemic uncertainty
-        self.group_entropies = []  # Entropy of group predictions
-        self.offset_entropies = []  # Entropy of offset predictions
+        self.group_entropies: list[Any] = []  # Entropy of group predictions
+        self.offset_entropies: list[Any] = []  # Entropy of offset predictions
         self.max_entropy_samples = 10000
 
         # Classifier confidence metrics
-        self.conf_group_list = []  # Group confidences
-        self.conf_offset_list = []  # Offset confidences
-        self.conf_joint_list = []  # Joint confidences
+        self.conf_group_list: list[Any] = []  # Group confidences
+        self.conf_offset_list: list[Any] = []  # Offset confidences
+        self.conf_joint_list: list[Any] = []  # Joint confidences
         # Cap matches max_calibration_samples so ECE (group_preds/targets + conf_*)
         # uses the same sample budget — reduces ECE variance (CV) at no training cost.
         self.max_confidence_samples = 50000
 
         # Calibration metrics (for ECE computation)
-        self.group_preds_list = []  # Group predictions
-        self.offset_preds_list = []  # Offset predictions
-        self.group_targets_list = []  # Group targets
-        self.offset_targets_list = []  # Offset targets
+        self.group_preds_list: list[Any] = []  # Group predictions
+        self.offset_preds_list: list[Any] = []  # Offset predictions
+        self.group_targets_list: list[Any] = []  # Group targets
+        self.offset_targets_list: list[Any] = []  # Offset targets
         self.max_calibration_samples = 50000  # Cap for ECE accumulator lists
 
         # Bin accuracy counters (unconditional, streaming)
@@ -92,7 +85,7 @@ class StreamingMetrics:
         self.bin_acc_group_top5_correct = 0
         self.bin_acc_offset_top5_correct = 0
         self.bin_acc_offset_pm1_correct = 0  # ±1 bin tolerance
-        self.bin_acc_bin_pm1_correct = 0     # group exact + offset ±1
+        self.bin_acc_bin_pm1_correct = 0  # group exact + offset ±1
         self.bin_acc_total = 0
 
         # Bin-only metrics (for delta Da comparison)
@@ -105,11 +98,10 @@ class StreamingMetrics:
         self.bin_only_median_ppm_accumulator: list = []
         self._bin_only_median_ppm_total_seen = 0
 
-
     def update_loss(self, loss: float) -> None:
         """Update running loss."""
-        self.running_loss = (self.running_loss * self.running_counts['losses'] + loss) / (self.running_counts['losses'] + 1)
-        self.running_counts['losses'] += 1
+        self.running_loss = (self.running_loss * self.running_counts["losses"] + loss) / (self.running_counts["losses"] + 1)
+        self.running_counts["losses"] += 1
 
     def update_bin_accuracy(
         self,
@@ -142,12 +134,12 @@ class StreamingMetrics:
         if n == 0:
             return
 
-        group_correct = (gp == gt)
-        offset_correct = (op == ot)
+        group_correct = gp == gt
+        offset_correct = op == ot
         bin_correct = group_correct & offset_correct
 
         # ±1 bin tolerance (offset within 1 bin of target, group must be exact)
-        offset_pm1_correct = ((op - ot).abs() <= 1)
+        offset_pm1_correct = (op - ot).abs() <= 1
         bin_pm1_correct = group_correct & offset_pm1_correct
 
         # Top-5 accuracy
@@ -160,15 +152,17 @@ class StreamingMetrics:
         offset_top5_hit = (offset_top5 == ot.unsqueeze(-1)).any(dim=-1)
 
         # Batch all sums into a single GPU→CPU transfer (7 values instead of 7 .item() calls)
-        counts = torch.stack([
-            group_correct.sum(),
-            offset_correct.sum(),
-            bin_correct.sum(),
-            offset_pm1_correct.sum(),
-            bin_pm1_correct.sum(),
-            group_top5_hit.sum(),
-            offset_top5_hit.sum(),
-        ]).cpu()
+        counts = torch.stack(
+            [
+                group_correct.sum(),
+                offset_correct.sum(),
+                bin_correct.sum(),
+                offset_pm1_correct.sum(),
+                bin_pm1_correct.sum(),
+                group_top5_hit.sum(),
+                offset_top5_hit.sum(),
+            ]
+        ).cpu()
 
         self.bin_acc_group_correct += int(counts[0])
         self.bin_acc_offset_correct += int(counts[1])
@@ -180,14 +174,8 @@ class StreamingMetrics:
 
         self.bin_acc_total += n
 
-    def update_entropy_metrics(
-        self,
-        group_logits: torch.Tensor,
-        offset_logits: torch.Tensor,
-        valid_mask: torch.Tensor
-    ) -> None:
-        """
-        Update entropy metrics for epistemic uncertainty estimation.
+    def update_entropy_metrics(self, group_logits: torch.Tensor, offset_logits: torch.Tensor, valid_mask: torch.Tensor) -> None:
+        """Update entropy metrics for epistemic uncertainty estimation.
 
         Args:
             group_logits: Group prediction logits (B, L, n_groups)
@@ -225,8 +213,7 @@ class StreamingMetrics:
         offset_targets: torch.Tensor,
         valid_mask: torch.Tensor,
     ) -> None:
-        """
-        Update classifier confidence metrics.
+        """Update classifier confidence metrics.
 
         Args:
             aux_out: Auxiliary outputs containing confidence metrics
@@ -267,15 +254,8 @@ class StreamingMetrics:
         self.group_targets_list.append(group_targets[valid_mask].cpu())
         self.offset_targets_list.append(offset_targets[valid_mask].cpu())
 
-
-    def update_mz_metrics(
-        self,
-        pred_mz: torch.Tensor,
-        target_mz: torch.Tensor,
-        valid_mask: torch.Tensor
-    ) -> None:
-        """
-        Update m/z prediction metrics (vectorized batch implementation).
+    def update_mz_metrics(self, pred_mz: torch.Tensor, target_mz: torch.Tensor, valid_mask: torch.Tensor) -> None:
+        """Update m/z prediction metrics (vectorized batch implementation).
 
         Args:
             pred_mz: Predicted m/z values (B, L) in actual m/z units
@@ -289,7 +269,7 @@ class StreamingMetrics:
         all_valid_tgt = target_mz[valid_mask]  # (N,)
 
         if all_valid_pred.numel() == 0:
-            self.running_counts['spectra'] += batch_size
+            self.running_counts["spectra"] += batch_size
             return
 
         # Compute errors (Da) - all on GPU
@@ -306,7 +286,7 @@ class StreamingMetrics:
 
         # Single GPU→CPU transfer for all scalar accumulations
         abs_errors_sum = abs_errors.sum().item()
-        abs_errors_sq_sum = (abs_errors ** 2).sum().item()
+        abs_errors_sq_sum = (abs_errors**2).sum().item()
         count_1da = within_1da.sum().item()
         count_01da = within_01da.sum().item()
         count_10ppm = within_10ppm.sum().item()
@@ -314,11 +294,11 @@ class StreamingMetrics:
         current_tokens = abs_errors.numel()
 
         # Update streaming MAE
-        old_count = self.running_counts['tokens']
+        old_count = self.running_counts["tokens"]
         new_count = old_count + current_tokens
         self.running_mae = (self.running_mae * old_count + abs_errors_sum) / new_count
         self.running_mae_squared = (self.running_mae_squared * old_count + abs_errors_sq_sum) / new_count
-        self.running_counts['tokens'] = new_count
+        self.running_counts["tokens"] = new_count
 
         # Update percentage counters
         self.tokens_within_1da += count_1da
@@ -330,19 +310,23 @@ class StreamingMetrics:
         batch_sample_size = min(500, current_tokens)
         if batch_sample_size > 0:
             # Subsample from this batch uniformly (avoids always taking first N)
-            perm = torch.randperm(current_tokens, device='cpu')[:batch_sample_size]
+            perm = torch.randperm(current_tokens, device="cpu")[:batch_sample_size]
             batch_da = abs_errors.cpu()[perm].tolist()
             batch_ppm = abs_errors_ppm.cpu()[perm].tolist()
 
             self._reservoir_update(
-                self.running_median_accumulator, self._median_total_seen,
-                batch_da, self.max_median_samples,
+                self.running_median_accumulator,
+                self._median_total_seen,
+                batch_da,
+                self.max_median_samples,
             )
             self._median_total_seen += batch_sample_size
 
             self._reservoir_update(
-                self.running_median_ppm_accumulator, self._median_ppm_total_seen,
-                batch_ppm, self.max_median_samples,
+                self.running_median_ppm_accumulator,
+                self._median_ppm_total_seen,
+                batch_ppm,
+                self.max_median_samples,
             )
             self._median_ppm_total_seen += batch_sample_size
 
@@ -355,7 +339,7 @@ class StreamingMetrics:
         spectrum_sums.scatter_add_(0, spectrum_idx, abs_errors)
 
         spectrum_sq_sums = torch.zeros(batch_size, device=pred_mz.device)
-        spectrum_sq_sums.scatter_add_(0, spectrum_idx, abs_errors ** 2)
+        spectrum_sq_sums.scatter_add_(0, spectrum_idx, abs_errors**2)
 
         spectrum_counts = torch.zeros(batch_size, device=pred_mz.device)
         spectrum_counts.scatter_add_(0, spectrum_idx, torch.ones_like(abs_errors))
@@ -369,8 +353,7 @@ class StreamingMetrics:
         multi_token_spectra = spectrum_counts > 1
         if multi_token_spectra.any():
             spectrum_vars[multi_token_spectra] = (
-                spectrum_sq_sums[multi_token_spectra] / spectrum_counts[multi_token_spectra]
-                - spectrum_means[multi_token_spectra] ** 2
+                spectrum_sq_sums[multi_token_spectra] / spectrum_counts[multi_token_spectra] - spectrum_means[multi_token_spectra] ** 2
             ).clamp(min=0.0)
         spectrum_stds = spectrum_vars.sqrt()
 
@@ -378,16 +361,10 @@ class StreamingMetrics:
         self.spectrum_mae_sum += spectrum_means.sum().item()
         self.spectrum_std_sum += spectrum_stds.sum().item()
 
-        self.running_counts['spectra'] += batch_size
+        self.running_counts["spectra"] += batch_size
 
-    def update_mz_metrics_bin_only(
-        self,
-        pred_mz_bin: torch.Tensor,
-        target_mz: torch.Tensor,
-        valid_mask: torch.Tensor
-    ) -> None:
-        """
-        Update bin-only m/z metrics (no delta correction) for comparison.
+    def update_mz_metrics_bin_only(self, pred_mz_bin: torch.Tensor, target_mz: torch.Tensor, valid_mask: torch.Tensor) -> None:
+        """Update bin-only m/z metrics (no delta correction) for comparison.
 
         Args:
             pred_mz_bin: Bin-center predictions (B, L) in Daltons
@@ -421,11 +398,13 @@ class StreamingMetrics:
         # Reservoir sample for median PPM
         batch_sample_size = min(500, current_tokens)
         if batch_sample_size > 0:
-            perm = torch.randperm(current_tokens, device='cpu')[:batch_sample_size]
+            perm = torch.randperm(current_tokens, device="cpu")[:batch_sample_size]
             batch_ppm = abs_errors_ppm.cpu()[perm].tolist()
             self._reservoir_update(
-                self.bin_only_median_ppm_accumulator, self._bin_only_median_ppm_total_seen,
-                batch_ppm, self.max_median_samples,
+                self.bin_only_median_ppm_accumulator,
+                self._bin_only_median_ppm_total_seen,
+                batch_ppm,
+                self.max_median_samples,
             )
             self._bin_only_median_ppm_total_seen += batch_sample_size
 
@@ -435,8 +414,7 @@ class StreamingMetrics:
         batch: Dict[str, torch.Tensor],
         aux_config: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """
-        Update auxiliary task metrics (intensity only).
+        """Update auxiliary task metrics (intensity only).
 
         Args:
             aux_out: Auxiliary outputs from model
@@ -476,7 +454,7 @@ class StreamingMetrics:
 
                         spec_mask = valid_mask[i]  # (L,)
                         spec_p = inten_preds_2d[i, spec_mask]  # (n_valid,)
-                        spec_t = inten_labels[i, spec_mask]     # (n_valid,)
+                        spec_t = inten_labels[i, spec_mask]  # (n_valid,)
 
                         # Spearman rank correlation (torch-based, no scipy)
                         spearman = self._spearman_correlation(spec_p, spec_t)
@@ -491,7 +469,7 @@ class StreamingMetrics:
 
                         self._spearman_spectra_seen += 1
 
-    def gather_across_ranks(self, accelerator) -> None:
+    def gather_across_ranks(self, accelerator: Any) -> None:
         """Gather scalar metric accumulators across distributed ranks.
 
         After distributed validation, each rank holds metrics from its subset
@@ -516,46 +494,54 @@ class StreamingMetrics:
             return
 
         # ---- Pack scalar SUM counters (23 values) ----
-        sums = torch.tensor([
-            # Core counters
-            float(self.running_counts['losses']),
-            float(self.running_counts['tokens']),
-            float(self.running_counts['spectra']),
-            # Threshold counters (Da)
-            float(self.tokens_within_1da),
-            float(self.tokens_within_01da),
-            # Threshold counters (PPM)
-            float(self.tokens_within_10ppm),
-            float(self.tokens_within_20ppm),
-            # Per-spectrum sums
-            self.spectrum_mae_sum,
-            self.spectrum_std_sum,
-            # Bin accuracy counters
-            float(self.bin_acc_group_correct),
-            float(self.bin_acc_offset_correct),
-            float(self.bin_acc_bin_correct),
-            float(self.bin_acc_group_top5_correct),
-            float(self.bin_acc_offset_top5_correct),
-            float(self.bin_acc_offset_pm1_correct),
-            float(self.bin_acc_bin_pm1_correct),
-            float(self.bin_acc_total),
-            # Bin-only counters
-            float(self.bin_only_tokens_within_01da),
-            float(self.bin_only_tokens_within_1da),
-            float(self.bin_only_tokens_within_10ppm),
-            float(self.bin_only_tokens_within_20ppm),
-            float(self.bin_only_token_count),
-        ], dtype=torch.float64, device=accelerator.device)
+        sums = torch.tensor(
+            [
+                # Core counters
+                float(self.running_counts["losses"]),
+                float(self.running_counts["tokens"]),
+                float(self.running_counts["spectra"]),
+                # Threshold counters (Da)
+                float(self.tokens_within_1da),
+                float(self.tokens_within_01da),
+                # Threshold counters (PPM)
+                float(self.tokens_within_10ppm),
+                float(self.tokens_within_20ppm),
+                # Per-spectrum sums
+                self.spectrum_mae_sum,
+                self.spectrum_std_sum,
+                # Bin accuracy counters
+                float(self.bin_acc_group_correct),
+                float(self.bin_acc_offset_correct),
+                float(self.bin_acc_bin_correct),
+                float(self.bin_acc_group_top5_correct),
+                float(self.bin_acc_offset_top5_correct),
+                float(self.bin_acc_offset_pm1_correct),
+                float(self.bin_acc_bin_pm1_correct),
+                float(self.bin_acc_total),
+                # Bin-only counters
+                float(self.bin_only_tokens_within_01da),
+                float(self.bin_only_tokens_within_1da),
+                float(self.bin_only_tokens_within_10ppm),
+                float(self.bin_only_tokens_within_20ppm),
+                float(self.bin_only_token_count),
+            ],
+            dtype=torch.float64,
+            device=accelerator.device,
+        )
 
         # ---- Pack weighted-average numerators (4 values) ----
         # Convert running averages back to raw sums before gathering:
         #   numerator = running_avg * count
-        weighted_numerators = torch.tensor([
-            self.running_loss * self.running_counts['losses'],
-            self.running_mae * self.running_counts['tokens'],
-            self.running_mae_squared * self.running_counts['tokens'],
-            self.bin_only_running_mae * self.bin_only_token_count,
-        ], dtype=torch.float64, device=accelerator.device)
+        weighted_numerators = torch.tensor(
+            [
+                self.running_loss * self.running_counts["losses"],
+                self.running_mae * self.running_counts["tokens"],
+                self.running_mae_squared * self.running_counts["tokens"],
+                self.bin_only_running_mae * self.bin_only_token_count,
+            ],
+            dtype=torch.float64,
+            device=accelerator.device,
+        )
 
         # ---- Single gather call for all 27 scalars ----
         all_scalars = torch.cat([sums, weighted_numerators])
@@ -578,67 +564,92 @@ class StreamingMetrics:
 
         # ---- Unpack SUM counters ----
         i = 0
-        self.running_counts['losses'] = int(total[i].item()); i += 1
-        self.running_counts['tokens'] = int(total[i].item()); i += 1
-        self.running_counts['spectra'] = int(total[i].item()); i += 1
-        self.tokens_within_1da = int(total[i].item()); i += 1
-        self.tokens_within_01da = int(total[i].item()); i += 1
-        self.tokens_within_10ppm = int(total[i].item()); i += 1
-        self.tokens_within_20ppm = int(total[i].item()); i += 1
-        self.spectrum_mae_sum = total[i].item(); i += 1
-        self.spectrum_std_sum = total[i].item(); i += 1
-        self.bin_acc_group_correct = int(total[i].item()); i += 1
-        self.bin_acc_offset_correct = int(total[i].item()); i += 1
-        self.bin_acc_bin_correct = int(total[i].item()); i += 1
-        self.bin_acc_group_top5_correct = int(total[i].item()); i += 1
-        self.bin_acc_offset_top5_correct = int(total[i].item()); i += 1
-        self.bin_acc_offset_pm1_correct = int(total[i].item()); i += 1
-        self.bin_acc_bin_pm1_correct = int(total[i].item()); i += 1
-        self.bin_acc_total = int(total[i].item()); i += 1
-        self.bin_only_tokens_within_01da = int(total[i].item()); i += 1
-        self.bin_only_tokens_within_1da = int(total[i].item()); i += 1
-        self.bin_only_tokens_within_10ppm = int(total[i].item()); i += 1
-        self.bin_only_tokens_within_20ppm = int(total[i].item()); i += 1
-        self.bin_only_token_count = int(total[i].item()); i += 1
+        self.running_counts["losses"] = int(total[i].item())
+        i += 1
+        self.running_counts["tokens"] = int(total[i].item())
+        i += 1
+        self.running_counts["spectra"] = int(total[i].item())
+        i += 1
+        self.tokens_within_1da = int(total[i].item())
+        i += 1
+        self.tokens_within_01da = int(total[i].item())
+        i += 1
+        self.tokens_within_10ppm = int(total[i].item())
+        i += 1
+        self.tokens_within_20ppm = int(total[i].item())
+        i += 1
+        self.spectrum_mae_sum = total[i].item()
+        i += 1
+        self.spectrum_std_sum = total[i].item()
+        i += 1
+        self.bin_acc_group_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_offset_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_bin_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_group_top5_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_offset_top5_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_offset_pm1_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_bin_pm1_correct = int(total[i].item())
+        i += 1
+        self.bin_acc_total = int(total[i].item())
+        i += 1
+        self.bin_only_tokens_within_01da = int(total[i].item())
+        i += 1
+        self.bin_only_tokens_within_1da = int(total[i].item())
+        i += 1
+        self.bin_only_tokens_within_10ppm = int(total[i].item())
+        i += 1
+        self.bin_only_tokens_within_20ppm = int(total[i].item())
+        i += 1
+        self.bin_only_token_count = int(total[i].item())
+        i += 1
 
         # ---- Unpack weighted-average numerators → reconvert to averages ----
-        loss_sum = total[i].item(); i += 1
-        mae_sum = total[i].item(); i += 1
-        mae_sq_sum = total[i].item(); i += 1
-        bin_only_mae_sum = total[i].item(); i += 1
+        loss_sum = total[i].item()
+        i += 1
+        mae_sum = total[i].item()
+        i += 1
+        mae_sq_sum = total[i].item()
+        i += 1
+        bin_only_mae_sum = total[i].item()
+        i += 1
 
-        if self.running_counts['losses'] > 0:
-            self.running_loss = loss_sum / self.running_counts['losses']
-        if self.running_counts['tokens'] > 0:
-            self.running_mae = mae_sum / self.running_counts['tokens']
-            self.running_mae_squared = mae_sq_sum / self.running_counts['tokens']
+        if self.running_counts["losses"] > 0:
+            self.running_loss = loss_sum / self.running_counts["losses"]
+        if self.running_counts["tokens"] > 0:
+            self.running_mae = mae_sum / self.running_counts["tokens"]
+            self.running_mae_squared = mae_sq_sum / self.running_counts["tokens"]
         if self.bin_only_token_count > 0:
             self.bin_only_running_mae = bin_only_mae_sum / self.bin_only_token_count
 
     def compute_final_metrics(self) -> Dict[str, float]:
-        """
-        Compute final metrics from streaming data.
+        """Compute final metrics from streaming data.
 
         Returns:
             Dictionary containing all computed metrics
         """
-        if self.running_counts['tokens'] == 0:
-            return {"loss": float('inf')}
+        if self.running_counts["tokens"] == 0:
+            return {"loss": float("inf")}
 
         # Calculate median from accumulated samples
-        median_ae_da = float(np.median(self.running_median_accumulator)) if self.running_median_accumulator else self.running_mae
+        float(np.median(self.running_median_accumulator)) if self.running_median_accumulator else self.running_mae
         median_ae_ppm = float(np.median(self.running_median_ppm_accumulator)) if self.running_median_ppm_accumulator else 0.0
 
         # Percentage metrics (Da)
-        pct_within_1da = (self.tokens_within_1da / self.running_counts['tokens']) * 100
-        pct_within_01da = (self.tokens_within_01da / self.running_counts['tokens']) * 100
+        pct_within_1da = (self.tokens_within_1da / self.running_counts["tokens"]) * 100
+        pct_within_01da = (self.tokens_within_01da / self.running_counts["tokens"]) * 100
 
         # Percentage metrics (PPM)
-        pct_within_10ppm = (self.tokens_within_10ppm / self.running_counts['tokens']) * 100
-        pct_within_20ppm = (self.tokens_within_20ppm / self.running_counts['tokens']) * 100
+        pct_within_10ppm = (self.tokens_within_10ppm / self.running_counts["tokens"]) * 100
+        pct_within_20ppm = (self.tokens_within_20ppm / self.running_counts["tokens"]) * 100
 
         # Core metrics
-        metrics = {
+        metrics: dict[str, Any] = {
             "loss": self.running_loss,
             # PPM metrics (prioritized)
             "median_ae_ppm": median_ae_ppm,
@@ -649,8 +660,8 @@ class StreamingMetrics:
             "pct_within_1da": pct_within_1da,
             "pct_within_01da": pct_within_01da,
             # Other metrics
-            "total_spectra": self.running_counts['spectra'],
-            "total_masked_tokens": self.running_counts['tokens'],
+            "total_spectra": self.running_counts["spectra"],
+            "total_masked_tokens": self.running_counts["tokens"],
         }
 
         # Bin accuracy metrics (unconditional)
@@ -811,34 +822,32 @@ class StreamingMetrics:
 
     def _compute_confidence_metrics(self) -> Dict[str, float]:
         """Compute classifier confidence metrics: ECE_group, ECE_offset, conf_joint_mean."""
-        metrics = {}
+        metrics: dict[str, Any] = {}
 
         if self.conf_joint_list:
             conf_joint = np.array(self.conf_joint_list)
             metrics["conf_joint_mean"] = float(np.mean(conf_joint))
 
         # Compute ECE if we have predictions and targets
-        if (self.group_preds_list and self.group_targets_list and
-            self.conf_group_list):
+        if self.group_preds_list and self.group_targets_list and self.conf_group_list:
             from instanovo_fm.trainer.calibration import compute_ece
 
             # Concatenate predictions and targets
             group_preds = torch.cat(self.group_preds_list, dim=0)
             group_targets = torch.cat(self.group_targets_list, dim=0)
-            conf_group_tensor = torch.tensor(self.conf_group_list[:len(group_preds)])
+            conf_group_tensor = torch.tensor(self.conf_group_list[: len(group_preds)])
 
             # Compute ECE for group head
             ece_group, _, _, _ = compute_ece(conf_group_tensor, group_preds, group_targets, n_bins=15)
             metrics["ece_group"] = ece_group
 
-        if (self.offset_preds_list and self.offset_targets_list and
-            self.conf_offset_list):
+        if self.offset_preds_list and self.offset_targets_list and self.conf_offset_list:
             from instanovo_fm.trainer.calibration import compute_ece
 
             # Concatenate predictions and targets
             offset_preds = torch.cat(self.offset_preds_list, dim=0)
             offset_targets = torch.cat(self.offset_targets_list, dim=0)
-            conf_offset_tensor = torch.tensor(self.conf_offset_list[:len(offset_preds)])
+            conf_offset_tensor = torch.tensor(self.conf_offset_list[: len(offset_preds)])
 
             # Compute ECE for offset head
             ece_offset, _, _, _ = compute_ece(conf_offset_tensor, offset_preds, offset_targets, n_bins=15)
@@ -851,11 +860,7 @@ class StreamingMetrics:
         self.running_loss = 0.0
         self.running_mae = 0.0
         self.running_mae_squared = 0.0
-        self.running_counts = {
-            'losses': 0,
-            'tokens': 0,
-            'spectra': 0
-        }
+        self.running_counts = {"losses": 0, "tokens": 0, "spectra": 0}
         self.tokens_within_1da = 0
         self.tokens_within_01da = 0
         self.tokens_within_10ppm = 0

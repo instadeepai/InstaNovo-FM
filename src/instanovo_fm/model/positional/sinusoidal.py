@@ -1,10 +1,10 @@
-"""
-Sinusoidal positional encoding implementation.
+"""Sinusoidal positional encoding implementation.
 
 This module provides the standard sinusoidal positional encoding used in the original Transformer paper.
 """
 
 import math
+
 import torch
 import torch.nn as nn
 from jaxtyping import Float
@@ -14,7 +14,8 @@ from torch import Tensor
 class PositionalEncoding(nn.Module):
     """Standard sinusoidal positional encoding."""
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
+        """Initialise the input."""
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -25,9 +26,7 @@ class PositionalEncoding(nn.Module):
         pe[0, :, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)
 
-    def forward(
-        self, x: Float[Tensor, "token batch embedding"]
-    ) -> Float[Tensor, "token batch embedding"]:
+    def forward(self, x: Float[Tensor, "token batch embedding"]) -> Float[Tensor, "token batch embedding"]:
         """Positional encoding forward pass.
 
         Arguments:

@@ -19,7 +19,7 @@ from instanovo.utils.s3 import S3FileHandler
 logger = ColorLog(console, __name__).logger
 
 # parents[1] is the package root. It was parents[2] internally, where this module
-# sat one level deeper at instanovo/foundational/eval/; the "foundational"
+# sat one level deeper at instanovo_fm/eval/; the "foundational"
 # level is gone here, so the walk is one shorter.
 _DEFAULT_RESIDUE_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "residues" / "default.yaml"
 

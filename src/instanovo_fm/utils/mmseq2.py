@@ -5,17 +5,13 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict
-from typing import List
-from typing import Union
+from typing import Any, Dict, List, Union
 
 
 class MMseqs2:
-    """
-    A Python class wrapper for MMseqs2 clustering and search tool.
-    """
+    """A Python class wrapper for MMseqs2 clustering and search tool."""
 
-    def __init__(  # noqa: CCR001
+    def __init__(
         self,
         output_dir: Union[str, None] = None,
         fasta_file: Union[str, None] = None,
@@ -28,9 +24,8 @@ class MMseqs2:
         output_file: Union[str, None] = None,
         remove_tmp: bool = True,
         remove_output: bool = True,
-    ):
-        """
-        Initializes the MMseqs2 object with the provided parameters.
+    ) -> None:
+        """Initializes the MMseqs2 object with the provided parameters.
 
         Parameters:
         -----------
@@ -69,7 +64,7 @@ class MMseqs2:
         else:
             self.output_dir = Path(tempfile.mkdtemp())
             self.temp_output_dir = True  # Flag to identify if temp dir was used
-            print(f"Temporary output directory created at {self.output_dir}")
+            print(f"Temporary output directory created at {self.output_dir}")  # noqa: T201
 
         # Set temporary directory
         if tmp_dir:
@@ -78,7 +73,7 @@ class MMseqs2:
         else:
             self.tmp_dir = Path(tempfile.mkdtemp())
             self.temp_tmp_dir = True
-            print(f"Temporary tmp directory created at {self.tmp_dir}")
+            print(f"Temporary tmp directory created at {self.tmp_dir}")  # noqa: T201
 
         self.fasta_file = Path(fasta_file) if fasta_file else None
         self.sequences = sequences
@@ -99,41 +94,36 @@ class MMseqs2:
         if self.fasta_file and not self.fasta_file.exists():
             raise FileNotFoundError(f"FASTA file not found at {self.fasta_file}")
         if self.command not in ["easy-cluster", "easy-linclust", "easy-search"]:
-            raise ValueError(
-                "Invalid command. Options are 'easy-cluster', 'easy-linclust', 'easy-search'."
-            )
+            raise ValueError("Invalid command. Options are 'easy-cluster', 'easy-linclust', 'easy-search'.")
         if self.command == "easy-search":
             if self.target_file is None or not self.target_file.exists():
                 raise ValueError("For 'easy-search', a valid target_file must be specified.")
             if self.output_file is None:
                 raise ValueError("For 'easy-search', an output_file must be specified.")
 
-    def _create_temp_fasta(self):
-        """
-        Creates a temporary FASTA file from the list of sequences provided by the user.
-        """
+    def _create_temp_fasta(self) -> None:
+        """Creates a temporary FASTA file from the list of sequences provided by the user."""
         temp_fasta = tempfile.NamedTemporaryFile(delete=False, suffix=".fasta", mode="w")
         with temp_fasta as f:
-            for idx, sequence in enumerate(self.sequences, start=1):
+            for idx, sequence in enumerate(self.sequences, start=1):  # type: ignore[arg-type]
                 f.write(f">sequence_{idx}\n{sequence}\n")
-        self.temp_fasta_file = temp_fasta.name
-        print(f"Temporary FASTA file created at {self.temp_fasta_file}")
+        self.temp_fasta_file = temp_fasta.name  # type: ignore[assignment]
+        print(f"Temporary FASTA file created at {self.temp_fasta_file}")  # noqa: T201
 
-    def _delete_temp_fasta(self):
-        """
-        Deletes the temporary FASTA file if it exists.
-        """
+    def _delete_temp_fasta(self) -> None:
+        """Deletes the temporary FASTA file if it exists."""
         if self.temp_fasta_file:
             try:
                 os.remove(self.temp_fasta_file)
-                print(f"Temporary FASTA file {self.temp_fasta_file} deleted.")
+                print(f"Temporary FASTA file {self.temp_fasta_file} deleted.")  # noqa: T201
             except OSError as e:
-                print(f"Error deleting temporary file {self.temp_fasta_file}: {e}")
+                print(f"Error deleting temporary file {self.temp_fasta_file}: {e}")  # noqa: T201
             finally:
                 self.temp_fasta_file = None
 
-    def _build_command(self):
-        """
+    def _build_command(self) -> Any:
+        """Construct the MMseqs2 command.
+
         Constructs the MMseqs2 command with the provided parameters,
         ensuring directory paths have trailing slashes.
         """
@@ -145,22 +135,14 @@ class MMseqs2:
             fasta_input = str(self.fasta_file)
 
         # Ensure trailing slashes for directory paths
-        output_dir = (
-            str(self.output_dir) + "/"
-            if not str(self.output_dir).endswith("/")
-            else str(self.output_dir)
-        )
-        tmp_dir = (
-            str(self.tmp_dir) + "/" if not str(self.tmp_dir).endswith("/") else str(self.tmp_dir)
-        )
+        output_dir = str(self.output_dir) + "/" if not str(self.output_dir).endswith("/") else str(self.output_dir)
+        tmp_dir = str(self.tmp_dir) + "/" if not str(self.tmp_dir).endswith("/") else str(self.tmp_dir)
 
         command = ["mmseqs", self.command]
 
         if self.command in ["easy-cluster", "easy-linclust"]:
             # For clustering commands, set identity threshold immediately after command
-            command.extend(
-                ["--min-seq-id", str(self.identity_threshold), fasta_input, output_dir, tmp_dir]
-            )
+            command.extend(["--min-seq-id", str(self.identity_threshold), fasta_input, output_dir, tmp_dir])  # type: ignore[list-item]
 
             # Handle is_huge_dataset
             if self.is_huge_dataset:
@@ -170,16 +152,15 @@ class MMseqs2:
             # For search command, need query and target
             target_file = str(self.target_file)
             output_file = str(self.output_file)
-            command.extend([fasta_input, target_file, output_file, tmp_dir])
+            command.extend([fasta_input, target_file, output_file, tmp_dir])  # type: ignore[list-item]
 
         # # Add verbose flag for debugging
         # command.append("--verbose")
 
         return command
 
-    def _clean_output(self):
-        """
-        Removes all files from the output directory if it is temporary.
+    def _clean_output(self) -> None:
+        """Removes all files from the output directory if it is temporary.
 
         Raises:
         -------
@@ -189,13 +170,12 @@ class MMseqs2:
         if self.temp_output_dir:
             try:
                 shutil.rmtree(self.output_dir)
-                print(f"Temporary output directory {self.output_dir} deleted.")
+                print(f"Temporary output directory {self.output_dir} deleted.")  # noqa: T201
             except OSError as e:
-                print(f"Error deleting temporary output directory {self.output_dir}: {e}")
+                print(f"Error deleting temporary output directory {self.output_dir}: {e}")  # noqa: T201
 
-    def _clean_tmp_dir(self):
-        """
-        Removes all files from the tmp directory if it is temporary.
+    def _clean_tmp_dir(self) -> None:
+        """Removes all files from the tmp directory if it is temporary.
 
         Raises:
         -------
@@ -205,19 +185,14 @@ class MMseqs2:
         if self.temp_tmp_dir:
             try:
                 shutil.rmtree(self.tmp_dir)
-                print(f"Temporary tmp directory {self.tmp_dir} deleted.")
+                print(f"Temporary tmp directory {self.tmp_dir} deleted.")  # noqa: T201
             except OSError as e:
-                print(f"Error deleting temporary tmp directory {self.tmp_dir}: {e}")
+                print(f"Error deleting temporary tmp directory {self.tmp_dir}: {e}")  # noqa: T201
 
     def parse_clusters(self) -> Dict[str, int]:
-        """
-        Parses the MMseqs2 clustering output and returns a dictionary mapping each sequence ID
-        to an integer cluster ID.
+        """Parses the MMseqs2 clustering output and returns a dictionary mapping each sequence ID to an integer cluster ID.
 
-        Returns:
-        --------
-        Dict[str, int]
-            A dictionary where keys are sequence IDs and values are integer cluster IDs.
+        Returns: -------- Dict[str, int] A dictionary where keys are sequence IDs and values are integer cluster IDs.
         """
         # Locate the cluster file in the output directory
         cluster_files = list(self.output_dir.glob("*_cluster.tsv"))
@@ -237,45 +212,33 @@ class MMseqs2:
 
         # Map each sequence ID to an integer cluster ID
         cluster_id_map = {cluster_id: i for i, cluster_id in enumerate(cluster_annotation.keys())}
-        seq_to_cluster = {
-            seq_id: cluster_id_map[cluster_id]
-            for cluster_id, seq_ids in cluster_annotation.items()
-            for seq_id in seq_ids
-        }
+        seq_to_cluster = {seq_id: cluster_id_map[cluster_id] for cluster_id, seq_ids in cluster_annotation.items() for seq_id in seq_ids}
 
         return seq_to_cluster
 
-    def run(self) -> List[Union[int, None]]:  # noqa: CCR001
-        """
-        Runs the MMseqs2 command and returns the list of assigned cluster IDs
-        for each input sequence.
+    def run(self) -> List[Union[int, None]]:
+        """Runs the MMseqs2 command and returns the list of assigned cluster IDs for each input sequence.
 
-        Returns:
-        --------
-        List[Union[int, None]]
-            A list of integer cluster IDs for each input sequence, or
-            None if a sequence was not clustered.
+        Returns: -------- List[Union[int, None]] A list of integer cluster IDs for each input sequence, or None if a sequence was not clustered.
         """
         command = self._build_command()
-        print(f"Running MMseqs2 with command: {' '.join(command)}")
+        print(f"Running MMseqs2 with command: {' '.join(command)}")  # noqa: T201
 
         try:
             # Use subprocess.Popen to run the command
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             stdout, stderr = process.communicate()
 
             # Check if the command failed
             if process.returncode != 0:
-                print(f"MMseqs2 failed with error:\n{stderr}")
+                print(f"MMseqs2 failed with error:\n{stderr}")  # noqa: T201
                 raise RuntimeError(f"MMseqs2 failed with error:\n{stderr}")
 
-            print(f"MMseqs2 Output:\n{stdout}")
+            print(f"MMseqs2 Output:\n{stdout}")  # noqa: T201
 
         except subprocess.CalledProcessError as e:
-            print(f"MMseqs2 encountered an error: {e.stderr}")
-            raise RuntimeError(f"MMseqs2 failed with error: {e.stderr}")
+            print(f"MMseqs2 encountered an error: {e.stderr}")  # noqa: T201
+            raise RuntimeError(f"MMseqs2 failed with error: {e.stderr}") from e
 
         finally:
             # Clean up the temporary fasta file if created
@@ -286,15 +249,11 @@ class MMseqs2:
 
         # Return a list of cluster IDs corresponding to the input sequence order
         if self.sequences:
-            cluster_ids = [
-                seq_to_cluster.get(f"sequence_{i + 1}") for i in range(len(self.sequences))
-            ]
+            cluster_ids = [seq_to_cluster.get(f"sequence_{i + 1}") for i in range(len(self.sequences))]
         else:
             if self.fasta_file is None:
                 raise ValueError("fasta_file is required if sequences are not provided.")
-            cluster_ids = [
-                seq_to_cluster.get(seq_id) for seq_id in self.fasta_file.read_text().splitlines()
-            ]
+            cluster_ids = [seq_to_cluster.get(seq_id) for seq_id in self.fasta_file.read_text().splitlines()]
 
         # Clean output and tmp directories if needed
         if self.remove_output:

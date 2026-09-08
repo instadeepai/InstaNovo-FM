@@ -1,5 +1,4 @@
-"""
-Attention mechanisms for the InstaNovo model.
+"""Attention mechanisms for the InstaNovo model.
 
 This module provides various attention implementations:
 - Flash attention for efficient computation
@@ -7,9 +6,9 @@ This module provides various attention implementations:
 - Base attention utilities and classes
 """
 
-from .flash import FlashMHA
-from .bias_aware import BiasAwareMHA
 from .base import BaseAttention
+from .bias_aware import BiasAwareMHA
+from .flash import FlashMHA
 
 __all__ = [
     "FlashMHA",

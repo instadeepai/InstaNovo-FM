@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Binning Strategy Analyzer for Foundation Model Training.
+"""Binning Strategy Analyzer for Foundation Model Training.
 
 Performs analysis of m/z binning strategies including:
 1. Part A: Binning simulation (bin error rates from mass measurement error)
@@ -36,8 +35,7 @@ logger = ColorLog(console, __name__).logger
 
 
 class BinningAnalyser:
-    """
-    Analyzer for m/z binning strategies.
+    """Analyzer for m/z binning strategies.
 
     Analyzes:
     - Part A: Binning simulation (theo/exp bin mismatches)
@@ -47,9 +45,8 @@ class BinningAnalyser:
     - Stratified jump rate analysis (per fragmentation type)
     """
 
-    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None):
-        """
-        Initialize the binning analyzer.
+    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None) -> None:
+        """Initialize the binning analyzer.
 
         Args:
             config: Hydra configuration
@@ -75,9 +72,7 @@ class BinningAnalyser:
         # Resolve task_configs for binning-specific settings
         task_configs_raw = analysis_config.get("task_configs", {})
         if hasattr(task_configs_raw, "_metadata"):
-            binning_tc = OmegaConf.to_container(
-                task_configs_raw.get("binning", {}), resolve=True
-            )
+            binning_tc = OmegaConf.to_container(task_configs_raw.get("binning", {}), resolve=True)
         elif hasattr(task_configs_raw, "get"):
             binning_tc = dict(task_configs_raw.get("binning", {}))
         else:
@@ -92,12 +87,15 @@ class BinningAnalyser:
         self.ppm_tol = _tc("ppm_tol", 10.0)
 
         # Bin-aligned m/z region definitions
-        self.mz_range_boundaries = _tc("mz_range_boundaries", {
-            "immonium_internal": (0, 200),
-            "core_fragment": (200, 800),
-            "extended_fragment": (800, 1500),
-            "high_mass_fragment": (1500, float('inf'))
-        })
+        self.mz_range_boundaries = _tc(
+            "mz_range_boundaries",
+            {
+                "immonium_internal": (0, 200),
+                "core_fragment": (200, 800),
+                "extended_fragment": (800, 1500),
+                "high_mass_fragment": (1500, float("inf")),
+            },
+        )
         self.mz_range_order = ["immonium_internal", "core_fragment", "extended_fragment", "high_mass_fragment"]
 
         # Analysis feature toggles
@@ -111,9 +109,25 @@ class BinningAnalyser:
         self.enable_stratified_analysis = _tc("enable_stratified_analysis", True)
 
         self.enable_cid_analysis = _tc("enable_cid_analysis", True)
-        self.cid_error_sweep_da = list(_tc("cid_error_sweep_da", [
-            0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5,
-        ]))
+        self.cid_error_sweep_da = list(
+            _tc(
+                "cid_error_sweep_da",
+                [
+                    0.005,
+                    0.01,
+                    0.02,
+                    0.03,
+                    0.05,
+                    0.08,
+                    0.1,
+                    0.15,
+                    0.2,
+                    0.3,
+                    0.4,
+                    0.5,
+                ],
+            )
+        )
         self.cid_literature_errors_da = list(_tc("cid_literature_errors_da", [0.3, 0.4, 0.5]))
         self.orbitrap_reference_errors_ppm = list(_tc("orbitrap_reference_errors_ppm", [5.0, 10.0]))
 
@@ -135,7 +149,7 @@ class BinningAnalyser:
         self.binning_strategies = strategies
 
         # Results storage
-        self.results = {}
+        self.results: dict[str, Any] = {}
 
         logger.info(f"Binning analyzer initialized. Output directory: {self.output_dir}")
 
@@ -147,8 +161,7 @@ class BinningAnalyser:
         per_spectrum_mz: Optional[List[np.ndarray]] = None,
         per_spectrum_frag_type: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """
-        Run binning strategy analysis.
+        """Run binning strategy analysis.
 
         Args:
             mass_error_df: DataFrame with columns [theo_mz, exp_mz, delta_mz_da,
@@ -188,55 +201,44 @@ class BinningAnalyser:
 
         # Part B2: Intra-spectrum collision analysis
         intra_spectrum_collision = None
-        if (self.enable_intra_collision_analysis and
-                per_spectrum_mz is not None and len(per_spectrum_mz) > 0):
+        if self.enable_intra_collision_analysis and per_spectrum_mz is not None and len(per_spectrum_mz) > 0:
             logger.info("Part B2: Calculating intra-spectrum collision statistics...")
-            intra_spectrum_collision = self._calculate_intra_spectrum_collision_statistics(
-                per_spectrum_mz, per_spectrum_frag_type
-            )
+            intra_spectrum_collision = self._calculate_intra_spectrum_collision_statistics(per_spectrum_mz, per_spectrum_frag_type)
 
         # Resolution information analysis (Part C) — computed before tradeoff
         # so prediction_entropy is available for effective information rate
         resolution_information = None
         if self.enable_resolution_information:
             logger.info("Calculating resolution information analysis...")
-            resolution_information = self._calculate_resolution_information_analysis(
-                mass_error_df, per_spectrum_mz
-            )
+            resolution_information = self._calculate_resolution_information_analysis(mass_error_df, per_spectrum_mz)
 
         # Resolution-noise tradeoff (combines jump rate + intra-spectrum collision + entropy)
         resolution_noise_tradeoff = None
-        if (bin_jump_analysis and "per_strategy" in bin_jump_analysis
-                and intra_spectrum_collision):
-            prediction_entropy = (
-                resolution_information.get("prediction_entropy")
-                if resolution_information else None
-            )
+        if bin_jump_analysis and "per_strategy" in bin_jump_analysis and intra_spectrum_collision:
+            prediction_entropy = resolution_information.get("prediction_entropy") if resolution_information else None
             resolution_noise_tradeoff = self._compute_resolution_noise_tradeoff(
-                bin_jump_analysis, intra_spectrum_collision,
+                bin_jump_analysis,
+                intra_spectrum_collision,
                 prediction_entropy=prediction_entropy,
             )
 
         # Stratified analysis (per fragmentation type)
         stratified_analysis = None
-        if (self.enable_bin_jump_analysis and self.enable_stratified_analysis
-                and "frag_type" in mass_error_df.columns):
+        if self.enable_bin_jump_analysis and self.enable_stratified_analysis and "frag_type" in mass_error_df.columns:
             strategies = self._get_binning_strategies_from_config()
             logger.info("Calculating stratified jump rate analysis...")
-            stratified_analysis = self._calculate_stratified_bin_analysis(
-                mass_error_df, strategies
-            )
+            stratified_analysis = self._calculate_stratified_bin_analysis(mass_error_df, strategies)
 
         # Error model fit
         error_model_fit = self._fit_error_model(mass_error_df)
 
         # CID simulated analysis
         cid_analysis = None
-        if (self.enable_cid_analysis and per_spectrum_mz
-                and per_spectrum_frag_type):
+        if self.enable_cid_analysis and per_spectrum_mz and per_spectrum_frag_type:
             logger.info("Calculating CID simulated analysis...")
             cid_analysis = self._calculate_cid_simulated_analysis(
-                per_spectrum_mz, per_spectrum_frag_type,
+                per_spectrum_mz,
+                per_spectrum_frag_type,
                 mass_error_df=mass_error_df,
             )
 
@@ -260,7 +262,7 @@ class BinningAnalyser:
         logger.info("Binning analysis complete.")
         return self.results
 
-    def generate_visualizations(self):
+    def generate_visualizations(self) -> None:
         """Generate all binning-related visualizations."""
         logger.info("Generating binning visualizations...")
 
@@ -301,7 +303,7 @@ class BinningAnalyser:
 
         logger.info("Binning visualizations complete")
 
-    def save_results(self):
+    def save_results(self) -> None:
         """Save analysis results to files."""
         logger.info("Saving binning analysis results...")
 
@@ -312,12 +314,21 @@ class BinningAnalyser:
         # Export per-peak mass error data (essential columns only to reduce file size)
         if "raw_data" in self.results:
             mass_error_df = self.results["raw_data"]
-            save_cols = [c for c in [
-                "theo_mz", "exp_mz", "signed_ppm",
-                "ion_type", "charge", "frag_type", "feature_type",
-            ] if c in mass_error_df.columns]
+            save_cols = [
+                c
+                for c in [
+                    "theo_mz",
+                    "exp_mz",
+                    "signed_ppm",
+                    "ion_type",
+                    "charge",
+                    "frag_type",
+                    "feature_type",
+                ]
+                if c in mass_error_df.columns
+            ]
             mass_error_csv = self.output_dir / "mass_error_per_peak.csv"
-            mass_error_df[save_cols].to_csv(mass_error_csv, index=False, float_format='%.6f')
+            mass_error_df[save_cols].to_csv(mass_error_csv, index=False, float_format="%.6f")
             logger.info(f"Per-peak mass error data saved to: {mass_error_csv} ({len(mass_error_df):,d} peaks, {len(save_cols)} columns)")
 
         # Export per-ion bin-jump data if available
@@ -326,7 +337,7 @@ class BinningAnalyser:
             if bin_jump_analysis and "per_ion_data" in bin_jump_analysis:
                 bin_jump_df = bin_jump_analysis["per_ion_data"]
                 bin_jump_csv = self.output_dir / "bin_jump_per_ion.csv"
-                bin_jump_df.to_csv(bin_jump_csv, index=False, float_format='%.6f')
+                bin_jump_df.to_csv(bin_jump_csv, index=False, float_format="%.6f")
                 logger.info(f"Per-ion bin-jump data saved to: {bin_jump_csv} ({len(bin_jump_df):,d} ions)")
 
         # Export resolution-noise tradeoff table
@@ -334,7 +345,7 @@ class BinningAnalyser:
         if tradeoff and "tradeoff_table" in tradeoff:
             tradeoff_df = pd.DataFrame(tradeoff["tradeoff_table"])
             tradeoff_csv = self.output_dir / "resolution_noise_tradeoff.csv"
-            tradeoff_df.to_csv(tradeoff_csv, index=False, float_format='%.6f')
+            tradeoff_df.to_csv(tradeoff_csv, index=False, float_format="%.6f")
             logger.info(f"Resolution-noise tradeoff saved to: {tradeoff_csv} ({len(tradeoff_df)} strategies)")
 
         # Export resolution information CSVs
@@ -343,25 +354,27 @@ class BinningAnalyser:
             # 1. Prediction entropy table
             pred_ent = res_info.get("prediction_entropy", {})
             if pred_ent:
-                rows = []
+                rows: list[Any] = []
                 for name, metrics in pred_ent.items():
-                    rows.append({
-                        "strategy": name,
-                        "total_entropy_bits": metrics["total_entropy"],
-                        "group_entropy_bits": metrics["group_entropy"],
-                        "offset_entropy_bits": metrics["offset_entropy"],
-                        "max_entropy_bits": metrics["max_entropy"],
-                        "efficiency": metrics["efficiency"],
-                        "effective_classes": metrics["effective_classes"],
-                        "occupancy_rate": metrics["occupancy_rate"],
-                        "n_bins": metrics["n_bins"],
-                        "n_groups": metrics["n_groups"],
-                        "bin_group_size": metrics["bin_group_size"],
-                        "n_peaks": metrics["n_peaks"],
-                    })
+                    rows.append(
+                        {
+                            "strategy": name,
+                            "total_entropy_bits": metrics["total_entropy"],
+                            "group_entropy_bits": metrics["group_entropy"],
+                            "offset_entropy_bits": metrics["offset_entropy"],
+                            "max_entropy_bits": metrics["max_entropy"],
+                            "efficiency": metrics["efficiency"],
+                            "effective_classes": metrics["effective_classes"],
+                            "occupancy_rate": metrics["occupancy_rate"],
+                            "n_bins": metrics["n_bins"],
+                            "n_groups": metrics["n_groups"],
+                            "bin_group_size": metrics["bin_group_size"],
+                            "n_peaks": metrics["n_peaks"],
+                        }
+                    )
                 ent_df = pd.DataFrame(rows)
                 ent_csv = self.output_dir / "resolution_prediction_entropy.csv"
-                ent_df.to_csv(ent_csv, index=False, float_format='%.6f')
+                ent_df.to_csv(ent_csv, index=False, float_format="%.6f")
                 logger.info(f"Prediction entropy saved to: {ent_csv} ({len(ent_df)} strategies)")
 
             # 2. Physical resolvability table
@@ -370,16 +383,18 @@ class BinningAnalyser:
                 rows = []
                 for strat_name, diffs in phys["per_strategy"].items():
                     for diff_name, entry in diffs.items():
-                        rows.append({
-                            "strategy": strat_name,
-                            "mass_difference": diff_name,
-                            "delta_da": phys["mass_differences"][diff_name],
-                            "min_bins": entry["min_bins"],
-                            "classification": entry["classification"],
-                        })
+                        rows.append(
+                            {
+                                "strategy": strat_name,
+                                "mass_difference": diff_name,
+                                "delta_da": phys["mass_differences"][diff_name],
+                                "min_bins": entry["min_bins"],
+                                "classification": entry["classification"],
+                            }
+                        )
                 resolv_df = pd.DataFrame(rows)
                 resolv_csv = self.output_dir / "resolution_physical_resolvability.csv"
-                resolv_df.to_csv(resolv_csv, index=False, float_format='%.6f')
+                resolv_df.to_csv(resolv_csv, index=False, float_format="%.6f")
                 logger.info(f"Physical resolvability saved to: {resolv_csv} ({len(resolv_df)} entries)")
 
             # 3. Local entropy table
@@ -388,16 +403,18 @@ class BinningAnalyser:
                 window_centers = local["window_centers"]
                 rows = []
                 for strat_name, data in local["per_strategy"].items():
-                    for i, (ent, count) in enumerate(zip(data["entropies"], data["peak_counts"])):
-                        rows.append({
-                            "strategy": strat_name,
-                            "mz_window_center": window_centers[i],
-                            "entropy_bits": ent,
-                            "peak_count": count,
-                        })
+                    for i, (ent, count) in enumerate(zip(data["entropies"], data["peak_counts"], strict=False)):
+                        rows.append(
+                            {
+                                "strategy": strat_name,
+                                "mz_window_center": window_centers[i],
+                                "entropy_bits": ent,
+                                "peak_count": count,
+                            }
+                        )
                 local_df = pd.DataFrame(rows)
                 local_csv = self.output_dir / "resolution_local_entropy.csv"
-                local_df.to_csv(local_csv, index=False, float_format='%.6f')
+                local_df.to_csv(local_csv, index=False, float_format="%.6f")
                 logger.info(f"Local entropy saved to: {local_csv} ({len(local_df)} entries)")
 
             # 4. Group size sensitivity table
@@ -406,29 +423,29 @@ class BinningAnalyser:
                 rows = []
                 for strat_name, gs_results in gs_sens["per_strategy"].items():
                     for gs, metrics in sorted(gs_results.items()):
-                        rows.append({
-                            "strategy": strat_name,
-                            "group_size": gs,
-                            "n_groups": metrics["n_groups"],
-                            "n_offset_classes": metrics["n_offset_classes"],
-                            "h_bin_bits": metrics["h_bin"],
-                            "h_group_bits": metrics["h_group"],
-                            "h_offset_given_group_bits": metrics["h_offset_given_group"],
-                            "max_h_offset_bits": metrics["max_h_offset"],
-                            "offset_utilization": metrics["offset_utilization"],
-                            "offset_headroom_bits": metrics["offset_headroom"],
-                            "head_balance": metrics["head_balance"],
-                            "group_width_da_mean": metrics["group_width_da_mean"],
-                            "group_width_da_min": metrics["group_width_da_min"],
-                            "group_width_da_max": metrics["group_width_da_max"],
-                            "recommended": metrics["recommended"],
-                        })
+                        rows.append(
+                            {
+                                "strategy": strat_name,
+                                "group_size": gs,
+                                "n_groups": metrics["n_groups"],
+                                "n_offset_classes": metrics["n_offset_classes"],
+                                "h_bin_bits": metrics["h_bin"],
+                                "h_group_bits": metrics["h_group"],
+                                "h_offset_given_group_bits": metrics["h_offset_given_group"],
+                                "max_h_offset_bits": metrics["max_h_offset"],
+                                "offset_utilization": metrics["offset_utilization"],
+                                "offset_headroom_bits": metrics["offset_headroom"],
+                                "head_balance": metrics["head_balance"],
+                                "group_width_da_mean": metrics["group_width_da_mean"],
+                                "group_width_da_min": metrics["group_width_da_min"],
+                                "group_width_da_max": metrics["group_width_da_max"],
+                                "recommended": metrics["recommended"],
+                            }
+                        )
                 gs_df = pd.DataFrame(rows)
                 gs_csv = self.output_dir / "resolution_group_size_sensitivity.csv"
-                gs_df.to_csv(gs_csv, index=False, float_format='%.6f')
-                logger.info(
-                    f"Group size sensitivity saved to: {gs_csv} ({len(gs_df)} entries)"
-                )
+                gs_df.to_csv(gs_csv, index=False, float_format="%.6f")
+                logger.info(f"Group size sensitivity saved to: {gs_csv} ({len(gs_df)} entries)")
 
         # Export error model fit data
         error_model = self.results.get("error_model_fit")
@@ -448,7 +465,7 @@ class BinningAnalyser:
                 rows.append(row)
             fit_df = pd.DataFrame(rows)
             fit_csv = self.output_dir / "error_model_fit.csv"
-            fit_df.to_csv(fit_csv, index=False, float_format='%.6f')
+            fit_df.to_csv(fit_csv, index=False, float_format="%.6f")
             logger.info(f"Error model fit saved to: {fit_csv} ({len(fit_df)} bins)")
 
         # Export CID simulated mismatch data
@@ -485,7 +502,7 @@ class BinningAnalyser:
             if rows:
                 cid_df = pd.DataFrame(rows)
                 cid_csv = self.output_dir / "cid_simulated_mismatch.csv"
-                cid_df.to_csv(cid_csv, index=False, float_format='%.6f')
+                cid_df.to_csv(cid_csv, index=False, float_format="%.6f")
                 logger.info(f"CID simulated mismatch saved to: {cid_csv} ({len(cid_df)} rows)")
 
             # Export observed CID errors
@@ -494,12 +511,12 @@ class BinningAnalyser:
                 obs_rows = [{k: v for k, v in obs.items() if k != "note"}]
                 obs_df = pd.DataFrame(obs_rows)
                 obs_csv = self.output_dir / "observed_cid_errors.csv"
-                obs_df.to_csv(obs_csv, index=False, float_format='%.6f')
+                obs_df.to_csv(obs_csv, index=False, float_format="%.6f")
                 logger.info(f"Observed CID errors saved to: {obs_csv}")
 
         logger.info("Binning analysis results saved")
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         """Print analysis summary to console."""
         if not self.results:
             logger.warning("No results to summarize")
@@ -520,17 +537,17 @@ class BinningAnalyser:
             if "summary" in jump_analysis:
                 summary = jump_analysis["summary"]
                 logger.info(f"Best strategy (bin-jump): {summary['best_strategy']}")
-                logger.info(f"Jump rate: {summary['best_mean_jump_rate']*100:.2f}%")
+                logger.info(f"Jump rate: {summary['best_mean_jump_rate'] * 100:.2f}%")
 
         # Intra-spectrum collision analysis
         if self.results.get("intra_spectrum_collision"):
             intra = self.results["intra_spectrum_collision"]
             best = intra["best_strategy"]
             best_cr = intra["per_strategy"][best]["mean_collision_rate"]
-            logger.info(f"Best strategy (intra-collision): {best} ({best_cr*100:.2f}%)")
+            logger.info(f"Best strategy (intra-collision): {best} ({best_cr * 100:.2f}%)")
             worst = intra["worst_strategy"]
             worst_cr = intra["per_strategy"][worst]["mean_collision_rate"]
-            logger.info(f"Worst strategy (intra-collision): {worst} ({worst_cr*100:.2f}%)")
+            logger.info(f"Worst strategy (intra-collision): {worst} ({worst_cr * 100:.2f}%)")
 
         # Resolution-noise tradeoff
         if self.results.get("resolution_noise_tradeoff"):
@@ -548,28 +565,18 @@ class BinningAnalyser:
             mi_h = summary["most_informative_entropy"]
             mi_eff = summary["most_informative_efficiency"]
             mi_ec = summary["most_informative_effective_classes"]
-            logger.info(
-                f"  Most informative: {mi} "
-                f"(H={mi_h:.1f} bits, efficiency={mi_eff*100:.1f}%, "
-                f"{mi_ec:,.0f} effective classes)"
-            )
+            logger.info(f"  Most informative: {mi} (H={mi_h:.1f} bits, efficiency={mi_eff * 100:.1f}%, {mi_ec:,.0f} effective classes)")
             me = summary["most_efficient_strategy"]
             me_h = summary["most_efficient_entropy"]
             me_eff = summary["most_efficient_efficiency"]
-            logger.info(
-                f"  Most efficient: {me} "
-                f"(H={me_h:.1f} bits, efficiency={me_eff*100:.1f}%)"
-            )
+            logger.info(f"  Most efficient: {me} (H={me_h:.1f} bits, efficiency={me_eff * 100:.1f}%)")
 
             # Report resolvability issues
             phys = res_info.get("physical_resolvability", {})
             if phys and "per_strategy" in phys:
-                issues = []
+                issues: list[Any] = []
                 for diff_name in phys["mass_differences"]:
-                    failing = [
-                        s for s, diffs in phys["per_strategy"].items()
-                        if diffs[diff_name]["classification"] == "unresolvable"
-                    ]
+                    failing = [s for s, diffs in phys["per_strategy"].items() if diffs[diff_name]["classification"] == "unresolvable"]
                     if failing:
                         issues.append(f"{diff_name} unresolvable by {', '.join(failing)}")
                 if issues:
@@ -592,13 +599,10 @@ class BinningAnalyser:
                         logger.info(
                             f"    {strat_name}: recommended {rec} "
                             f"(best balance at gs={best_gs}: "
-                            f"{bal*100:.0f}% group / {(1-bal)*100:.0f}% offset)"
+                            f"{bal * 100:.0f}% group / {(1 - bal) * 100:.0f}% offset)"
                         )
                     else:
-                        logger.info(
-                            f"    {strat_name}: NO recommended group_size "
-                            f"(offset saturated at all candidates)"
-                        )
+                        logger.info(f"    {strat_name}: NO recommended group_size (offset saturated at all candidates)")
 
         # Error model fit
         error_model = self.results.get("error_model_fit")
@@ -612,15 +616,8 @@ class BinningAnalyser:
         # CID analysis
         cid = self.results.get("cid_analysis")
         if cid and "composition" in cid:
-            comp_str = ", ".join(
-                f"{ft}: {d['n_spectra']} spectra/{d['n_peaks']} peaks"
-                for ft, d in sorted(cid["composition"].items())
-            )
-            logger.info(
-                f"CID composition: {comp_str} "
-                f"(strict CID: {cid.get('n_cid_spectra', '?')} spectra, "
-                f"{cid.get('n_cid_peaks', '?'):,d} peaks)"
-            )
+            comp_str = ", ".join(f"{ft}: {d['n_spectra']} spectra/{d['n_peaks']} peaks" for ft, d in sorted(cid["composition"].items()))
+            logger.info(f"CID composition: {comp_str} (strict CID: {cid.get('n_cid_spectra', '?')} spectra, {cid.get('n_cid_peaks', '?'):,d} peaks)")
             obs = cid.get("observed_cid_errors")
             if obs:
                 logger.info(
@@ -630,7 +627,7 @@ class BinningAnalyser:
                 )
             breaking = cid.get("breaking_points", {})
             if breaking:
-                bp_strs = []
+                bp_strs: list[Any] = []
                 for sn in sorted(breaking.keys()):
                     bp = breaking[sn]["error_da_at_50pct_mismatch"]
                     bp_strs.append(f"{sn}={bp:.3f}" if bp else f"{sn}=>0.5")
@@ -641,18 +638,15 @@ class BinningAnalyser:
                 logger.info(
                     f"CID vs Orbitrap gap (worst): {dominant[0]} "
                     f"(ratio={dominant[1]['gap_ratio']:.1f}x, "
-                    f"CID={dominant[1]['cid_mismatch']*100:.1f}%, "
-                    f"Orbitrap={dominant[1]['orbitrap_mismatch']*100:.1f}%)"
+                    f"CID={dominant[1]['cid_mismatch'] * 100:.1f}%, "
+                    f"Orbitrap={dominant[1]['orbitrap_mismatch'] * 100:.1f}%)"
                 )
 
         # Effective information rate
         tradeoff = self.results.get("resolution_noise_tradeoff")
         if tradeoff and "tradeoff_table" in tradeoff:
             table = tradeoff["tradeoff_table"]
-            info_rates = [
-                (r["strategy"], r.get("effective_info_rate_bits", 0))
-                for r in table if r.get("effective_info_rate_bits", 0) > 0
-            ]
+            info_rates = [(r["strategy"], r.get("effective_info_rate_bits", 0)) for r in table if r.get("effective_info_rate_bits", 0) > 0]
             if info_rates:
                 info_rates.sort(key=lambda x: x[1], reverse=True)
                 top3 = info_rates[:3]
@@ -674,7 +668,7 @@ class BinningAnalyser:
         if self.binning_strategies:
             # Handle both OmegaConf and plain dict (from task_configs resolution)
             if hasattr(self.binning_strategies, "_metadata"):
-                return OmegaConf.to_container(self.binning_strategies, resolve=True)
+                return OmegaConf.to_container(self.binning_strategies, resolve=True)  # type: ignore[no-any-return]
             return dict(self.binning_strategies)
         else:
             return {
@@ -684,12 +678,22 @@ class BinningAnalyser:
                 "fixed_ppm_10": {"type": "fixed_ppm", "ppm": 10},
                 "fixed_ppm_20": {"type": "fixed_ppm", "ppm": 20},
                 "fixed_ppm_50": {"type": "fixed_ppm", "ppm": 50},
-                "adaptive_fine": {"type": "adaptive", "function": "hyperbolic",
-                                 "da_floor": 0.02, "ppm_asymptote": 15.0,
-                                 "min_da": 0.005, "max_da": 0.12},
-                "adaptive_coarse": {"type": "adaptive", "function": "hyperbolic",
-                                    "da_floor": 0.025, "ppm_asymptote": 50.0,
-                                    "min_da": 0.005, "max_da": 0.15},
+                "adaptive_fine": {
+                    "type": "adaptive",
+                    "function": "hyperbolic",
+                    "da_floor": 0.02,
+                    "ppm_asymptote": 15.0,
+                    "min_da": 0.005,
+                    "max_da": 0.12,
+                },
+                "adaptive_coarse": {
+                    "type": "adaptive",
+                    "function": "hyperbolic",
+                    "da_floor": 0.025,
+                    "ppm_asymptote": 50.0,
+                    "min_da": 0.005,
+                    "max_da": 0.15,
+                },
             }
 
     def _build_ion_id(self, df: pd.DataFrame) -> pd.Series:
@@ -722,16 +726,22 @@ class BinningAnalyser:
             feature_types = "base"
 
         return (
-            df["peptide"].astype(str) + "_" +
-            df["ion_type"].astype(str) +
-            df["position"].astype(str) + "+" +
-            df["charge"].astype(str) + "_" +
-            feature_types + "@" +
-            theo_mz_bin.astype(str)
+            df["peptide"].astype(str)
+            + "_"
+            + df["ion_type"].astype(str)
+            + df["position"].astype(str)
+            + "+"
+            + df["charge"].astype(str)
+            + "_"
+            + feature_types
+            + "@"
+            + theo_mz_bin.astype(str)
         )
 
     def _compute_jump_rates(
-        self, multi_obs_df: pd.DataFrame, strategies: Dict[str, Dict],
+        self,
+        multi_obs_df: pd.DataFrame,
+        strategies: Dict[str, Dict],
         ion_total_counts: pd.Series,
     ) -> Dict[str, Dict[str, Any]]:
         """Compute jump rates per strategy for multi-observation ions.
@@ -747,18 +757,16 @@ class BinningAnalyser:
         Returns:
             Dict mapping strategy_name to jump rate results including raw Series
         """
-        per_strategy = {}
+        per_strategy: dict[str, Any] = {}
 
         for strategy_name in strategies:
             bin_col = f"bin_{strategy_name}"
 
             # Group by (ion_id, bin) and count occurrences
-            bin_counts = multi_obs_df.groupby(
-                ["ion_id", bin_col], observed=True
-            ).size().reset_index(name='count')
+            bin_counts = multi_obs_df.groupby(["ion_id", bin_col], observed=True).size().reset_index(name="count")
 
             # Find modal bin count for each ion
-            modal_counts = bin_counts.groupby("ion_id", observed=True)['count'].max()
+            modal_counts = bin_counts.groupby("ion_id", observed=True)["count"].max()
 
             # Count unique bins per ion
             n_unique_bins = bin_counts.groupby("ion_id", observed=True).size()
@@ -787,7 +795,7 @@ class BinningAnalyser:
     def _calculate_overall_stats(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Calculate overall mass error statistics."""
         ppm_values = df["delta_mz_ppm"].values
-        percentiles_ppm = {
+        percentiles_ppm: dict[str, Any] = {
             "p50": float(np.percentile(np.abs(ppm_values), 50)),
             "p90": float(np.percentile(np.abs(ppm_values), 90)),
             "p95": float(np.percentile(np.abs(ppm_values), 95)),
@@ -805,7 +813,7 @@ class BinningAnalyser:
 
     def _calculate_range_stats(self, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Calculate mass error statistics stratified by m/z range."""
-        range_stats = {}
+        range_stats: dict[str, Any] = {}
 
         for mz_range in self.mz_range_order:
             range_df = df[df["mz_range"] == mz_range]
@@ -828,7 +836,7 @@ class BinningAnalyser:
 
         return range_stats
 
-    def _create_binning_strategy(self, params: Dict[str, Any]):
+    def _create_binning_strategy(self, params: Dict[str, Any]) -> Any:
         """Create a binning strategy object from parameters.
 
         Args:
@@ -895,9 +903,7 @@ class BinningAnalyser:
     # Part A: Binning Simulation Methods
     # =========================================================================
 
-    def _calculate_within_bin_residuals(
-        self, mz_array: np.ndarray, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _calculate_within_bin_residuals(self, mz_array: np.ndarray, params: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate within-bin residual metrics for quantization error analysis.
 
         For each m/z value, compute how far it falls from the center of its assigned bin.
@@ -956,7 +962,7 @@ class BinningAnalyser:
         """
         strategies = self._get_binning_strategies_from_config()
 
-        results = {}
+        results: dict[str, Any] = {}
         for strategy_name, params in strategies.items():
             theo_bins = self._calculate_bins(df["theo_mz"].values, params)
             exp_bins = self._calculate_bins(df["exp_mz"].values, params)
@@ -964,9 +970,7 @@ class BinningAnalyser:
             bin_errors = int(np.sum(theo_bins != exp_bins))
             bin_error_rate = float(bin_errors / len(df))
 
-            within_bin_residuals = self._calculate_within_bin_residuals(
-                df["exp_mz"].values, params
-            )
+            within_bin_residuals = self._calculate_within_bin_residuals(df["exp_mz"].values, params)
 
             results[strategy_name] = {
                 "bin_errors": bin_errors,
@@ -1039,21 +1043,21 @@ class BinningAnalyser:
 
         # Calculate per-ion aggregates once
         logger.info("Calculating per-ion statistics...")
-        ion_aggregates = multi_obs_df.groupby("ion_id", observed=True).agg({
-            "exp_mz": ["mean", "count"],
-            "theo_mz": "mean",
-            "peptide": "first",
-            "ion_type": "first",
-            "position": "first",
-            "charge": "first",
-        })
-        ion_aggregates.columns = ['_'.join(col).strip('_') for col in ion_aggregates.columns]
+        ion_aggregates = multi_obs_df.groupby("ion_id", observed=True).agg(
+            {
+                "exp_mz": ["mean", "count"],
+                "theo_mz": "mean",
+                "peptide": "first",
+                "ion_type": "first",
+                "position": "first",
+                "charge": "first",
+            }
+        )
+        ion_aggregates.columns = ["_".join(col).strip("_") for col in ion_aggregates.columns]
 
         ion_total_counts = ion_aggregates["exp_mz_count"]
 
-        n_total_valid_peaks = len(multi_obs_df) + int(
-            (df["position"] >= 1).sum() - len(multi_obs_df)
-        )
+        n_total_valid_peaks = len(multi_obs_df) + int((df["position"] >= 1).sum() - len(multi_obs_df))
 
         # Use shared jump rate computation
         computed = self._compute_jump_rates(multi_obs_df, strategies, ion_total_counts)
@@ -1064,7 +1068,7 @@ class BinningAnalyser:
         # All copies were retained in strategy_combined_data but only the
         # best strategy was ever used later.  Instead, read directly from
         # ion_aggregates and the per-strategy Series.
-        per_strategy_results = {}
+        per_strategy_results: dict[str, Any] = {}
         # Store only the lightweight Series per strategy for later use
         strategy_jump_data: Dict[str, Dict[str, pd.Series]] = {}
 
@@ -1087,14 +1091,16 @@ class BinningAnalyser:
             jump_rates_arr = jump_rates_series.reindex(_ion_ids).values
             n_unique_arr = n_unique_bins_series.reindex(_ion_ids).values
 
-            ion_jump_stats = pd.DataFrame({
-                "ion_id": _ion_ids,
-                "jump_rate": jump_rates_arr,
-                "n_obs": _exp_mz_count.astype(int),
-                "n_unique_bins": n_unique_arr.astype(int),
-                "mean_exp_mz": _exp_mz_mean,
-                "mean_theo_mz": _theo_mz_mean,
-            }).to_dict("records")
+            ion_jump_stats = pd.DataFrame(
+                {
+                    "ion_id": _ion_ids,
+                    "jump_rate": jump_rates_arr,
+                    "n_obs": _exp_mz_count.astype(int),
+                    "n_unique_bins": n_unique_arr.astype(int),
+                    "mean_exp_mz": _exp_mz_mean,
+                    "mean_theo_mz": _theo_mz_mean,
+                }
+            ).to_dict("records")
 
             per_strategy_results[strategy_name] = {
                 "mean_jump_rate": comp["mean_jump_rate"],
@@ -1107,14 +1113,11 @@ class BinningAnalyser:
             }
 
         # Summary: best strategy
-        strategy_rankings = sorted(
-            per_strategy_results.items(),
-            key=lambda x: x[1]["mean_jump_rate"]
-        )
+        strategy_rankings = sorted(per_strategy_results.items(), key=lambda x: x[1]["mean_jump_rate"])
 
         best_strategy_name = strategy_rankings[0][0]
 
-        summary = {
+        summary: dict[str, Any] = {
             "best_strategy": best_strategy_name,
             "best_mean_jump_rate": strategy_rankings[0][1]["mean_jump_rate"],
             "n_multi_obs_ions": len(multi_obs_ion_ids),
@@ -1123,7 +1126,7 @@ class BinningAnalyser:
         }
 
         # Jump distance analysis for all strategies
-        jump_distance_results = {}
+        jump_distance_results: dict[str, Any] = {}
         for strategy_name, params in strategies.items():
             jump_dist = self._analyze_jump_distances(multi_obs_df, strategy_name, params)
             jump_distance_results[strategy_name] = jump_dist
@@ -1144,17 +1147,19 @@ class BinningAnalyser:
         fragments = prefix2_parts.str[1].fillna("")
         peptides = prefix2_parts.str[0]
 
-        per_ion_df = pd.DataFrame({
-            "ion_id": ion_ids.values,
-            "peptide": peptides.values,
-            "fragment": fragments.values,
-            "feature_type": feature_types.values,
-            "n_observations": _exp_mz_count.astype(int),
-            "jump_rate": best_jump_rates,
-            "mean_exp_mz": _exp_mz_mean,
-            "mean_theo_mz": _theo_mz_mean,
-            "strategy": best_strategy_name,
-        })
+        per_ion_df = pd.DataFrame(
+            {
+                "ion_id": ion_ids.values,
+                "peptide": peptides.values,
+                "fragment": fragments.values,
+                "feature_type": feature_types.values,
+                "n_observations": _exp_mz_count.astype(int),
+                "jump_rate": best_jump_rates,
+                "mean_exp_mz": _exp_mz_mean,
+                "mean_theo_mz": _theo_mz_mean,
+                "strategy": best_strategy_name,
+            }
+        )
 
         logger.info(f"Bin-jump rate analysis complete. Best strategy: {summary['best_strategy']}")
 
@@ -1165,9 +1170,7 @@ class BinningAnalyser:
             "jump_distance_analysis": jump_distance_results,
         }
 
-    def _analyze_jump_distances(
-        self, multi_obs_df: pd.DataFrame, strategy_name: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _analyze_jump_distances(self, multi_obs_df: pd.DataFrame, strategy_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze how far ions jump when they jump bins.
 
         Classifies jumps as adjacent (1 bin), near (2 bins), or distant (>2 bins).
@@ -1200,10 +1203,9 @@ class BinningAnalyser:
         jumping_ions = unique_bins_per_ion[unique_bins_per_ion > 1].index
 
         if len(jumping_ions) == 0:
-            return {"no_jumps": True, "fraction_adjacent": 0.0, "fraction_within_2": 0.0,
-                    "fraction_distant": 0.0, "n_jumps": 0}
+            return {"no_jumps": True, "fraction_adjacent": 0.0, "fraction_within_2": 0.0, "fraction_distant": 0.0, "n_jumps": 0}
 
-        jump_distances = []
+        jump_distances: list[Any] = []
         for ion_id in jumping_ions:
             ion_bins = grouped.get_group(ion_id).values
             modal_bin = modal_bins[ion_id]
@@ -1211,8 +1213,7 @@ class BinningAnalyser:
             jump_distances.extend(distances[distances > 0])
 
         if not jump_distances:
-            return {"no_jumps": True, "fraction_adjacent": 0.0, "fraction_within_2": 0.0,
-                    "fraction_distant": 0.0, "n_jumps": 0}
+            return {"no_jumps": True, "fraction_adjacent": 0.0, "fraction_within_2": 0.0, "fraction_distant": 0.0, "n_jumps": 0}
 
         jump_distances = np.array(jump_distances)
 
@@ -1266,13 +1267,9 @@ class BinningAnalyser:
         split_points = np.cumsum(spectrum_lengths[:-1])
 
         # Vectorized m/z range classification
-        range_boundaries_upper = np.array([
-            self.mz_range_boundaries[r][1] for r in self.mz_range_order
-        ], dtype=np.float64)
-        range_boundaries_upper = np.where(
-            np.isinf(range_boundaries_upper), 1e12, range_boundaries_upper
-        )
-        all_range_indices = np.searchsorted(range_boundaries_upper, all_mz_flat, side='left')
+        range_boundaries_upper = np.array([self.mz_range_boundaries[r][1] for r in self.mz_range_order], dtype=np.float64)
+        range_boundaries_upper = np.where(np.isinf(range_boundaries_upper), 1e12, range_boundaries_upper)
+        all_range_indices = np.searchsorted(range_boundaries_upper, all_mz_flat, side="left")
         all_range_indices = np.clip(all_range_indices, 0, len(self.mz_range_order) - 1)
 
         per_strategy_results = {}
@@ -1307,7 +1304,7 @@ class BinningAnalyser:
                 peaks_per_occupied_bin_arr[i] = counts.mean()
                 max_peaks_per_bin_arr[i] = counts.max()
 
-            collision_by_mz_range = {}
+            collision_by_mz_range: dict[str, Any] = {}
             for range_idx, range_name in enumerate(self.mz_range_order):
                 mask = all_range_indices == range_idx
                 n_peaks_in_range = int(mask.sum())
@@ -1326,7 +1323,7 @@ class BinningAnalyser:
                 }
 
             # Fragmentation-type stratified collision rates
-            collision_by_frag_type = {}
+            collision_by_frag_type: dict[str, Any] = {}
             if per_spectrum_frag_type and len(per_spectrum_frag_type) == n_spectra:
                 frag_types_arr = np.array(per_spectrum_frag_type, dtype=object)
                 unique_frag_types = np.unique(frag_types_arr)
@@ -1358,17 +1355,14 @@ class BinningAnalyser:
             }
 
         # Summary
-        strategy_rankings = sorted(
-            per_strategy_results.items(),
-            key=lambda x: x[1]["mean_collision_rate"]
-        )
+        strategy_rankings = sorted(per_strategy_results.items(), key=lambda x: x[1]["mean_collision_rate"])
         best_strategy = strategy_rankings[0][0]
         worst_strategy = strategy_rankings[-1][0]
 
         logger.info(
             f"Intra-spectrum collision analysis complete. "
-            f"Best: {best_strategy} ({per_strategy_results[best_strategy]['mean_collision_rate']*100:.2f}% collision rate), "
-            f"Worst: {worst_strategy} ({per_strategy_results[worst_strategy]['mean_collision_rate']*100:.2f}%)"
+            f"Best: {best_strategy} ({per_strategy_results[best_strategy]['mean_collision_rate'] * 100:.2f}% collision rate), "
+            f"Worst: {worst_strategy} ({per_strategy_results[worst_strategy]['mean_collision_rate'] * 100:.2f}%)"
         )
 
         return {
@@ -1412,17 +1406,15 @@ class BinningAnalyser:
         collision_per_strategy = intra_spectrum_collision["per_strategy"]
 
         # Only include strategies present in both analyses
-        common_strategies = sorted(
-            set(jump_per_strategy.keys()) & set(collision_per_strategy.keys())
-        )
+        common_strategies = sorted(set(jump_per_strategy.keys()) & set(collision_per_strategy.keys()))
 
         if not common_strategies:
             logger.warning("No common strategies between jump rate and collision analyses")
             return {"error": "No common strategies"}
 
-        tradeoff_table = []
-        jump_rates = []
-        collision_rates = []
+        tradeoff_table: list[Any] = []
+        jump_rates: list[Any] = []
+        collision_rates: list[Any] = []
 
         for name in common_strategies:
             jr = jump_per_strategy[name]["mean_jump_rate"]
@@ -1436,15 +1428,17 @@ class BinningAnalyser:
                 h_bin = prediction_entropy[name]["total_entropy"]
             effective_info_rate = h_bin * (1.0 - jr)
 
-            tradeoff_table.append({
-                "strategy": name,
-                "jump_rate": jr,
-                "collision_rate": cr,
-                "combined_score": combined,
-                "n_bins": n_bins,
-                "h_bin_bits": h_bin,
-                "effective_info_rate_bits": effective_info_rate,
-            })
+            tradeoff_table.append(
+                {
+                    "strategy": name,
+                    "jump_rate": jr,
+                    "collision_rate": cr,
+                    "combined_score": combined,
+                    "n_bins": n_bins,
+                    "h_bin_bits": h_bin,
+                    "effective_info_rate_bits": effective_info_rate,
+                }
+            )
             jump_rates.append(jr)
             collision_rates.append(cr)
 
@@ -1456,10 +1450,7 @@ class BinningAnalyser:
 
         pareto_strategies = [t["strategy"] for t in tradeoff_table if t["pareto_optimal"]]
 
-        logger.info(
-            f"Resolution-noise tradeoff complete. "
-            f"Pareto-optimal: {', '.join(pareto_strategies)} (w={w})"
-        )
+        logger.info(f"Resolution-noise tradeoff complete. Pareto-optimal: {', '.join(pareto_strategies)} (w={w})")
 
         return {
             "tradeoff_table": tradeoff_table,
@@ -1471,9 +1462,7 @@ class BinningAnalyser:
     # Stratified Analysis (Per Fragmentation Type)
     # =========================================================================
 
-    def _calculate_stratified_bin_analysis(
-        self, df: pd.DataFrame, strategies: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _calculate_stratified_bin_analysis(self, df: pd.DataFrame, strategies: Dict[str, Any]) -> Dict[str, Any]:
         """Run jump rate analysis stratified by fragmentation type.
 
         Reveals whether different instrument types need different binning.
@@ -1494,7 +1483,7 @@ class BinningAnalyser:
         frag_types = df["frag_type"].dropna().unique()
         logger.info(f"Found fragmentation types: {list(frag_types)}")
 
-        stratified_results = {}
+        stratified_results: dict[str, Any] = {}
 
         for frag_type in frag_types:
             frag_df = df[df["frag_type"] == frag_type].copy()
@@ -1504,7 +1493,7 @@ class BinningAnalyser:
                 logger.warning(f"Skipping {frag_type}: only {n_peaks} peaks")
                 continue
 
-            logger.info(f"Analyzing {frag_type}: {n_peaks:,d} peaks ({n_peaks/len(df)*100:.1f}%)")
+            logger.info(f"Analyzing {frag_type}: {n_peaks:,d} peaks ({n_peaks / len(df) * 100:.1f}%)")
 
             jump_results = self._calculate_stratified_jump_rates(frag_df, strategies)
 
@@ -1519,9 +1508,7 @@ class BinningAnalyser:
             "n_frag_types": len(stratified_results),
         }
 
-    def _calculate_stratified_jump_rates(
-        self, df: pd.DataFrame, strategies: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _calculate_stratified_jump_rates(self, df: pd.DataFrame, strategies: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate jump rates for a stratified subset of data.
 
         Uses shared _compute_jump_rates helper for deduplication.
@@ -1582,9 +1569,7 @@ class BinningAnalyser:
     # Pareto Helper
     # =========================================================================
 
-    def _identify_pareto_optimal(
-        self, jump_rates: List[float], collision_rates: List[float]
-    ) -> List[bool]:
+    def _identify_pareto_optimal(self, jump_rates: List[float], collision_rates: List[float]) -> List[bool]:
         """Identify Pareto-optimal strategies (lower is better for both metrics).
 
         Args:
@@ -1601,8 +1586,11 @@ class BinningAnalyser:
             for j in range(n):
                 if i != j:
                     # j dominates i if j is <= in both and < in at least one
-                    if (jump_rates[j] <= jump_rates[i] and collision_rates[j] <= collision_rates[i] and
-                        (jump_rates[j] < jump_rates[i] or collision_rates[j] < collision_rates[i])):
+                    if (
+                        jump_rates[j] <= jump_rates[i]
+                        and collision_rates[j] <= collision_rates[i]
+                        and (jump_rates[j] < jump_rates[i] or collision_rates[j] < collision_rates[i])
+                    ):
                         pareto_mask[i] = False
                         break
 
@@ -1612,7 +1600,7 @@ class BinningAnalyser:
     # Visualization Methods
     # =========================================================================
 
-    def _generate_strategy_comparison_visualization(self):
+    def _generate_strategy_comparison_visualization(self) -> None:
         """Generate Figure 1: strategy_comparison.png (2x2).
 
         Panels:
@@ -1638,27 +1626,27 @@ class BinningAnalyser:
         names = [s[0] for s in strategies_sorted]
         rates = [s[1]["bin_error_rate"] * 100 for s in strategies_sorted]
 
-        colors = []
+        colors: list[Any] = []
         for rate in rates:
             if rate < 5:
-                colors.append('lightgreen')
+                colors.append("lightgreen")
             elif rate < 10:
-                colors.append('gold')
+                colors.append("gold")
             else:
-                colors.append('salmon')
+                colors.append("salmon")
 
         y_pos = np.arange(len(names))
-        ax.barh(y_pos, rates, color=colors, alpha=0.8, edgecolor='black', linewidth=0.5)
+        ax.barh(y_pos, rates, color=colors, alpha=0.8, edgecolor="black", linewidth=0.5)
         ax.set_yticks(y_pos)
         ax.set_yticklabels(names, fontsize=9)
         ax.set_xlabel("Bin Error Rate (%)")
         ax.set_title("Theo-Exp Bin Mismatch Rate")
-        ax.axvline(x=5, color='green', linestyle='--', alpha=0.7, linewidth=1.5, label='5%')
-        ax.axvline(x=10, color='orange', linestyle='--', alpha=0.7, linewidth=1.5, label='10%')
+        ax.axvline(x=5, color="green", linestyle="--", alpha=0.7, linewidth=1.5, label="5%")
+        ax.axvline(x=10, color="orange", linestyle="--", alpha=0.7, linewidth=1.5, label="10%")
         for i, rate in enumerate(rates):
-            ax.text(rate + 0.3, i, f'{rate:.1f}%', va='center', fontsize=8)
-        ax.legend(fontsize=8, loc='lower right')
-        ax.grid(True, alpha=0.3, axis='x')
+            ax.text(rate + 0.3, i, f"{rate:.1f}%", va="center", fontsize=8)
+        ax.legend(fontsize=8, loc="lower right")
+        ax.grid(True, alpha=0.3, axis="x")
 
         # ---- (0,1): Mean bin-jump rate ----
         ax = axes[0, 1]
@@ -1667,33 +1655,31 @@ class BinningAnalyser:
             jump_sorted = sorted(per_strat.items(), key=lambda x: x[1]["mean_jump_rate"])
             j_names = [s[0] for s in jump_sorted]
             j_means = [s[1]["mean_jump_rate"] * 100 for s in jump_sorted]
-            j_stds = [s[1]["std_jump_rate"] * 100 for s in jump_sorted]
+            [s[1]["std_jump_rate"] * 100 for s in jump_sorted]
 
-            j_colors = []
+            j_colors: list[Any] = []
             for rate in j_means:
                 if rate < 5:
-                    j_colors.append('lightgreen')
+                    j_colors.append("lightgreen")
                 elif rate < 10:
-                    j_colors.append('gold')
+                    j_colors.append("gold")
                 else:
-                    j_colors.append('salmon')
+                    j_colors.append("salmon")
 
             y_pos = np.arange(len(j_names))
-            ax.barh(y_pos, j_means, color=j_colors, alpha=0.8,
-                    edgecolor='black', linewidth=0.5)
+            ax.barh(y_pos, j_means, color=j_colors, alpha=0.8, edgecolor="black", linewidth=0.5)
             ax.set_yticks(y_pos)
             ax.set_yticklabels(j_names, fontsize=9)
             ax.set_xlabel("Mean Jump Rate (%)")
             ax.set_title("Bin-Jump Rate (Label Noise)")
-            ax.axvline(x=5, color='green', linestyle='--', alpha=0.7, linewidth=1.5, label='5%')
-            ax.axvline(x=10, color='orange', linestyle='--', alpha=0.7, linewidth=1.5, label='10%')
+            ax.axvline(x=5, color="green", linestyle="--", alpha=0.7, linewidth=1.5, label="5%")
+            ax.axvline(x=10, color="orange", linestyle="--", alpha=0.7, linewidth=1.5, label="10%")
             for i, mean in enumerate(j_means):
-                ax.text(mean + 0.3, i, f'{mean:.1f}%', va='center', fontsize=8)
-            ax.legend(fontsize=8, loc='lower right')
-            ax.grid(True, alpha=0.3, axis='x')
+                ax.text(mean + 0.3, i, f"{mean:.1f}%", va="center", fontsize=8)
+            ax.legend(fontsize=8, loc="lower right")
+            ax.grid(True, alpha=0.3, axis="x")
         else:
-            ax.text(0.5, 0.5, "Bin-jump analysis not available",
-                    ha='center', va='center', transform=ax.transAxes)
+            ax.text(0.5, 0.5, "Bin-jump analysis not available", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("Bin-Jump Rate (Label Noise)")
 
         # ---- (1,0): Vocabulary size & efficiency ----
@@ -1704,7 +1690,7 @@ class BinningAnalyser:
         tradeoff_table = tradeoff.get("tradeoff_table", [])
 
         # Build n_bins lookup from tradeoff table or prediction entropy
-        vocab_data = {}
+        vocab_data: dict[str, Any] = {}
         for row in tradeoff_table:
             vocab_data[row["strategy"]] = {"n_bins": row["n_bins"]}
         for strat_name, metrics in pred_entropy.items():
@@ -1725,26 +1711,22 @@ class BinningAnalyser:
             x_pos = np.arange(len(strat_names))
             width = 0.35
 
-            bars1 = ax.bar(x_pos - width / 2, [n / 1000 for n in n_bins_vals], width,
-                           label='Total bins (k)', color='steelblue', alpha=0.8)
-            bars2 = ax.bar(x_pos + width / 2, [e / 1000 for e in eff_classes], width,
-                           label='Effective classes (k)', color='seagreen', alpha=0.8)
+            ax.bar(x_pos - width / 2, [n / 1000 for n in n_bins_vals], width, label="Total bins (k)", color="steelblue", alpha=0.8)
+            ax.bar(x_pos + width / 2, [e / 1000 for e in eff_classes], width, label="Effective classes (k)", color="seagreen", alpha=0.8)
 
             # Annotate occupancy rate on top of each pair
-            for i, (nb, ec, occ) in enumerate(zip(n_bins_vals, eff_classes, occupancy)):
+            for i, (nb, ec, occ) in enumerate(zip(n_bins_vals, eff_classes, occupancy, strict=False)):
                 bar_top = max(nb, ec) / 1000
-                ax.text(i, bar_top + 5, f'{occ:.0%}',
-                        ha='center', va='bottom', fontsize=7, fontweight='bold', color='#555')
+                ax.text(i, bar_top + 5, f"{occ:.0%}", ha="center", va="bottom", fontsize=7, fontweight="bold", color="#555")
 
             ax.set_xticks(x_pos)
-            ax.set_xticklabels(strat_names, rotation=45, ha='right', fontsize=8)
+            ax.set_xticklabels(strat_names, rotation=45, ha="right", fontsize=8)
             ax.set_ylabel("Count (thousands)")
             ax.set_title("Vocabulary Size & Efficiency")
-            ax.legend(fontsize=8, loc='upper left')
-            ax.grid(True, alpha=0.3, axis='y')
+            ax.legend(fontsize=8, loc="upper left")
+            ax.grid(True, alpha=0.3, axis="y")
         else:
-            ax.text(0.5, 0.5, "No vocabulary data available",
-                    ha='center', va='center', transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No vocabulary data available", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("Vocabulary Size & Efficiency")
 
         # ---- (1,1): P90 rolling jump rate vs m/z ----
@@ -1758,26 +1740,20 @@ class BinningAnalyser:
                 if not per_ion_data:
                     continue
 
-                df_ions = pd.DataFrame([
-                    {"mean_exp_mz": ion["mean_exp_mz"], "jump_rate": ion["jump_rate"]}
-                    for ion in per_ion_data
-                ])
+                df_ions = pd.DataFrame([{"mean_exp_mz": ion["mean_exp_mz"], "jump_rate": ion["jump_rate"]} for ion in per_ion_data])
 
                 mz_min = df_ions["mean_exp_mz"].min()
                 mz_max = df_ions["mean_exp_mz"].max()
                 window_size = 100.0
 
                 mz_bins = np.arange(
-                    np.floor(mz_min / window_size) * window_size,
-                    np.ceil(mz_max / window_size) * window_size + window_size,
-                    window_size
+                    np.floor(mz_min / window_size) * window_size, np.ceil(mz_max / window_size) * window_size + window_size, window_size
                 )
 
                 if len(mz_bins) < 2:
                     continue
 
-                df_ions["mz_window"] = pd.cut(df_ions["mean_exp_mz"], bins=mz_bins,
-                                              labels=mz_bins[:-1], include_lowest=True)
+                df_ions["mz_window"] = pd.cut(df_ions["mean_exp_mz"], bins=mz_bins, labels=mz_bins[:-1], include_lowest=True)
 
                 window_p90 = df_ions.groupby("mz_window", observed=True)["jump_rate"].quantile(0.90)
                 if len(window_p90) == 0:
@@ -1785,31 +1761,30 @@ class BinningAnalyser:
 
                 mz_centers = window_p90.index.astype(float).values + (window_size / 2.0)
 
-                ax.plot(mz_centers, window_p90.values, 'o-',
-                        label=strategy_name, color=colors_map[strategy_idx],
-                        alpha=0.7, linewidth=2, markersize=4)
+                ax.plot(
+                    mz_centers, window_p90.values, "o-", label=strategy_name, color=colors_map[strategy_idx], alpha=0.7, linewidth=2, markersize=4
+                )
 
-            ax.axhline(y=0.05, color='orange', linestyle='--', alpha=0.7, linewidth=1.5, label='5%')
-            ax.axhline(y=0.10, color='red', linestyle='--', alpha=0.7, linewidth=1.5, label='10%')
+            ax.axhline(y=0.05, color="orange", linestyle="--", alpha=0.7, linewidth=1.5, label="5%")
+            ax.axhline(y=0.10, color="red", linestyle="--", alpha=0.7, linewidth=1.5, label="10%")
             ax.set_xlabel("m/z (Da)")
             ax.set_ylabel("P90 Jump Rate")
             ax.set_title("P90 Rolling Jump Rate vs m/z (100 Da windows)")
-            ax.legend(fontsize=7, loc='best')
+            ax.legend(fontsize=7, loc="best")
             ax.grid(True, alpha=0.3)
             ax.set_ylim(0, 0.45)
         else:
-            ax.text(0.5, 0.5, "Bin-jump analysis not available",
-                    ha='center', va='center', transform=ax.transAxes)
+            ax.text(0.5, 0.5, "Bin-jump analysis not available", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("P90 Rolling Jump Rate vs m/z")
 
-        fig.suptitle("Binning Strategy Comparison", fontsize=16, fontweight='bold')
+        fig.suptitle("Binning Strategy Comparison", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "strategy_comparison.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Strategy comparison visualization saved to: {fig_path}")
 
-    def _generate_strategy_shapes_visualization(self):
+    def _generate_strategy_shapes_visualization(self) -> None:
         """Generate Figure 2: strategy_shapes.png (4x1).
 
         Panels:
@@ -1824,9 +1799,7 @@ class BinningAnalyser:
 
         error_model = self.results.get("error_model_fit")
         has_error_model = (
-            error_model is not None
-            and error_model.get("fitted_da_floor") is not None
-            and error_model.get("fitted_ppm_equiv") is not None
+            error_model is not None and error_model.get("fitted_da_floor") is not None and error_model.get("fitted_ppm_equiv") is not None
         )
         n_panels = 4 if has_error_model else 3
 
@@ -1839,7 +1812,7 @@ class BinningAnalyser:
 
         colors = plt.cm.tab10(np.linspace(0, 1, len(strategies)))
 
-        for (strategy_name, params), color in zip(strategies.items(), colors):
+        for (strategy_name, params), color in zip(strategies.items(), colors, strict=False):
             try:
                 strategy = self._create_binning_strategy(params)
                 bin_edges = strategy.bin_edges.cpu().numpy()
@@ -1847,24 +1820,21 @@ class BinningAnalyser:
                 bin_widths = np.diff(bin_edges)
 
                 # Panel 1: Bin width
-                ax1.plot(bin_centers, bin_widths, '-', label=strategy_name,
-                         color=color, linewidth=2, alpha=0.8)
+                ax1.plot(bin_centers, bin_widths, "-", label=strategy_name, color=color, linewidth=2, alpha=0.8)
 
                 if params["type"] == "adaptive":
                     min_da = params.get("min_da", 0.005)
                     max_da = params.get("max_da", 0.12)
-                    ax1.axhline(y=min_da, color='gray', linestyle=':', alpha=0.4)
-                    ax1.axhline(y=max_da, color='gray', linestyle=':', alpha=0.4)
+                    ax1.axhline(y=min_da, color="gray", linestyle=":", alpha=0.4)
+                    ax1.axhline(y=max_da, color="gray", linestyle=":", alpha=0.4)
 
                 # Panel 2: Effective PPM
                 effective_ppm = 1e6 * bin_widths / bin_centers
-                ax2.plot(bin_centers, effective_ppm, '-', label=strategy_name,
-                         color=color, linewidth=2, alpha=0.8)
+                ax2.plot(bin_centers, effective_ppm, "-", label=strategy_name, color=color, linewidth=2, alpha=0.8)
 
                 # Panel 3: Cumulative bins
                 cumulative_fraction = np.cumsum(np.ones_like(bin_centers)) / len(bin_centers)
-                ax3.plot(bin_centers, cumulative_fraction, '-', label=strategy_name,
-                         color=color, linewidth=2, alpha=0.8)
+                ax3.plot(bin_centers, cumulative_fraction, "-", label=strategy_name, color=color, linewidth=2, alpha=0.8)
 
             except Exception as e:
                 logger.warning(f"Failed to process strategy {strategy_name}: {e}")
@@ -1873,65 +1843,62 @@ class BinningAnalyser:
         ax1.set_xlabel("m/z (Da)")
         ax1.set_ylabel("Bin Width (Da)")
         ax1.set_title("Bin Width vs m/z")
-        ax1.legend(fontsize=9, loc='best')
+        ax1.legend(fontsize=9, loc="best")
         ax1.grid(True, alpha=0.3)
 
         ax2.set_xlabel("m/z (Da)")
         ax2.set_ylabel("Effective PPM Resolution")
         ax2.set_title("Effective Resolution (PPM) vs m/z")
-        ax2.axhline(y=10, color='green', linestyle='--', alpha=0.5, linewidth=1, label='10 PPM')
-        ax2.axhline(y=20, color='orange', linestyle='--', alpha=0.5, linewidth=1, label='20 PPM')
-        ax2.axhline(y=50, color='red', linestyle='--', alpha=0.5, linewidth=1, label='50 PPM')
-        ax2.legend(fontsize=9, loc='best')
+        ax2.axhline(y=10, color="green", linestyle="--", alpha=0.5, linewidth=1, label="10 PPM")
+        ax2.axhline(y=20, color="orange", linestyle="--", alpha=0.5, linewidth=1, label="20 PPM")
+        ax2.axhline(y=50, color="red", linestyle="--", alpha=0.5, linewidth=1, label="50 PPM")
+        ax2.legend(fontsize=9, loc="best")
         ax2.grid(True, alpha=0.3)
         ax2.set_ylim(0, min(250, ax2.get_ylim()[1]))
 
         ax3.set_xlabel("m/z (Da)")
         ax3.set_ylabel("Cumulative Fraction of Bins")
         ax3.set_title("Cumulative Bin Count")
-        ax3.legend(fontsize=9, loc='best')
+        ax3.legend(fontsize=9, loc="best")
         ax3.grid(True, alpha=0.3)
         ax3.set_ylim(0, 1.0)
 
         # ---- Panel 4: Safety Margin (only if error model is fitted) ----
         if ax4 is not None and has_error_model:
-            fitted_a = error_model["fitted_da_floor"]
-            fitted_b = error_model["fitted_ppm_equiv"] / 1e6  # convert back to raw
+            fitted_a = error_model["fitted_da_floor"]  # type: ignore[index]
+            fitted_b = error_model["fitted_ppm_equiv"] / 1e6  # type: ignore[index]  # convert back to raw
 
-            for (strategy_name, params), color in zip(strategies.items(), colors):
+            for (strategy_name, params), color in zip(strategies.items(), colors, strict=False):
                 try:
                     strategy = self._create_binning_strategy(params)
                     bin_edges = strategy.bin_edges.cpu().numpy()
                     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
                     bin_widths = np.diff(bin_edges)
 
-                    p95_errors = np.sqrt(fitted_a**2 + (fitted_b * bin_centers)**2)
+                    p95_errors = np.sqrt(fitted_a**2 + (fitted_b * bin_centers) ** 2)
                     safety = bin_widths / (2 * p95_errors)
 
-                    ax4.plot(bin_centers, safety, '-', label=strategy_name,
-                             color=color, linewidth=2, alpha=0.8)
+                    ax4.plot(bin_centers, safety, "-", label=strategy_name, color=color, linewidth=2, alpha=0.8)
                 except Exception as e:
                     logger.warning(f"Failed to plot safety margin for {strategy_name}: {e}")
 
-            ax4.axhline(y=1.0, color='red', linestyle='--', alpha=0.7, linewidth=2,
-                        label='Margin = 1 (bin = 2x error)')
-            ax4.axhline(y=2.0, color='orange', linestyle=':', alpha=0.5, linewidth=1.5,
-                        label='Margin = 2 (comfortable)')
+            ax4.axhline(y=1.0, color="red", linestyle="--", alpha=0.7, linewidth=2, label="Margin = 1 (bin = 2x error)")
+            ax4.axhline(y=2.0, color="orange", linestyle=":", alpha=0.5, linewidth=1.5, label="Margin = 2 (comfortable)")
             ax4.set_xlabel("m/z (Da)")
             ax4.set_ylabel("Safety Margin (bin_width / 2*P95)")
             ax4.set_title("Bin Width Safety Margin vs Fitted P95 Error (Orbitrap)")
-            ax4.legend(fontsize=8, loc='best')
+            ax4.legend(fontsize=8, loc="best")
             ax4.grid(True, alpha=0.3)
             ax4.set_ylim(0, min(20, ax4.get_ylim()[1]))
 
-        fig.suptitle("Binning Strategy Shapes", fontsize=16, fontweight='bold')
+        fig.suptitle("Binning Strategy Shapes", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "strategy_shapes.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Strategy shapes visualization saved to: {fig_path}")
 
-    def _generate_resolution_noise_tradeoff_visualization(self):
+    def _generate_resolution_noise_tradeoff_visualization(self) -> None:
         """Generate Figure 3: resolution_noise_tradeoff.png (1x2).
 
         Panels:
@@ -1967,43 +1934,45 @@ class BinningAnalyser:
             sizes = np.full_like(n_bins_arr, 200)
 
         for i in range(len(table)):
-            color = '#2ecc71' if pareto[i] else 'lightgray'
-            edge_color = '#27ae60' if pareto[i] else 'gray'
-            ax1.scatter(jump_rates[i], collision_rates[i], s=sizes[i],
-                       c=color, edgecolors=edge_color, linewidths=1.5,
-                       zorder=3 if pareto[i] else 2, alpha=0.8)
+            color = "#2ecc71" if pareto[i] else "lightgray"
+            edge_color = "#27ae60" if pareto[i] else "gray"
+            ax1.scatter(
+                jump_rates[i], collision_rates[i], s=sizes[i], c=color, edgecolors=edge_color, linewidths=1.5, zorder=3 if pareto[i] else 2, alpha=0.8
+            )
 
         # Draw Pareto frontier
-        pareto_points = [(jump_rates[i], collision_rates[i])
-                        for i in range(len(table)) if pareto[i]]
+        pareto_points = [(jump_rates[i], collision_rates[i]) for i in range(len(table)) if pareto[i]]
         if len(pareto_points) >= 2:
             pareto_points.sort(key=lambda p: p[0])
-            px, py = zip(*pareto_points)
-            ax1.plot(px, py, '--', color='#27ae60', linewidth=1.5, alpha=0.6,
-                    label='Pareto frontier')
+            px, py = zip(*pareto_points, strict=False)
+            ax1.plot(px, py, "--", color="#27ae60", linewidth=1.5, alpha=0.6, label="Pareto frontier")
 
         # Annotate
         for i in range(len(table)):
             label = f"{names[i]}\n({n_bins_list[i]:,d} bins)"
             offset = (8, 8) if i % 2 == 0 else (8, -12)
-            ax1.annotate(label, (jump_rates[i], collision_rates[i]),
-                        xytext=offset, textcoords='offset points',
-                        fontsize=7, alpha=0.8,
-                        arrowprops=dict(arrowstyle='-', alpha=0.3, lw=0.5))
+            ax1.annotate(
+                label,
+                (jump_rates[i], collision_rates[i]),
+                xytext=offset,
+                textcoords="offset points",
+                fontsize=7,
+                alpha=0.8,
+                arrowprops={"arrowstyle": "-", "alpha": 0.3, "lw": 0.5},
+            )
 
-        ax1.axvline(x=5, color='red', linestyle=':', alpha=0.4, label='5% threshold')
-        ax1.axhline(y=5, color='red', linestyle=':', alpha=0.4)
+        ax1.axvline(x=5, color="red", linestyle=":", alpha=0.4, label="5% threshold")
+        ax1.axhline(y=5, color="red", linestyle=":", alpha=0.4)
 
         from matplotlib.lines import Line2D
+
         legend_elements = [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='#2ecc71',
-                   markeredgecolor='#27ae60', markersize=10, label='Pareto-optimal'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgray',
-                   markeredgecolor='gray', markersize=10, label='Dominated'),
-            Line2D([0], [0], linestyle='--', color='#27ae60', label='Pareto frontier'),
-            Line2D([0], [0], linestyle=':', color='red', alpha=0.4, label='5% threshold'),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor="#2ecc71", markeredgecolor="#27ae60", markersize=10, label="Pareto-optimal"),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor="lightgray", markeredgecolor="gray", markersize=10, label="Dominated"),
+            Line2D([0], [0], linestyle="--", color="#27ae60", label="Pareto frontier"),
+            Line2D([0], [0], linestyle=":", color="red", alpha=0.4, label="5% threshold"),
         ]
-        ax1.legend(handles=legend_elements, loc='upper right', fontsize=8)
+        ax1.legend(handles=legend_elements, loc="upper right", fontsize=8)
 
         ax1.set_xlabel("Jump Rate (%) -- label noise")
         ax1.set_ylabel("Intra-Spectrum Collision Rate (%) -- information loss")
@@ -2015,49 +1984,41 @@ class BinningAnalyser:
 
         if jump_dist:
             # Filter to strategies with actual data
-            strat_names = [s for s in jump_dist
-                          if not jump_dist[s].get("no_data") and not jump_dist[s].get("no_jumps")]
+            strat_names = [s for s in jump_dist if not jump_dist[s].get("no_data") and not jump_dist[s].get("no_jumps")]
 
             if strat_names:
                 frac_adjacent = [jump_dist[s].get("fraction_adjacent", 0) * 100 for s in strat_names]
-                frac_near = [(jump_dist[s].get("fraction_within_2", 0) -
-                             jump_dist[s].get("fraction_adjacent", 0)) * 100
-                            for s in strat_names]
+                frac_near = [(jump_dist[s].get("fraction_within_2", 0) - jump_dist[s].get("fraction_adjacent", 0)) * 100 for s in strat_names]
                 frac_distant = [jump_dist[s].get("fraction_distant", 0) * 100 for s in strat_names]
 
                 x_pos = np.arange(len(strat_names))
                 width = 0.25
 
-                ax2.bar(x_pos - width, frac_adjacent, width, label='Adjacent (1 bin)',
-                       color='steelblue', alpha=0.8)
-                ax2.bar(x_pos, frac_near, width, label='Near (2 bins)',
-                       color='gold', alpha=0.8)
-                ax2.bar(x_pos + width, frac_distant, width, label='Distant (>2 bins)',
-                       color='salmon', alpha=0.8)
+                ax2.bar(x_pos - width, frac_adjacent, width, label="Adjacent (1 bin)", color="steelblue", alpha=0.8)
+                ax2.bar(x_pos, frac_near, width, label="Near (2 bins)", color="gold", alpha=0.8)
+                ax2.bar(x_pos + width, frac_distant, width, label="Distant (>2 bins)", color="salmon", alpha=0.8)
 
                 ax2.set_xticks(x_pos)
-                ax2.set_xticklabels(strat_names, rotation=45, ha='right', fontsize=8)
+                ax2.set_xticklabels(strat_names, rotation=45, ha="right", fontsize=8)
                 ax2.set_ylabel("Fraction of Jumps (%)")
                 ax2.set_title("Jump Distance Distribution")
                 ax2.legend(fontsize=9)
-                ax2.grid(True, alpha=0.3, axis='y')
+                ax2.grid(True, alpha=0.3, axis="y")
             else:
-                ax2.text(0.5, 0.5, "No jump distance data available",
-                        ha='center', va='center', transform=ax2.transAxes)
+                ax2.text(0.5, 0.5, "No jump distance data available", ha="center", va="center", transform=ax2.transAxes)
                 ax2.set_title("Jump Distance Distribution")
         else:
-            ax2.text(0.5, 0.5, "No jump distance data available",
-                    ha='center', va='center', transform=ax2.transAxes)
+            ax2.text(0.5, 0.5, "No jump distance data available", ha="center", va="center", transform=ax2.transAxes)
             ax2.set_title("Jump Distance Distribution")
 
-        fig.suptitle("Resolution-Noise Tradeoff", fontsize=16, fontweight='bold')
+        fig.suptitle("Resolution-Noise Tradeoff", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "resolution_noise_tradeoff.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Resolution-noise tradeoff visualization saved to: {fig_path}")
 
-    def _generate_group_offset_balance_visualization(self):
+    def _generate_group_offset_balance_visualization(self) -> None:
         """Generate Figure 4: group_offset_balance.png (1x2).
 
         Panels:
@@ -2080,7 +2041,7 @@ class BinningAnalyser:
 
         colors = plt.cm.tab10(np.linspace(0, 1, len(strategies)))
 
-        for (strategy_name, params), color in zip(strategies.items(), colors):
+        for (strategy_name, params), color in zip(strategies.items(), colors, strict=False):
             try:
                 strategy = self._create_binning_strategy(params)
                 mz_tensor = torch.from_numpy(df["exp_mz"].values).float()
@@ -2092,40 +2053,38 @@ class BinningAnalyser:
                 # Panel 1: Group frequency
                 group_counts = pd.Series(group_indices_np).value_counts().sort_values(ascending=False)
                 ranks = np.arange(1, len(group_counts) + 1)
-                ax1.plot(ranks, group_counts.values, 'o-', label=strategy_name,
-                        color=color, alpha=0.7, linewidth=2, markersize=4)
+                ax1.plot(ranks, group_counts.values, "o-", label=strategy_name, color=color, alpha=0.7, linewidth=2, markersize=4)
 
                 # Panel 2: Offset distribution
                 offset_counts = pd.Series(offset_indices_np).value_counts().sort_index()
                 offset_pct = 100.0 * offset_counts / offset_counts.sum()
-                ax2.bar(offset_pct.index, offset_pct.values, alpha=0.5,
-                       label=strategy_name, color=color, width=0.8)
+                ax2.bar(offset_pct.index, offset_pct.values, alpha=0.5, label=strategy_name, color=color, width=0.8)
 
             except Exception as e:
                 logger.warning(f"Failed to process strategy {strategy_name}: {e}")
                 continue
 
-        ax1.set_yscale('log')
+        ax1.set_yscale("log")
         ax1.set_xlabel("Group Rank")
         ax1.set_ylabel("Frequency (log scale)")
         ax1.set_title("Group Label Distribution (Rank-Frequency)")
-        ax1.legend(fontsize=9, loc='best')
+        ax1.legend(fontsize=9, loc="best")
         ax1.grid(True, alpha=0.3)
 
         ax2.set_xlabel("Offset Index")
         ax2.set_ylabel("Frequency (%)")
         ax2.set_title("Offset Usage Distribution")
-        ax2.legend(fontsize=9, loc='best')
-        ax2.grid(True, alpha=0.3, axis='y')
+        ax2.legend(fontsize=9, loc="best")
+        ax2.grid(True, alpha=0.3, axis="y")
 
-        fig.suptitle("Hierarchical Classification Balance", fontsize=16, fontweight='bold')
+        fig.suptitle("Hierarchical Classification Balance", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "group_offset_balance.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Group/offset balance visualization saved to: {fig_path}")
 
-    def _generate_stratified_jump_rates_visualization(self):
+    def _generate_stratified_jump_rates_visualization(self) -> None:
         """Generate Figure 5: stratified_jump_rates.png (grouped bar).
 
         Shows mean jump rate across ALL strategies per fragmentation type.
@@ -2163,7 +2122,7 @@ class BinningAnalyser:
         colors = plt.cm.tab10(np.linspace(0, 1, n_strats))
 
         for strat_idx, strategy_name in enumerate(all_strategies):
-            rates = []
+            rates: list[Any] = []
             for frag_type in frag_types:
                 jump_analysis = per_frag[frag_type].get("jump_analysis", {})
                 per_strategy = jump_analysis.get("per_strategy", {})
@@ -2173,23 +2132,22 @@ class BinningAnalyser:
                     rates.append(0)
 
             offset = (strat_idx - n_strats / 2 + 0.5) * bar_width
-            ax.bar(x_pos + offset, rates, bar_width, label=strategy_name,
-                   color=colors[strat_idx], alpha=0.8)
+            ax.bar(x_pos + offset, rates, bar_width, label=strategy_name, color=colors[strat_idx], alpha=0.8)
 
         ax.set_xticks(x_pos)
         ax.set_xticklabels(frag_types, fontsize=10)
         ax.set_xlabel("Fragmentation Type")
         ax.set_ylabel("Mean Jump Rate (%)")
         ax.set_title("Jump Rate by Fragmentation Type and Strategy")
-        ax.axhline(y=5, color='green', linestyle='--', alpha=0.7, linewidth=1.5, label='5%')
-        ax.axhline(y=10, color='orange', linestyle='--', alpha=0.7, linewidth=1.5, label='10%')
-        ax.legend(fontsize=8, loc='best', ncol=2)
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.axhline(y=5, color="green", linestyle="--", alpha=0.7, linewidth=1.5, label="5%")
+        ax.axhline(y=10, color="orange", linestyle="--", alpha=0.7, linewidth=1.5, label="10%")
+        ax.legend(fontsize=8, loc="best", ncol=2)
+        ax.grid(True, alpha=0.3, axis="y")
 
-        fig.suptitle("Stratified Jump Rate Analysis", fontsize=16, fontweight='bold')
+        fig.suptitle("Stratified Jump Rate Analysis", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "stratified_jump_rates.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Stratified jump rates visualization saved to: {fig_path}")
 
@@ -2331,7 +2289,7 @@ class BinningAnalyser:
 
             # Derived metrics
             efficiency = h_bin / max_h_bin if max_h_bin > 0 else 0.0
-            effective_classes = 2.0 ** h_bin
+            effective_classes = 2.0**h_bin
             n_occupied = int(np.sum(bin_counts > 0))
             occupancy_rate = n_occupied / n_bins if n_bins > 0 else 0.0
 
@@ -2367,12 +2325,12 @@ class BinningAnalyser:
         Returns:
             Dict with mass_differences and per_strategy resolvability matrices.
         """
-        mass_differences = {
+        mass_differences: dict[str, Any] = {
             # Custom ion mass differences (low m/z region)
-            "TMT N/C channel": 0.0063,          # TMT_127N vs TMT_127C (isobaric reporter)
-            "immonium Arg vs TMT_129N": 0.018,   # Arg immonium vs TMT reporter overlap
-            "Gln-Lys": 0.036,                    # Also immonium_Gln vs immonium_Lys
-            "glycan_126 vs TMT_126": 0.0727,     # Glycan fragment vs TMT reporter
+            "TMT N/C channel": 0.0063,  # TMT_127N vs TMT_127C (isobaric reporter)
+            "immonium Arg vs TMT_129N": 0.018,  # Arg immonium vs TMT reporter overlap
+            "Gln-Lys": 0.036,  # Also immonium_Gln vs immonium_Lys
+            "glycan_126 vs TMT_126": 0.0727,  # Glycan fragment vs TMT reporter
             # Backbone fragment mass differences
             "Isotope (z=3)": 0.334,
             "Isotope (z=2)": 0.502,
@@ -2388,9 +2346,9 @@ class BinningAnalyser:
             bin_widths = np.diff(bin_edges)
             max_bin_width = float(bin_widths.max())
 
-            per_diff = {}
+            per_diff: dict[str, Any] = {}
             for diff_name, delta in mass_differences.items():
-                min_bins = delta / max_bin_width if max_bin_width > 0 else float('inf')
+                min_bins = delta / max_bin_width if max_bin_width > 0 else float("inf")
                 if min_bins >= 2.0:
                     classification = "resolvable"
                 elif min_bins >= 1.0:
@@ -2451,7 +2409,7 @@ class BinningAnalyser:
 
         # Pre-compute bin indices for all strategies
         mz_tensor = torch.from_numpy(all_mz).float()
-        strategy_bin_indices = {}
+        strategy_bin_indices: dict[str, Any] = {}
         for strategy_name, params in strategies.items():
             strategy = self._create_binning_strategy(params)
             bins = strategy.mz_to_bin(mz_tensor).numpy()
@@ -2461,8 +2419,8 @@ class BinningAnalyser:
         per_strategy = {}
         for strategy_name in strategies:
             bins_sorted = strategy_bin_indices[strategy_name]
-            entropies = []
-            peak_counts = []
+            entropies: list[Any] = []
+            peak_counts: list[Any] = []
 
             for w in range(n_windows):
                 start_idx = split_indices[w]
@@ -2522,7 +2480,7 @@ class BinningAnalyser:
 
         mz_tensor = torch.from_numpy(all_mz).float()
         per_strategy = {}
-        recommendations = {}
+        recommendations: dict[str, Any] = {}
 
         for strategy_name, params in strategies.items():
             strategy = self._create_binning_strategy(params)
@@ -2532,8 +2490,8 @@ class BinningAnalyser:
             h_bin = self._shannon_entropy_bits(bin_counts)
             bin_edges = strategy.bin_edges.cpu().numpy()
 
-            strategy_results = {}
-            recommended_sizes = []
+            strategy_results: dict[str, Any] = {}
+            recommended_sizes: list[Any] = []
 
             for gs in candidates:
                 n_groups = (n_bins + gs - 1) // gs
@@ -2547,9 +2505,7 @@ class BinningAnalyser:
                 h_offset_given_group = h_bin - h_group
 
                 max_h_offset = np.log2(gs) if gs > 1 else 0.0
-                offset_utilization = (
-                    h_offset_given_group / max_h_offset if max_h_offset > 0 else 0.0
-                )
+                offset_utilization = h_offset_given_group / max_h_offset if max_h_offset > 0 else 0.0
                 offset_headroom = max_h_offset - h_offset_given_group
                 head_balance = h_group / h_bin if h_bin > 0 else 0.0
 
@@ -2558,11 +2514,7 @@ class BinningAnalyser:
                 group_ends = np.minimum(group_starts + gs, n_bins)
                 group_widths = bin_edges[group_ends] - bin_edges[group_starts]
 
-                recommended = (
-                    offset_utilization < max_offset_util
-                    and offset_headroom >= min_headroom
-                    and n_groups <= max_n_groups
-                )
+                recommended = offset_utilization < max_offset_util and offset_headroom >= min_headroom and n_groups <= max_n_groups
                 if recommended:
                     recommended_sizes.append(gs)
 
@@ -2600,7 +2552,7 @@ class BinningAnalyser:
     # Figure 6: Resolution Information Visualization
     # =========================================================================
 
-    def _generate_resolution_information_visualization(self):
+    def _generate_resolution_information_visualization(self) -> None:
         """Generate Figure 6: resolution_information.png (2x2).
 
         Panels:
@@ -2633,26 +2585,23 @@ class BinningAnalyser:
         total_h = [s[1]["total_entropy"] for s in sorted_strategies]
 
         y_pos = np.arange(len(s_names))
-        ax.barh(y_pos, group_h, color='steelblue', alpha=0.85, label='H(group)',
-                edgecolor='black', linewidth=0.5)
-        ax.barh(y_pos, offset_h, left=group_h, color='coral', alpha=0.85,
-                label='H(offset|group)', edgecolor='black', linewidth=0.5)
+        ax.barh(y_pos, group_h, color="steelblue", alpha=0.85, label="H(group)", edgecolor="black", linewidth=0.5)
+        ax.barh(y_pos, offset_h, left=group_h, color="coral", alpha=0.85, label="H(offset|group)", edgecolor="black", linewidth=0.5)
 
         # Reference line: log2(bin_group_size)
         if sorted_strategies:
             ref_offset = sorted_strategies[0][1]["max_offset_entropy"]
-            ax.axvline(x=ref_offset, color='gray', linestyle=':', alpha=0.6,
-                       label=f'max H(offset) = {ref_offset:.2f} bits')
+            ax.axvline(x=ref_offset, color="gray", linestyle=":", alpha=0.6, label=f"max H(offset) = {ref_offset:.2f} bits")
 
         for i, h in enumerate(total_h):
-            ax.text(h + 0.1, i, f'{h:.1f} bits', va='center', fontsize=8)
+            ax.text(h + 0.1, i, f"{h:.1f} bits", va="center", fontsize=8)
 
         ax.set_yticks(y_pos)
         ax.set_yticklabels(s_names, fontsize=9)
         ax.set_xlabel("Entropy (bits)")
         ax.set_title("Prediction Entropy (group + offset)")
-        ax.legend(fontsize=8, loc='lower right')
-        ax.grid(True, alpha=0.3, axis='x')
+        ax.legend(fontsize=8, loc="lower right")
+        ax.grid(True, alpha=0.3, axis="x")
 
         # ---- (0,1): Physical Resolvability — heatmap ----
         ax = axes[0, 1]
@@ -2675,26 +2624,32 @@ class BinningAnalyser:
                 heatmap_data[i, j] = mb
                 annotations[i, j] = f"{mb:.1f}"
                 if entry["classification"] == "resolvable":
-                    cell_colors[i, j] = '#2ecc71'
+                    cell_colors[i, j] = "#2ecc71"
                 elif entry["classification"] == "marginal":
-                    cell_colors[i, j] = '#f1c40f'
+                    cell_colors[i, j] = "#f1c40f"
                 else:
-                    cell_colors[i, j] = '#e74c3c'
+                    cell_colors[i, j] = "#e74c3c"
 
         # Draw colored cells manually
         for i in range(n_diffs):
             for j in range(n_strats):
-                ax.add_patch(plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
-                    facecolor=cell_colors[i, j], alpha=0.6, edgecolor='white', linewidth=1,
-                ))
-                ax.text(j, i, annotations[i, j], ha='center', va='center', fontsize=8,
-                        fontweight='bold')
+                ax.add_patch(
+                    plt.Rectangle(
+                        (j - 0.5, i - 0.5),
+                        1,
+                        1,
+                        facecolor=cell_colors[i, j],
+                        alpha=0.6,
+                        edgecolor="white",
+                        linewidth=1,
+                    )
+                )
+                ax.text(j, i, annotations[i, j], ha="center", va="center", fontsize=8, fontweight="bold")
 
         ax.set_xlim(-0.5, n_strats - 0.5)
         ax.set_ylim(-0.5, n_diffs - 0.5)
         ax.set_xticks(range(n_strats))
-        ax.set_xticklabels(strat_names, rotation=45, ha='right', fontsize=8)
+        ax.set_xticklabels(strat_names, rotation=45, ha="right", fontsize=8)
         ax.set_yticks(range(n_diffs))
         diff_labels = [f"{d}\n({mass_diffs[d]:.3f} Da)" for d in diff_names]
         ax.set_yticklabels(diff_labels, fontsize=8)
@@ -2703,12 +2658,13 @@ class BinningAnalyser:
 
         # Legend patches
         from matplotlib.patches import Patch
+
         legend_patches = [
-            Patch(facecolor='#2ecc71', alpha=0.6, label='Resolvable (>=2)'),
-            Patch(facecolor='#f1c40f', alpha=0.6, label='Marginal ([1,2))'),
-            Patch(facecolor='#e74c3c', alpha=0.6, label='Unresolvable (<1)'),
+            Patch(facecolor="#2ecc71", alpha=0.6, label="Resolvable (>=2)"),
+            Patch(facecolor="#f1c40f", alpha=0.6, label="Marginal ([1,2))"),
+            Patch(facecolor="#e74c3c", alpha=0.6, label="Unresolvable (<1)"),
         ]
-        ax.legend(handles=legend_patches, loc='upper right', fontsize=7)
+        ax.legend(handles=legend_patches, loc="upper right", fontsize=7)
 
         # ---- (1,0): Local Entropy vs m/z — line plot ----
         ax = axes[1, 0]
@@ -2717,20 +2673,19 @@ class BinningAnalyser:
 
         for idx, (strategy_name, data) in enumerate(local_ent["per_strategy"].items()):
             entropies = data["entropies"]
-            valid_x = []
-            valid_y = []
+            valid_x: list[Any] = []
+            valid_y: list[Any] = []
             for i, e in enumerate(entropies):
                 if e is not None:
                     valid_x.append(window_centers[i])
                     valid_y.append(e)
             if valid_x:
-                ax.plot(valid_x, valid_y, 'o-', label=strategy_name,
-                        color=colors_map[idx], alpha=0.7, linewidth=2, markersize=3)
+                ax.plot(valid_x, valid_y, "o-", label=strategy_name, color=colors_map[idx], alpha=0.7, linewidth=2, markersize=3)
 
         ax.set_xlabel("m/z (Da)")
         ax.set_ylabel("Entropy (bits)")
         ax.set_title(f"Local Entropy vs m/z ({local_ent['window_size']:.0f} Da windows)")
-        ax.legend(fontsize=7, loc='best')
+        ax.legend(fontsize=7, loc="best")
         ax.grid(True, alpha=0.3)
 
         # ---- (1,1): Vocabulary Utilization — grouped bar ----
@@ -2742,23 +2697,21 @@ class BinningAnalyser:
         x_pos = np.arange(len(strat_names_sorted))
         width = 0.35
 
-        ax.bar(x_pos - width / 2, occupancy, width, label='Occupancy Rate (%)',
-               color='steelblue', alpha=0.8, edgecolor='black', linewidth=0.5)
-        ax.bar(x_pos + width / 2, efficiency, width, label='Efficiency (%)',
-               color='coral', alpha=0.8, edgecolor='black', linewidth=0.5)
+        ax.bar(x_pos - width / 2, occupancy, width, label="Occupancy Rate (%)", color="steelblue", alpha=0.8, edgecolor="black", linewidth=0.5)
+        ax.bar(x_pos + width / 2, efficiency, width, label="Efficiency (%)", color="coral", alpha=0.8, edgecolor="black", linewidth=0.5)
 
         ax.set_xticks(x_pos)
-        ax.set_xticklabels(strat_names_sorted, rotation=45, ha='right', fontsize=8)
+        ax.set_xticklabels(strat_names_sorted, rotation=45, ha="right", fontsize=8)
         ax.set_ylabel("Percentage (%)")
         ax.set_title("Vocabulary Utilization")
-        ax.legend(fontsize=9, loc='lower right')
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.legend(fontsize=9, loc="lower right")
+        ax.grid(True, alpha=0.3, axis="y")
         ax.set_ylim(0, 105)
 
-        fig.suptitle("Resolution Information Analysis", fontsize=16, fontweight='bold')
+        fig.suptitle("Resolution Information Analysis", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "resolution_information.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Resolution information visualization saved to: {fig_path}")
 
@@ -2766,7 +2719,7 @@ class BinningAnalyser:
     # Figure 7: Group Size Sensitivity Visualization
     # =========================================================================
 
-    def _generate_group_size_sensitivity_visualization(self):
+    def _generate_group_size_sensitivity_visualization(self) -> None:
         """Generate Figure 7: group_size_sensitivity.png (2x2).
 
         Panels:
@@ -2775,9 +2728,7 @@ class BinningAnalyser:
         - (1,0): Head balance vs group size — line plot
         - (1,1): Recommendation heatmap — colored grid
         """
-        gs_sens = self.results.get("resolution_information", {}).get(
-            "group_size_sensitivity"
-        )
+        gs_sens = self.results.get("resolution_information", {}).get("group_size_sensitivity")
         if not gs_sens:
             return
 
@@ -2801,24 +2752,40 @@ class BinningAnalyser:
             color = colors[idx]
 
             ax.plot(
-                candidates, h_group, 'o-', color=color, alpha=0.8,
-                linewidth=2, markersize=5, label=f"{strat_name} H(group)",
+                candidates,
+                h_group,
+                "o-",
+                color=color,
+                alpha=0.8,
+                linewidth=2,
+                markersize=5,
+                label=f"{strat_name} H(group)",
             )
             ax.plot(
-                candidates, h_offset, 's--', color=color, alpha=0.6,
-                linewidth=1.5, markersize=4, label=f"{strat_name} H(offset|group)",
+                candidates,
+                h_offset,
+                "s--",
+                color=color,
+                alpha=0.6,
+                linewidth=1.5,
+                markersize=4,
+                label=f"{strat_name} H(offset|group)",
             )
             ax.axhline(
-                y=h_bin, color=color, linestyle=':', alpha=0.3, linewidth=1,
+                y=h_bin,
+                color=color,
+                linestyle=":",
+                alpha=0.3,
+                linewidth=1,
             )
 
-        ax.set_xscale('log')
+        ax.set_xscale("log")
         ax.set_xticks(candidates)
         ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
         ax.set_xlabel("Group Size")
         ax.set_ylabel("Entropy (bits)")
         ax.set_title("Entropy Decomposition vs Group Size")
-        ax.legend(fontsize=6, loc='best', ncol=2)
+        ax.legend(fontsize=6, loc="best", ncol=2)
         ax.grid(True, alpha=0.3)
 
         # ---- (0,1): Offset Utilization vs Group Size ----
@@ -2827,21 +2794,30 @@ class BinningAnalyser:
             data = per_strategy[strat_name]
             util_pct = [data[gs]["offset_utilization"] * 100 for gs in candidates]
             ax.plot(
-                candidates, util_pct, 'o-', color=colors[idx], alpha=0.8,
-                linewidth=2, markersize=5, label=strat_name,
+                candidates,
+                util_pct,
+                "o-",
+                color=colors[idx],
+                alpha=0.8,
+                linewidth=2,
+                markersize=5,
+                label=strat_name,
             )
         ax.axhline(
             y=thresholds["max_offset_utilization"] * 100,
-            color='red', linestyle='--', alpha=0.7, linewidth=1.5,
-            label=f'Threshold ({thresholds["max_offset_utilization"]*100:.0f}%)',
+            color="red",
+            linestyle="--",
+            alpha=0.7,
+            linewidth=1.5,
+            label=f"Threshold ({thresholds['max_offset_utilization'] * 100:.0f}%)",
         )
-        ax.set_xscale('log')
+        ax.set_xscale("log")
         ax.set_xticks(candidates)
         ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
         ax.set_xlabel("Group Size")
         ax.set_ylabel("Offset Utilization (%)")
         ax.set_title("Offset Utilization vs Group Size")
-        ax.legend(fontsize=7, loc='best')
+        ax.legend(fontsize=7, loc="best")
         ax.grid(True, alpha=0.3)
         ax.set_ylim(0, 105)
 
@@ -2851,20 +2827,30 @@ class BinningAnalyser:
             data = per_strategy[strat_name]
             balance_pct = [data[gs]["head_balance"] * 100 for gs in candidates]
             ax.plot(
-                candidates, balance_pct, 'o-', color=colors[idx], alpha=0.8,
-                linewidth=2, markersize=5, label=strat_name,
+                candidates,
+                balance_pct,
+                "o-",
+                color=colors[idx],
+                alpha=0.8,
+                linewidth=2,
+                markersize=5,
+                label=strat_name,
             )
         ax.axhline(
-            y=50, color='gray', linestyle='--', alpha=0.5, linewidth=1.5,
-            label='50% (balanced)',
+            y=50,
+            color="gray",
+            linestyle="--",
+            alpha=0.5,
+            linewidth=1.5,
+            label="50% (balanced)",
         )
-        ax.set_xscale('log')
+        ax.set_xscale("log")
         ax.set_xticks(candidates)
         ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
         ax.set_xlabel("Group Size")
         ax.set_ylabel("Head Balance (% info in group head)")
         ax.set_title("Head Balance vs Group Size")
-        ax.legend(fontsize=7, loc='best')
+        ax.legend(fontsize=7, loc="best")
         ax.grid(True, alpha=0.3)
         ax.set_ylim(0, 105)
 
@@ -2878,14 +2864,26 @@ class BinningAnalyser:
             for j, gs in enumerate(candidates):
                 metrics = data[gs]
                 is_rec = metrics["recommended"]
-                color = '#2ecc71' if is_rec else '#e74c3c'
-                ax.add_patch(plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
-                    facecolor=color, alpha=0.6, edgecolor='white', linewidth=1,
-                ))
+                color = "#2ecc71" if is_rec else "#e74c3c"
+                ax.add_patch(
+                    plt.Rectangle(
+                        (j - 0.5, i - 0.5),
+                        1,
+                        1,
+                        facecolor=color,
+                        alpha=0.6,
+                        edgecolor="white",
+                        linewidth=1,
+                    )
+                )
                 ax.text(
-                    j, i, f'{metrics["offset_utilization"]*100:.0f}%',
-                    ha='center', va='center', fontsize=8, fontweight='bold',
+                    j,
+                    i,
+                    f"{metrics['offset_utilization'] * 100:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    fontweight="bold",
                 )
 
         ax.set_xlim(-0.5, n_candidates - 0.5)
@@ -2899,18 +2897,21 @@ class BinningAnalyser:
         ax.invert_yaxis()
 
         from matplotlib.patches import Patch
+
         legend_patches = [
-            Patch(facecolor='#2ecc71', alpha=0.6, label='Recommended'),
-            Patch(facecolor='#e74c3c', alpha=0.6, label='Not recommended'),
+            Patch(facecolor="#2ecc71", alpha=0.6, label="Recommended"),
+            Patch(facecolor="#e74c3c", alpha=0.6, label="Not recommended"),
         ]
-        ax.legend(handles=legend_patches, loc='upper right', fontsize=8)
+        ax.legend(handles=legend_patches, loc="upper right", fontsize=8)
 
         fig.suptitle(
-            "Group Size Sensitivity Analysis", fontsize=16, fontweight='bold',
+            "Group Size Sensitivity Analysis",
+            fontsize=16,
+            fontweight="bold",
         )
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "group_size_sensitivity.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"Group size sensitivity visualization saved to: {fig_path}")
 
@@ -2982,12 +2983,16 @@ class BinningAnalyser:
             try:
                 from scipy.optimize import curve_fit
 
-                def hyperbolic_model(mz, a, b):
-                    return np.sqrt(a**2 + (b * mz)**2)
+                def hyperbolic_model(mz: Any, a: Any, b: Any) -> Any:
+                    """Hyperbolic model."""
+                    return np.sqrt(a**2 + (b * mz) ** 2)
 
                 popt, _ = curve_fit(
-                    hyperbolic_model, valid_centers, valid_p95,
-                    p0=[0.002, 5e-6], bounds=([0, 0], [1.0, 1e-3]),
+                    hyperbolic_model,
+                    valid_centers,
+                    valid_p95,
+                    p0=[0.002, 5e-6],
+                    bounds=([0, 0], [1.0, 1e-3]),
                     maxfev=5000,
                 )
                 fitted_a, fitted_b = float(popt[0]), float(popt[1])
@@ -2998,36 +3003,30 @@ class BinningAnalyser:
                 ss_tot = np.sum((valid_p95 - np.mean(valid_p95)) ** 2)
                 r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
 
-                logger.info(
-                    f"Error model fit: da_floor={fitted_a:.6f}, "
-                    f"ppm_equiv={fitted_b*1e6:.2f}, R^2={r_squared:.4f}"
-                )
+                logger.info(f"Error model fit: da_floor={fitted_a:.6f}, ppm_equiv={fitted_b * 1e6:.2f}, R^2={r_squared:.4f}")
 
             except Exception as e:
                 logger.warning(f"Curve fit failed, falling back to grid search: {e}")
                 # Grid search fallback
-                best_loss = float('inf')
+                best_loss = float("inf")
                 for a_try in np.linspace(0.0005, 0.01, 20):
                     for b_try in np.linspace(1e-7, 5e-5, 20):
-                        pred = np.sqrt(a_try**2 + (b_try * valid_centers)**2)
-                        loss = np.sum((valid_p95 - pred)**2)
+                        pred = np.sqrt(a_try**2 + (b_try * valid_centers) ** 2)
+                        loss = np.sum((valid_p95 - pred) ** 2)
                         if loss < best_loss:
                             best_loss = loss
                             fitted_a, fitted_b = float(a_try), float(b_try)
 
-                predicted = np.sqrt(fitted_a**2 + (fitted_b * valid_centers)**2)
+                predicted = np.sqrt(fitted_a**2 + (fitted_b * valid_centers) ** 2)  # type: ignore[operator]
                 ss_res = np.sum((valid_p95 - predicted) ** 2)
                 ss_tot = np.sum((valid_p95 - np.mean(valid_p95)) ** 2)
                 r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
-                logger.info(
-                    f"Grid search fit: da_floor={fitted_a:.6f}, "
-                    f"ppm_equiv={fitted_b*1e6:.2f}, R^2={r_squared:.4f}"
-                )
+                logger.info(f"Grid search fit: da_floor={fitted_a:.6f}, ppm_equiv={fitted_b * 1e6:.2f}, R^2={r_squared:.4f}")  # type: ignore[operator]
 
         # Safety margin: bin_width / (2 * P95_error) at reference m/z points
         strategies = self._get_binning_strategies_from_config()
         reference_mz = np.array([100, 200, 500, 800, 1000, 1500, 2000], dtype=np.float64)
-        safety_margins = {}
+        safety_margins: dict[str, Any] = {}
 
         for strategy_name, params in strategies.items():
             strategy = self._create_binning_strategy(params)
@@ -3035,19 +3034,19 @@ class BinningAnalyser:
             bin_widths_np = np.diff(bin_edges_np)
             bin_centers_strat = (bin_edges_np[:-1] + bin_edges_np[1:]) / 2.0
 
-            margins = {}
+            margins: dict[str, Any] = {}
             for ref_mz in reference_mz:
                 # Find closest bin center
                 idx = np.searchsorted(bin_centers_strat, ref_mz)
                 idx = min(idx, len(bin_widths_np) - 1)
                 bw = float(bin_widths_np[idx])
                 if fitted_a is not None and fitted_b is not None:
-                    p95_at_mz = np.sqrt(fitted_a**2 + (fitted_b * ref_mz)**2)
-                    margin = bw / (2 * p95_at_mz) if p95_at_mz > 0 else float('inf')
+                    p95_at_mz = np.sqrt(fitted_a**2 + (fitted_b * ref_mz) ** 2)
+                    margin = bw / (2 * p95_at_mz) if p95_at_mz > 0 else float("inf")
                 else:
                     p95_at_mz = 0.0
-                    margin = float('inf')
-                margins[float(ref_mz)] = {
+                    margin = float("inf")
+                margins[float(ref_mz)] = {  # type: ignore[index]
                     "bin_width": bw,
                     "p95_error": float(p95_at_mz),
                     "safety_margin": float(margin),
@@ -3055,9 +3054,9 @@ class BinningAnalyser:
             safety_margins[strategy_name] = margins
 
         # Per-bin data for CSV export
-        per_bin_data = []
+        per_bin_data: list[Any] = []
         for i in range(n_fit_bins):
-            row = {
+            row: dict[str, Any] = {
                 "mz_bin_center": float(bin_centers[i]),
                 "n_peaks": int(bin_counts[i]),
                 "p50_error_da": float(p50_errors[i]) if not np.isnan(p50_errors[i]) else None,
@@ -3065,9 +3064,7 @@ class BinningAnalyser:
                 "p99_error_da": float(p99_errors[i]) if not np.isnan(p99_errors[i]) else None,
             }
             if fitted_a is not None and fitted_b is not None:
-                row["fitted_error_da"] = float(
-                    np.sqrt(fitted_a**2 + (fitted_b * bin_centers[i])**2)
-                )
+                row["fitted_error_da"] = float(np.sqrt(fitted_a**2 + (fitted_b * bin_centers[i]) ** 2))
             per_bin_data.append(row)
 
         return {
@@ -3077,8 +3074,7 @@ class BinningAnalyser:
             "n_fit_bins": n_fit_bins,
             "per_bin_data": per_bin_data,
             "safety_margins": safety_margins,
-            "note": "Fitted to Orbitrap-dominated matched peaks. CID peaks are "
-                    "underrepresented due to quality gate filtering at 10 PPM.",
+            "note": "Fitted to Orbitrap-dominated matched peaks. CID peaks are underrepresented due to quality gate filtering at 10 PPM.",
         }
 
     # =========================================================================
@@ -3097,9 +3093,7 @@ class BinningAnalyser:
         if ft_upper == "CID":
             return True
         # Starts with CID (e.g. "CID-IT")
-        if ft_upper.startswith("CID") and (
-            len(ft_upper) == 3 or not ft_upper[3].isalpha()
-        ):
+        if ft_upper.startswith("CID") and (len(ft_upper) == 3 or not ft_upper[3].isalpha()):
             return True
         # Ion trap keywords
         if ft_upper in ("IT", "ION TRAP"):
@@ -3131,7 +3125,7 @@ class BinningAnalyser:
         frag_types_arr = np.array(per_spectrum_frag_type, dtype=object)
         unique_types = np.unique(frag_types_arr)
 
-        composition = {}
+        composition: dict[str, Any] = {}
         for ft in unique_types:
             ft_mask = frag_types_arr == ft
             n_spectra = int(ft_mask.sum())
@@ -3141,9 +3135,7 @@ class BinningAnalyser:
         logger.info(f"CID analysis composition: {composition}")
 
         # 2. Extract CID m/z peaks (strict matching — excludes HCID, EThcD etc.)
-        cid_mask = np.array([
-            self._is_cid_frag_type(ft) for ft in per_spectrum_frag_type
-        ], dtype=bool)
+        cid_mask = np.array([self._is_cid_frag_type(ft) for ft in per_spectrum_frag_type], dtype=bool)
 
         n_cid_spectra = int(cid_mask.sum())
         use_synthetic = False
@@ -3193,10 +3185,7 @@ class BinningAnalyser:
                     f"max={observed_cid_errors['max_da']:.4f} Da"
                 )
             else:
-                logger.info(
-                    f"Only {n_cid_matched} CID peaks passed quality gate — "
-                    f"insufficient for observed error statistics"
-                )
+                logger.info(f"Only {n_cid_matched} CID peaks passed quality gate — insufficient for observed error statistics")
 
         strategies = self._get_binning_strategies_from_config()
 
@@ -3204,14 +3193,14 @@ class BinningAnalyser:
         sweep_errors = sorted(self.cid_error_sweep_da)
         literature_errors = set(self.cid_literature_errors_da)
 
-        simulated_results = {}
+        simulated_results: dict[str, Any] = {}
         for strategy_name, params in strategies.items():
             strategy = self._create_binning_strategy(params)
             mz_tensor = torch.from_numpy(all_mz_flat).float()
             base_bins = strategy.mz_to_bin(mz_tensor).numpy()
 
             # Sweep: constant Da errors
-            sweep_results = {}
+            sweep_results: dict[str, Any] = {}
             for delta_da in sweep_errors:
                 plus_bins = strategy.mz_to_bin(mz_tensor + delta_da).numpy()
                 minus_bins = strategy.mz_to_bin(mz_tensor - delta_da).numpy()
@@ -3219,7 +3208,7 @@ class BinningAnalyser:
                 mismatch_rate = float(mismatches.mean())
 
                 # Stratify by m/z range
-                per_range = {}
+                per_range: dict[str, Any] = {}
                 for range_name in self.mz_range_order:
                     low, high = self.mz_range_boundaries[range_name]
                     high = min(high, 1e12)
@@ -3239,15 +3228,11 @@ class BinningAnalyser:
                 }
 
             # Orbitrap reference (PPM-based error)
-            orbitrap_results = {}
+            orbitrap_results: dict[str, Any] = {}
             for ppm in self.orbitrap_reference_errors_ppm:
                 delta_ppm = all_mz_flat * ppm / 1e6
-                plus_bins = strategy.mz_to_bin(
-                    torch.from_numpy(all_mz_flat + delta_ppm).float()
-                ).numpy()
-                minus_bins = strategy.mz_to_bin(
-                    torch.from_numpy(all_mz_flat - delta_ppm).float()
-                ).numpy()
+                plus_bins = strategy.mz_to_bin(torch.from_numpy(all_mz_flat + delta_ppm).float()).numpy()
+                minus_bins = strategy.mz_to_bin(torch.from_numpy(all_mz_flat - delta_ppm).float()).numpy()
                 mismatches = (base_bins != plus_bins) | (base_bins != minus_bins)
                 mismatch_rate = float(mismatches.mean())
 
@@ -3275,7 +3260,7 @@ class BinningAnalyser:
             }
 
         # 5. Breaking point: find error Da where mismatch first exceeds 50%
-        breaking_points = {}
+        breaking_points: dict[str, Any] = {}
         for strategy_name, sim in simulated_results.items():
             bp = None
             for delta_da in sweep_errors:
@@ -3289,13 +3274,13 @@ class BinningAnalyser:
             }
 
         # 6. CID vs Orbitrap gap (at literature midpoint)
-        cid_vs_orbitrap_gap = {}
+        cid_vs_orbitrap_gap: dict[str, Any] = {}
         mid_cid = self.cid_literature_errors_da[len(self.cid_literature_errors_da) // 2]
         mid_ppm = self.orbitrap_reference_errors_ppm[0]
         for strategy_name, sim in simulated_results.items():
             cid_rate = sim["sweep"].get(mid_cid, {}).get("mismatch_rate", 0)
             orb_rate = sim["orbitrap_errors"].get(mid_ppm, {}).get("mismatch_rate", 0)
-            gap_ratio = cid_rate / orb_rate if orb_rate > 0 else float('inf')
+            gap_ratio = cid_rate / orb_rate if orb_rate > 0 else float("inf")
             cid_vs_orbitrap_gap[strategy_name] = {
                 "cid_error_da": mid_cid,
                 "orbitrap_ppm": mid_ppm,
@@ -3320,7 +3305,7 @@ class BinningAnalyser:
     # Figure 8: CID Analysis Visualization
     # =========================================================================
 
-    def _generate_cid_analysis_visualization(self):
+    def _generate_cid_analysis_visualization(self) -> None:
         """Generate Figure 8: cid_analysis.png (2x2).
 
         Panels:
@@ -3347,28 +3332,30 @@ class BinningAnalyser:
 
             x_pos = np.arange(len(ft_names))
             width = 0.35
-            bars1 = ax.bar(x_pos - width / 2, spectra_counts, width,
-                           label='Spectra', color='steelblue', alpha=0.8)
-            bars2 = ax.bar(x_pos + width / 2, [p / 1000 for p in peak_counts],
-                           width, label='Peaks (k)', color='coral', alpha=0.8)
+            ax.bar(x_pos - width / 2, spectra_counts, width, label="Spectra", color="steelblue", alpha=0.8)
+            ax.bar(x_pos + width / 2, [p / 1000 for p in peak_counts], width, label="Peaks (k)", color="coral", alpha=0.8)
 
             # Annotate CID bar
             for i, ft in enumerate(ft_names):
                 if self._is_cid_frag_type(ft):
-                    ax.annotate('CID', xy=(x_pos[i] - width / 2, spectra_counts[i]),
-                                fontsize=9, fontweight='bold', color='firebrick',
-                                ha='center', va='bottom')
+                    ax.annotate(
+                        "CID",
+                        xy=(x_pos[i] - width / 2, spectra_counts[i]),
+                        fontsize=9,
+                        fontweight="bold",
+                        color="firebrick",
+                        ha="center",
+                        va="bottom",
+                    )
 
             ax.set_xticks(x_pos)
-            ax.set_xticklabels(ft_names, rotation=45, ha='right', fontsize=9)
+            ax.set_xticklabels(ft_names, rotation=45, ha="right", fontsize=9)
             ax.set_ylabel("Count")
-            ax.set_title(f"Data Composition ({cid.get('n_cid_spectra', '?')} "
-                         f"CID spectra, {cid.get('n_cid_peaks', '?'):,d} CID peaks)")
+            ax.set_title(f"Data Composition ({cid.get('n_cid_spectra', '?')} CID spectra, {cid.get('n_cid_peaks', '?'):,d} CID peaks)")
             ax.legend(fontsize=9)
-            ax.grid(True, alpha=0.3, axis='y')
+            ax.grid(True, alpha=0.3, axis="y")
         else:
-            ax.text(0.5, 0.5, "No composition data", ha='center', va='center',
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No composition data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("Data Composition")
 
         # ---- (0,1): Mismatch curve — error sweep ----
@@ -3380,49 +3367,45 @@ class BinningAnalyser:
             colors = plt.cm.tab10(np.linspace(0, 1, len(strategy_names)))
 
             for si, sn in enumerate(strategy_names):
-                rates = [
-                    sim[sn]["sweep"].get(d, {}).get("mismatch_rate", 0) * 100
-                    for d in sweep_errors
-                ]
-                ax.plot(sweep_errors, rates, 'o-', color=colors[si],
-                        linewidth=2, markersize=4, alpha=0.8, label=sn)
+                rates = [sim[sn]["sweep"].get(d, {}).get("mismatch_rate", 0) * 100 for d in sweep_errors]
+                ax.plot(sweep_errors, rates, "o-", color=colors[si], linewidth=2, markersize=4, alpha=0.8, label=sn)
 
             # Reference lines: literature CID errors
             for lit_da in self.cid_literature_errors_da:
-                ax.axvline(x=lit_da, color='firebrick', linestyle=':', alpha=0.4,
-                           linewidth=1.5)
+                ax.axvline(x=lit_da, color="firebrick", linestyle=":", alpha=0.4, linewidth=1.5)
             # Label the rightmost literature line
             if self.cid_literature_errors_da:
-                ax.text(self.cid_literature_errors_da[0], 55,
-                        f'CID literature\n({self.cid_literature_errors_da[0]} Da)',
-                        fontsize=7, color='firebrick', alpha=0.7,
-                        ha='center', va='bottom')
+                ax.text(
+                    self.cid_literature_errors_da[0],
+                    55,
+                    f"CID literature\n({self.cid_literature_errors_da[0]} Da)",
+                    fontsize=7,
+                    color="firebrick",
+                    alpha=0.7,
+                    ha="center",
+                    va="bottom",
+                )
 
             # Observed CID P95 marker
             obs = cid.get("observed_cid_errors")
             if obs:
                 p95 = obs["p95_da"]
-                ax.axvline(x=p95, color='darkgreen', linestyle='--', alpha=0.7,
-                           linewidth=2)
-                ax.text(p95, 45, f'Observed CID\nP95={p95:.3f} Da',
-                        fontsize=7, color='darkgreen', fontweight='bold',
-                        ha='center', va='bottom')
+                ax.axvline(x=p95, color="darkgreen", linestyle="--", alpha=0.7, linewidth=2)
+                ax.text(p95, 45, f"Observed CID\nP95={p95:.3f} Da", fontsize=7, color="darkgreen", fontweight="bold", ha="center", va="bottom")
 
             # 50% mismatch threshold
-            ax.axhline(y=50, color='gray', linestyle='--', alpha=0.4, linewidth=1)
-            ax.text(sweep_errors[0], 51, '50% mismatch', fontsize=7,
-                    color='gray', alpha=0.7)
+            ax.axhline(y=50, color="gray", linestyle="--", alpha=0.4, linewidth=1)
+            ax.text(sweep_errors[0], 51, "50% mismatch", fontsize=7, color="gray", alpha=0.7)
 
             ax.set_xlabel("Error (Da)")
             ax.set_ylabel("Mismatch Rate (%)")
             ax.set_title("Mismatch Curve: Error Sweep (constant Da)")
-            ax.legend(fontsize=6, loc='lower right', ncol=2)
+            ax.legend(fontsize=6, loc="lower right", ncol=2)
             ax.grid(True, alpha=0.3)
             ax.set_xlim(left=0)
             ax.set_ylim(0, 105)
         else:
-            ax.text(0.5, 0.5, "No sweep data", ha='center', va='center',
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No sweep data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("Mismatch Curve")
 
         # ---- (1,0): Mismatch by m/z range at a representative error ----
@@ -3446,51 +3429,41 @@ class BinningAnalyser:
             error_levels_to_show = [0.02, 0.05, 0.1, 0.2, 0.3]
             error_levels_to_show = [e for e in error_levels_to_show if e in sweep_errors]
             if not error_levels_to_show:
-                error_levels_to_show = sweep_errors[::max(1, len(sweep_errors) // 5)]
+                error_levels_to_show = sweep_errors[:: max(1, len(sweep_errors) // 5)]
 
             orb_ppm = self.orbitrap_reference_errors_ppm[0]
-            orb_per_range = sim[target_strat]["orbitrap_errors"].get(
-                orb_ppm, {}
-            ).get("per_mz_range", {})
+            orb_per_range = sim[target_strat]["orbitrap_errors"].get(orb_ppm, {}).get("per_mz_range", {})
 
-            range_names = [r for r in self.mz_range_order
-                           if any(sim[target_strat]["sweep"].get(e, {})
-                                  .get("per_mz_range", {}).get(r)
-                                  for e in error_levels_to_show)]
+            range_names = [
+                r
+                for r in self.mz_range_order
+                if any(sim[target_strat]["sweep"].get(e, {}).get("per_mz_range", {}).get(r) for e in error_levels_to_show)
+            ]
 
             if range_names:
                 sweep_colors = plt.cm.Reds(np.linspace(0.3, 0.9, len(error_levels_to_show)))
                 x_pos = np.arange(len(range_names))
 
                 for ei, delta_da in enumerate(error_levels_to_show):
-                    per_range = sim[target_strat]["sweep"].get(
-                        delta_da, {}
-                    ).get("per_mz_range", {})
-                    rates = [per_range.get(r, {}).get("mismatch_rate", 0) * 100
-                             for r in range_names]
-                    ax.plot(x_pos, rates, 'o-', color=sweep_colors[ei],
-                            linewidth=2, markersize=6,
-                            label=f'{delta_da} Da')
+                    per_range = sim[target_strat]["sweep"].get(delta_da, {}).get("per_mz_range", {})
+                    rates = [per_range.get(r, {}).get("mismatch_rate", 0) * 100 for r in range_names]
+                    ax.plot(x_pos, rates, "o-", color=sweep_colors[ei], linewidth=2, markersize=6, label=f"{delta_da} Da")
 
                 # Orbitrap reference
-                orb_rates = [orb_per_range.get(r, {}).get("mismatch_rate", 0) * 100
-                             for r in range_names]
-                ax.plot(x_pos, orb_rates, 's--', color='steelblue', linewidth=2.5,
-                        markersize=7, label=f'Orbitrap {orb_ppm} PPM')
+                orb_rates = [orb_per_range.get(r, {}).get("mismatch_rate", 0) * 100 for r in range_names]
+                ax.plot(x_pos, orb_rates, "s--", color="steelblue", linewidth=2.5, markersize=7, label=f"Orbitrap {orb_ppm} PPM")
 
                 ax.set_xticks(x_pos)
                 ax.set_xticklabels(range_names, fontsize=9)
                 ax.set_ylabel("Mismatch Rate (%)")
                 ax.set_title(f"Mismatch by m/z Range ({target_strat})")
-                ax.legend(fontsize=7, loc='best')
+                ax.legend(fontsize=7, loc="best")
                 ax.grid(True, alpha=0.3)
             else:
-                ax.text(0.5, 0.5, "No per-range data", ha='center', va='center',
-                        transform=ax.transAxes)
+                ax.text(0.5, 0.5, "No per-range data", ha="center", va="center", transform=ax.transAxes)
                 ax.set_title("Mismatch by m/z Range")
         else:
-            ax.text(0.5, 0.5, "No data", ha='center', va='center',
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("Mismatch by m/z Range")
 
         # ---- (1,1): Observed CID errors + breaking points ----
@@ -3499,7 +3472,7 @@ class BinningAnalyser:
         breaking = cid.get("breaking_points", {})
 
         # Build a text-based summary table
-        lines = []
+        lines: list[Any] = []
         if obs:
             lines.append("Observed CID Errors (quality-gate survivors)")
             lines.append(f"  Matched peaks: {obs['n_matched_peaks']:,d}")
@@ -3525,18 +3498,24 @@ class BinningAnalyser:
             bp_str = f"{bp:.3f} Da" if bp is not None else "> 0.5 Da"
             lines.append(f"  {sn:30s} {bp_str}")
 
-        ax.text(0.05, 0.95, "\n".join(lines), transform=ax.transAxes,
-                fontsize=9, verticalalignment='top', fontfamily='monospace',
-                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow',
-                          alpha=0.8))
+        ax.text(
+            0.05,
+            0.95,
+            "\n".join(lines),
+            transform=ax.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            fontfamily="monospace",
+            bbox={"boxstyle": "round,pad=0.5", "facecolor": "lightyellow", "alpha": 0.8},
+        )
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
-        ax.axis('off')
+        ax.axis("off")
         ax.set_title("Observed CID Errors & Strategy Breaking Points")
 
-        fig.suptitle("CID-Aware Analysis", fontsize=16, fontweight='bold')
+        fig.suptitle("CID-Aware Analysis", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig_path = self.output_dir / "cid_analysis.png"
-        fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+        fig.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close(fig)
         logger.info(f"CID analysis visualization saved to: {fig_path}")

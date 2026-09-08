@@ -1,19 +1,20 @@
-"""
-Relative Positional Encoding (RPE) implementation.
+"""Relative Positional Encoding (RPE) implementation.
 
 This module provides Shaw's Relative Positional Encoding which uses learned
 embeddings for relative positions between tokens.
 """
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from typing import Optional
 
 
 class RelativePositionalEncoding(nn.Module):
     """Shaw's Relative Positional Encoding (RPE) implementation."""
 
-    def __init__(self, max_relative_position: int, d_model: int):
+    def __init__(self, max_relative_position: int, d_model: int) -> None:
+        """Initialise the input."""
         super().__init__()
         self.max_relative_position = max_relative_position
         self.relative_attention_bias = nn.Embedding(2 * max_relative_position + 1, d_model)

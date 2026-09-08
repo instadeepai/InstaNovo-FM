@@ -7,7 +7,7 @@ from typing import Any, Dict
 import numpy as np
 
 from instanovo.__init__ import console
-from instanovo.common.dataset import DataProcessor
+from instanovo_fm.common.dataset import DataProcessor
 from instanovo_fm.data.search_data_manager import SearchDataManager
 from instanovo_fm.utils.hydrophobicity import compute_hydrophobicity
 from instanovo_fm.utils.modifications import compute_modification_types

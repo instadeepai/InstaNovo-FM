@@ -1,4 +1,4 @@
-# instanovo/foundational/utils/peak_classification.py
+# instanovo_fm/utils/peak_classification.py
 """Shared peak classification and spectrum quality utilities.
 
 Provides:
@@ -15,6 +15,7 @@ These functions are extracted from ``TheoreticalAnalyser`` so that both the
 data-analysis framework and the embedding evaluation pipeline share the same
 logic without duplication.
 """
+
 from __future__ import annotations
 
 import re
@@ -40,7 +41,7 @@ def parse_peak_label(
         Parent annotation for losses and isotopes (e.g. ``"b3+"`` for its
         isotope ``"b3+[+1]"``).
 
-    Returns
+    Returns:
     -------
     str
         One of: ``"b-ion"``, ``"y-ion"``, ``"a-ion"``, ``"b-loss"``,
@@ -64,19 +65,14 @@ def parse_peak_label(
                 inferred_type = "precursor"
             elif "[+" in ion_annotation:
                 inferred_type = "isotope"
-            elif "-" in ion_annotation and any(
-                loss in ion_annotation
-                for loss in ("H2O", "NH3", "CO", "H3PO4")
-            ):
+            elif "-" in ion_annotation and any(loss in ion_annotation for loss in ("H2O", "NH3", "CO", "H3PO4")):
                 inferred_type = "loss"
             else:
                 inferred_type = "base"
     else:
         ion_annotation = ""
 
-    if isinstance(ion_annotation, str) and (
-        ion_annotation.startswith("p^") or ion_annotation.startswith("p-")
-    ):
+    if isinstance(ion_annotation, str) and (ion_annotation.startswith("p^") or ion_annotation.startswith("p-")):
         if inferred_type == "isotope":
             return "precursor-isotope"
         return "precursor"
@@ -120,7 +116,7 @@ def group_fragment_key(
     parent_annotation : str or None
         Parent annotation for losses and isotopes.
 
-    Returns
+    Returns:
     -------
     str or None
         The group key (e.g. ``"b3+"``), or ``None`` for losses and
@@ -137,9 +133,7 @@ def group_fragment_key(
             ftype = "precursor"
         elif "[+" in ann:
             ftype = "isotope"
-        elif "-" in ann and any(
-            loss in ann for loss in ("H2O", "NH3", "CO", "H3PO4")
-        ):
+        elif "-" in ann and any(loss in ann for loss in ("H2O", "NH3", "CO", "H3PO4")):
             ftype = "loss"
         else:
             ftype = "base"
@@ -173,7 +167,7 @@ def classify_peaks_batch(
     parent_annotations : list
         Per-peak parent annotations (may contain ``None``).
 
-    Returns
+    Returns:
     -------
     detail_labels : list[str]
         Canonical label for each peak.
@@ -321,7 +315,7 @@ def compute_spectrum_quality(
     seq_len : int
         Peptide sequence length (number of amino-acid residues).
 
-    Returns
+    Returns:
     -------
     dict
         ``backbone_coverage`` (float, 0-1), ``n_fragment_groups`` (int),

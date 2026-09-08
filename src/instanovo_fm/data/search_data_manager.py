@@ -33,10 +33,7 @@ logger = ColorLog(console, __name__).logger
 _SHARD_PATTERN = re.compile(r"_\d{4}-\d{4}$")
 
 # Common MS file extensions to strip
-_MS_EXTENSIONS = (
-    ".mzML.gz", ".mzML", ".mzXML", ".raw",
-    ".wiff", ".d", ".mgf", ".gz"
-)
+_MS_EXTENSIONS = (".mzML.gz", ".mzML", ".mzXML", ".raw", ".wiff", ".d", ".mgf", ".gz")
 
 
 def _normalize_path(path: str) -> str:
@@ -69,7 +66,7 @@ def _extract_lookup_key_from_usi(usi: str) -> tuple[str, str]:
     # Strip MS file extensions from the filename component (same as filepath path)
     for ext in _MS_EXTENSIONS:
         if filename.lower().endswith(ext.lower()):
-            filename = filename[:-len(ext)]
+            filename = filename[: -len(ext)]
             break
     filename = filename.split(".")[0]
     if _SHARD_PATTERN.search(filename):
@@ -106,7 +103,7 @@ def _extract_lookup_key(filepath: str) -> tuple[str, str]:
     # Strip MS file extensions (handle multi-part extensions like .mzML.gz)
     for ext in _MS_EXTENSIONS:
         if filename.lower().endswith(ext.lower()):
-            filename = filename[:-len(ext)]
+            filename = filename[: -len(ext)]
             break
 
     # Remove any remaining single extensions
@@ -136,7 +133,7 @@ class SearchDataManager:
         file_path: str,
         filepath_column: str = "file path",
         spectrum_filepath_key: str = "filepath",
-    ):
+    ) -> None:
         """Initialize search data manager."""
         self.file_path = file_path
         self.filepath_column = filepath_column
@@ -165,13 +162,10 @@ class SearchDataManager:
         """
         # Check file exists
         if not os.path.exists(self.file_path):
-            raise FileNotFoundError(
-                f"Search data file not found: {self.file_path}"
-            )
-
+            raise FileNotFoundError(f"Search data file not found: {self.file_path}")
 
         # Load file (auto-detect CSV vs Excel)
-        if self.file_path.lower().endswith('.csv'):
+        if self.file_path.lower().endswith(".csv"):
             self._df = pd.read_csv(self.file_path)
         else:
             # Excel format - requires openpyxl
@@ -188,16 +182,13 @@ class SearchDataManager:
 
         # Validate required column exists
         if self.filepath_column not in self._df.columns:
-            raise ValueError(
-                f"Required column '{self.filepath_column}' not found in file. "
-                f"Available columns: {list(self._df.columns)}"
-            )
+            raise ValueError(f"Required column '{self.filepath_column}' not found in file. Available columns: {list(self._df.columns)}")
 
         # Build lookup index
         self._lookup = {}
         self._unindexed_rows = 0
 
-        for idx, row in self._df.iterrows():
+        for _idx, row in self._df.iterrows():
             filepath = row.get(self.filepath_column)
 
             # Skip invalid paths
@@ -272,7 +263,7 @@ class SearchDataManager:
             logger.warning("SearchDataManager not loaded, returning empty metadata batch")
             return [{} for _ in filepaths]
 
-        results = []
+        results: list[Any] = []
         for filepath in filepaths:
             if not filepath:
                 results.append({})
@@ -340,9 +331,7 @@ class SearchDataManager:
         return list(self._df.columns)
 
 
-def create_search_data_manager(
-    config: Dict[str, Any]
-) -> Optional[SearchDataManager]:
+def create_search_data_manager(config: Dict[str, Any]) -> Optional[SearchDataManager]:
     """Factory function to create SearchDataManager from config.
 
     Args:
@@ -362,21 +351,14 @@ def create_search_data_manager(
     # Get required path
     excel_path = config.get("search_data_path")
     if not excel_path:
-        logger.warning(
-            "use_search_data=True but search_data_path not provided. "
-            "Disabling search data integration."
-        )
+        logger.warning("use_search_data=True but search_data_path not provided. Disabling search data integration.")
         return None
 
     # Create manager
     manager = SearchDataManager(
         file_path=excel_path,
-        filepath_column=config.get(
-            "search_data_filepath_column", "file path"
-        ),
-        spectrum_filepath_key=config.get(
-            "search_data_spectrum_key", "filepath"
-        ),
+        filepath_column=config.get("search_data_filepath_column", "file path"),
+        spectrum_filepath_key=config.get("search_data_spectrum_key", "filepath"),
     )
 
     # Load data

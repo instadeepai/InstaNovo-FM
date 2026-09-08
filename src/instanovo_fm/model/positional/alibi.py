@@ -1,11 +1,12 @@
-"""
-Attention with Linear Biases (ALiBi) implementation.
+"""Attention with Linear Biases (ALiBi) implementation.
 
 This module provides the ALiBi positional encoding method which adds learnable
 positional biases to attention scores.
 """
 
 import math
+from typing import Any
+
 import torch
 import torch.nn as nn
 
@@ -13,36 +14,36 @@ import torch.nn as nn
 class ALiBi(nn.Module):
     """Attention with Linear Biases (ALiBi) implementation."""
 
-    def __init__(self, num_heads: int, max_seq_len: int = 2048):
+    def __init__(self, num_heads: int, max_seq_len: int = 2048) -> None:
+        """Initialise the input."""
         super().__init__()
         self.num_heads = num_heads
         self.max_seq_len = max_seq_len
 
         # Learnable slopes for each head - use default dtype to match model
-        slopes = torch.tensor(
-            self._get_slopes(num_heads),
-            dtype=torch.get_default_dtype()
-        )
-        self.register_buffer('slopes', slopes)
+        slopes = torch.tensor(self._get_slopes(num_heads), dtype=torch.get_default_dtype())
+        self.register_buffer("slopes", slopes)
 
         # Pre-compute bias matrix — symmetric absolute distance, negated for decay
         # -|i - j| ensures symmetric attention decay for bidirectional encoder
         bias = -(torch.arange(max_seq_len).unsqueeze(1) - torch.arange(max_seq_len).unsqueeze(0)).abs()
         bias = bias.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
-        self.register_buffer('bias', bias.to(slopes.dtype), persistent=False)
+        self.register_buffer("bias", bias.to(slopes.dtype), persistent=False)
 
     def _get_slopes(self, num_heads: int) -> list:
         """Get the slopes for ALiBi."""
-        def get_slopes_power_of_2(n):
-            start = (2**(-2**-(math.log2(n)-3)))
+
+        def get_slopes_power_of_2(n: int) -> Any:
+            """Return slopes power of 2."""
+            start = 2 ** (-(2 ** -(math.log2(n) - 3)))
             ratio = start
-            return [start*ratio**i for i in range(n)]
+            return [start * ratio**i for i in range(n)]
 
         if math.log2(num_heads).is_integer():
-            return get_slopes_power_of_2(num_heads)
+            return get_slopes_power_of_2(num_heads)  # type: ignore[no-any-return]
         else:
-            closest_power_of_2 = 2**math.floor(math.log2(num_heads))
-            return get_slopes_power_of_2(closest_power_of_2) + self._get_slopes(2*closest_power_of_2)[0::2][:num_heads-closest_power_of_2]
+            closest_power_of_2 = 2 ** math.floor(math.log2(num_heads))
+            return get_slopes_power_of_2(closest_power_of_2) + self._get_slopes(2 * closest_power_of_2)[0::2][: num_heads - closest_power_of_2]  # type: ignore[no-any-return]
 
     def get_bias(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         """Get ALiBi bias tensor for the given sequence length.
@@ -57,7 +58,9 @@ class ALiBi(nn.Module):
         """
         if seq_len > self.max_seq_len:
             # Extend bias matrix if needed
-            bias = -(torch.arange(seq_len, device=device, dtype=dtype).unsqueeze(1) - torch.arange(seq_len, device=device, dtype=dtype).unsqueeze(0)).abs()
+            bias = -(
+                torch.arange(seq_len, device=device, dtype=dtype).unsqueeze(1) - torch.arange(seq_len, device=device, dtype=dtype).unsqueeze(0)
+            ).abs()
             bias = bias.unsqueeze(0).unsqueeze(0)  # (1, 1, L, L)
         else:
             bias = self.bias[:, :, :seq_len, :seq_len].to(device=device, dtype=dtype)

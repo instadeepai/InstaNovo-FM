@@ -1,5 +1,6 @@
-import torch
+from typing import Any
 
+import torch
 
 # ============================================================================
 # Constants
@@ -13,10 +14,11 @@ ISOTOPE_DISTANCE_WINDOW = 5.0  # Maximum m/z distance for span-aware isotope det
 # Helper Functions
 # ============================================================================
 
+
 @torch.no_grad()
 def _compute_isotope_shift_match(
     candidate_mz: torch.Tensor,  # (C,)
-    masked_mz: torch.Tensor,      # (M,)
+    masked_mz: torch.Tensor,  # (M,)
     charges: torch.Tensor | None,
     ppm: float,
     da_floor: float,
@@ -24,8 +26,7 @@ def _compute_isotope_shift_match(
     max_order: int,
     device: torch.device,
 ) -> torch.Tensor:
-    """
-    Check which candidate positions are isotopes of masked peaks (OPTIMIZED).
+    """Check which candidate positions are isotopes of masked peaks (OPTIMIZED).
 
     Uses adaptive isotopic order based on median m/z of masked peaks:
     - Conservative formula: max_order ≈ m/z / 600, clamped to [1, 3]
@@ -38,7 +39,7 @@ def _compute_isotope_shift_match(
     peak. Without this, the most informative peak could remain visible, making
     the reconstruction task trivially easy.
 
-    Returns
+    Returns:
     -------
     is_isotope : (C,) bool tensor, True for candidates that are isotopes
     """
@@ -91,9 +92,8 @@ def _compute_isotope_shift_match(
 
 
 @torch.no_grad()
-def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor, device: torch.device):
-    """
-    Identify all contiguous spans in a 1D mask (OPTIMIZED).
+def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor, device: torch.device) -> Any:
+    """Identify all contiguous spans in a 1D mask (OPTIMIZED).
 
     Parameters
     ----------
@@ -101,11 +101,11 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
     intensity : (L,) intensity tensor
     device : torch device
 
-    Returns
+    Returns:
     -------
     spans : list of dicts with keys 'start', 'positions', 'length', 'intensity'
     """
-    L = span_mask.shape[0]
+    L = span_mask.shape[0]  # noqa: N806
     masked_indices = torch.nonzero(span_mask, as_tuple=False).squeeze(-1)
 
     if masked_indices.numel() == 0:
@@ -139,8 +139,8 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
 
             if break_points.numel() > 0:
                 # Span ends at first break point
-                end_pos = valid_positions[break_points[0]].item()
-                span_positions = valid_positions[:break_points[0] + 1].tolist()
+                valid_positions[break_points[0]].item()
+                span_positions = valid_positions[: break_points[0] + 1].tolist()
             else:
                 # No breaks, span continues to end
                 span_positions = valid_positions.tolist()
@@ -154,12 +154,14 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
         # Vectorized intensity calculation
         span_intensity = intensity[torch.tensor(span_positions, device=device)].mean().item()
 
-        spans.append({
-            'start': start_pos,
-            'positions': span_positions,
-            'length': span_length,
-            'intensity': span_intensity,
-        })
+        spans.append(
+            {
+                "start": start_pos,
+                "positions": span_positions,
+                "length": span_length,
+                "intensity": span_intensity,
+            }
+        )
 
     return spans
 
@@ -167,9 +169,9 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
 @torch.no_grad()
 def _vectorized_isotope_extension(
     span_mask: torch.Tensor,  # (B, L)
-    mz: torch.Tensor,         # (B, L)
+    mz: torch.Tensor,  # (B, L)
     intensity: torch.Tensor,  # (B, L)
-    valid: torch.Tensor,      # (B, L)
+    valid: torch.Tensor,  # (B, L)
     charges: torch.Tensor | None,  # (B,)
     max_total_mask_ratio: float,
     isotope_ppm: float,
@@ -189,7 +191,7 @@ def _vectorized_isotope_extension(
     Runs ``isotope_max_order`` rounds so that full isotope envelopes (M+1,
     M+2, M+3) are captured layer by layer.
     """
-    B, L = span_mask.shape
+    B, L = span_mask.shape  # noqa: N806
     result_mask = span_mask.clone()
 
     # Pre-compute all isotope shifts for every (charge, order) combination.
@@ -278,8 +280,7 @@ def find_isotopic_neighbors(
     max_charge: int = 3,
     max_order: int = 2,
 ) -> torch.Tensor:
-    """
-    Find isotopic neighbors of masked peaks (span-aware, conservative).
+    """Find isotopic neighbors of masked peaks (span-aware, conservative).
 
     DEPRECATED: This function is primarily for testing/analysis.
     For production use, `thompson_sampling_span_mask` with `include_isotopes=True`
@@ -296,11 +297,11 @@ def find_isotopic_neighbors(
     max_charge : maximum charge state to consider (fallback)
     max_order : maximum isotopic order (adaptive formula used)
 
-    Returns
+    Returns:
     -------
     isotope_mask : (B, L) bool, True for isotopic neighbors of masked peaks
     """
-    B, L = mz.shape
+    B, L = mz.shape  # noqa: N806
     device = mz.device
     isotope_mask = torch.zeros_like(valid_mask, dtype=torch.bool)
 
@@ -330,7 +331,7 @@ def find_isotopic_neighbors(
             nearby_masked_mz = masked_mz[nearby_masked_indices]
 
             is_iso = _compute_isotope_shift_match(
-                candidate_mz=candidate_mz[c_idx:c_idx+1],
+                candidate_mz=candidate_mz[c_idx : c_idx + 1],
                 masked_mz=nearby_masked_mz,
                 charges=charge_b,
                 ppm=ppm,
@@ -351,6 +352,7 @@ def find_isotopic_neighbors(
 # Core Masking Strategies
 # ============================================================================
 
+
 @torch.no_grad()
 def thompson_sampling_mask(
     intensity: torch.Tensor,
@@ -362,8 +364,7 @@ def thompson_sampling_mask(
     gamma: float = 0.7,
     use_topk: bool = True,
 ) -> torch.Tensor:
-    """
-    Thompson-sampling peak mask (vectorized, intensity-aware).
+    """Thompson-sampling peak mask (vectorized, intensity-aware).
 
     Samples peaks based on Beta distribution parameterized by intensity,
     favoring high-intensity peaks while maintaining stochasticity.
@@ -378,11 +379,11 @@ def thompson_sampling_mask(
     gamma : intensity tempering exponent (I^gamma)
     use_topk : use topk (faster) vs full argsort
 
-    Returns
+    Returns:
     -------
     mask : (B, L) bool, True where masked
     """
-    B, L = intensity.shape
+    B, L = intensity.shape  # noqa: N806
     device = intensity.device
 
     valid = ~spectra_mask
@@ -393,7 +394,7 @@ def thompson_sampling_mask(
 
     # Beta parameters with tempering & concentration
     eps = 1e-6
-    I = intensity.clamp(eps, 1.0 - eps).pow(gamma)
+    I = intensity.clamp(eps, 1.0 - eps).pow(gamma)  # noqa: E741, N806
     a = alpha + kappa * I
     b = beta + kappa * (1.0 - I)
 
@@ -426,8 +427,7 @@ def uniform_random_mask(
     spectra_mask: torch.Tensor,
     mask_portion: float = 0.30,
 ) -> torch.Tensor:
-    """
-    Uniform random masking (vectorized, intensity-agnostic baseline).
+    """Uniform random masking (vectorized, intensity-agnostic baseline).
 
     Parameters
     ----------
@@ -435,11 +435,11 @@ def uniform_random_mask(
     spectra_mask : (B, L) bool, True for PAD positions
     mask_portion : fraction of valid tokens to mask
 
-    Returns
+    Returns:
     -------
     mask : (B, L) bool, True where masked
     """
-    B, L = intensity.shape
+    B, L = intensity.shape  # noqa: N806
     device = intensity.device
 
     valid = ~spectra_mask
@@ -484,8 +484,7 @@ def thompson_sampling_span_mask(
     max_mz: float = 2500.0,
     normalize_mz: bool = True,
 ) -> torch.Tensor:
-    """
-    Intensity-aware span masking for contiguous peak sequences.
+    """Intensity-aware span masking for contiguous peak sequences.
 
     Samples anchor peaks using Thompson sampling, expands them into spans,
     and optionally extends with isotopic neighbors. Ensures all masked peaks
@@ -511,17 +510,17 @@ def thompson_sampling_span_mask(
     isotope_max_order : max isotopic order
     max_total_mask_ratio : hard cap on masking ratio
 
-    Returns
+    Returns:
     -------
     mask : (B, L) bool, True where masked
     """
-    B, L = intensity.shape
+    B, L = intensity.shape  # noqa: N806
     device = intensity.device
     valid = ~spectra_mask
 
     # Always sort by m/z for consistent span masking, then unsort at end
     if mz is not None:
-        mz_for_sorting = torch.where(spectra_mask, torch.tensor(float('inf'), device=device, dtype=mz.dtype), mz)
+        mz_for_sorting = torch.where(spectra_mask, torch.tensor(float("inf"), device=device, dtype=mz.dtype), mz)
         sort_indices = torch.argsort(mz_for_sorting, dim=1)
         unsort_indices = torch.argsort(sort_indices, dim=1)
 
@@ -557,9 +556,7 @@ def thompson_sampling_span_mask(
     if num_anchors == 0:
         return span_mask
 
-    span_lengths = torch.randint(
-        low=span_min, high=span_max + 1, size=(num_anchors,), device=device, dtype=torch.long
-    )
+    span_lengths = torch.randint(low=span_min, high=span_max + 1, size=(num_anchors,), device=device, dtype=torch.long)
 
     anchor_batch_idx, anchor_pos_idx = torch.nonzero(anchors, as_tuple=True)
 
@@ -598,16 +595,16 @@ def thompson_sampling_span_mask(
         if not spans:
             continue
 
-        spans.sort(key=lambda s: (s['length'], s['intensity']))
+        spans.sort(key=lambda s: (s["length"], s["intensity"]))
 
         removed_count = 0
         for span in spans:
             if removed_count >= excess:
                 break
 
-            span_positions = torch.tensor(span['positions'], device=device, dtype=torch.long)
+            span_positions = torch.tensor(span["positions"], device=device, dtype=torch.long)
             span_mask[b_idx, span_positions] = False
-            removed_count += span['length']
+            removed_count += span["length"]
 
     # Isotopic co-masking
     if include_isotopes and mz_for_isotopes is not None:
@@ -662,7 +659,8 @@ def thompson_sampling_span_mask(
 # Signal-Aware Fragment Masking
 # ============================================================================
 
-def _annotate_single_spectrum_worker(args):
+
+def _annotate_single_spectrum_worker(args: Any) -> Any:
     """Worker function for parallel annotation via multiprocessing.
 
     Parameters
@@ -670,7 +668,7 @@ def _annotate_single_spectrum_worker(args):
     args : tuple
         (mz_np, intensity_np, peptide, charge, ppm_tol, ion_types, da_tol, frag_type)
 
-    Returns
+    Returns:
     -------
     dict or None
         Annotation result from match_with_conditional_features, or None if failed
@@ -705,7 +703,7 @@ def _annotate_single_spectrum_worker(args):
         return None
 
 
-def _expand_annotation_to_full_length(result, valid_mask, L):
+def _expand_annotation_to_full_length(result: Any, valid_mask: Any, L: Any) -> Any:  # noqa: N803
     """Expand annotation results from valid peaks to full tensor length.
 
     Parameters
@@ -717,7 +715,7 @@ def _expand_annotation_to_full_length(result, valid_mask, L):
     L : int
         Full tensor length
 
-    Returns
+    Returns:
     -------
     dict
         Annotation result with arrays expanded to length L
@@ -742,7 +740,7 @@ def _expand_annotation_to_full_length(result, valid_mask, L):
     return expanded
 
 
-def _build_parent_child_mapping(feature_types, parent_annotations, matched_annotations, intensity, spectra_mask):
+def _build_parent_child_mapping(feature_types: Any, parent_annotations: Any, matched_annotations: Any, intensity: Any, spectra_mask: Any) -> Any:
     """Build parent-child mapping from annotation results.
 
     Parameters
@@ -758,7 +756,7 @@ def _build_parent_child_mapping(feature_types, parent_annotations, matched_annot
     spectra_mask : torch.Tensor
         Padding mask [L], True for padded positions
 
-    Returns
+    Returns:
     -------
     dict
         Mapping from parent annotation string to dict with:
@@ -767,7 +765,7 @@ def _build_parent_child_mapping(feature_types, parent_annotations, matched_annot
         - loss_indices: list of int
         - isotope_indices: list of int
     """
-    L = len(feature_types)
+    L = len(feature_types)  # noqa: N806
     parent_groups = {}
 
     # Pass 1: Identify all base fragment ions (parents)
@@ -802,7 +800,7 @@ def _build_parent_child_mapping(feature_types, parent_annotations, matched_annot
     return parent_groups
 
 
-def _select_fragment_ions_uniform(parent_groups, mask_portion, n_valid, max_ratio):
+def _select_fragment_ions_uniform(parent_groups: Any, mask_portion: Any, n_valid: Any, max_ratio: Any) -> Any:
     """Select fragment ions uniformly at random.
 
     Parameters
@@ -816,7 +814,7 @@ def _select_fragment_ions_uniform(parent_groups, mask_portion, n_valid, max_rati
     max_ratio : float
         Maximum fraction of total peaks that can be masked
 
-    Returns
+    Returns:
     -------
     list
         List of selected parent annotation keys
@@ -858,7 +856,7 @@ def _select_fragment_ions_uniform(parent_groups, mask_portion, n_valid, max_rati
     return selected
 
 
-def _enforce_mask_cap(batch_mask, spectra_mask, max_ratio, intensity):
+def _enforce_mask_cap(batch_mask: Any, spectra_mask: Any, max_ratio: Any, intensity: Any) -> Any:
     """Enforce hard cap on masking ratio by removing lowest-intensity peaks.
 
     Parameters
@@ -872,7 +870,7 @@ def _enforce_mask_cap(batch_mask, spectra_mask, max_ratio, intensity):
     intensity : torch.Tensor
         Peak intensities [L]
 
-    Returns
+    Returns:
     -------
     torch.Tensor
         Updated mask with cap enforced
@@ -998,15 +996,14 @@ def signal_aware_fragment_mask(
     num_workers : int
         Number of multiprocessing workers for annotation
 
-    Returns
+    Returns:
     -------
     torch.Tensor
         Boolean mask [B, L], True for masked positions
     """
-    import numpy as np
     from multiprocessing import Pool
 
-    B, L = intensity.shape
+    B, L = intensity.shape  # noqa: N806
     device = intensity.device
     peak_mask = torch.zeros_like(spectra_mask, dtype=torch.bool)
 
@@ -1049,7 +1046,7 @@ def signal_aware_fragment_mask(
     # Import here to avoid circular imports at module level
     from instanovo_fm.utils.theoretical_spectra import _da_tol_for_fragmentation
 
-    annotation_args = []
+    annotation_args: list[Any] = []
     for b in range(B):
         valid_mask = ~spectra_mask[b].cpu().numpy()
 
@@ -1064,16 +1061,18 @@ def signal_aware_fragment_mask(
         frag_type = frag_types[b] if frag_types is not None else None
         da_tol = _da_tol_for_fragmentation(frag_type, annotation_cid_da_tol) if annotation_cid_da_tol else None
 
-        annotation_args.append((
-            mz_np,
-            intensity_np,
-            peptides[b],
-            charges[b].item(),
-            annotation_ppm,
-            annotation_ion_types,
-            da_tol,
-            frag_type,
-        ))
+        annotation_args.append(
+            (
+                mz_np,
+                intensity_np,
+                peptides[b],
+                charges[b].item(),
+                annotation_ppm,
+                annotation_ion_types,
+                da_tol,
+                frag_type,
+            )
+        )
 
     # Parallel annotation
     # Check if we're in a daemon worker process (daemon processes can't spawn children)
@@ -1081,18 +1080,20 @@ def signal_aware_fragment_mask(
     try:
         # Check for PyTorch DataLoader workers
         from torch.utils.data import get_worker_info
+
         worker_info = get_worker_info()
         if worker_info is not None:
             in_daemon_process = True
-    except:
+    except Exception:
         pass
 
     # Also check for general multiprocessing daemon processes
     if not in_daemon_process:
         try:
             from multiprocessing import current_process
+
             in_daemon_process = current_process().daemon
-        except:
+        except Exception:
             pass
 
     # Use sequential processing if in daemon worker or if num_workers=1
@@ -1102,8 +1103,7 @@ def signal_aware_fragment_mask(
             annotation_results = pool.map(_annotate_single_spectrum_worker, annotation_args)
     else:
         # Sequential fallback (in daemon worker process or single worker mode)
-        annotation_results = [_annotate_single_spectrum_worker(arg) if arg is not None else None
-                             for arg in annotation_args]
+        annotation_results = [_annotate_single_spectrum_worker(arg) if arg is not None else None for arg in annotation_args]
 
     # Import quality gate function
     from instanovo_fm.utils.modifications import clean_peptide_sequence
@@ -1132,16 +1132,13 @@ def signal_aware_fragment_mask(
                     matched_annotations=result.get("matched_annotation", []),
                     seq_len=seq_len,
                 )
-                use_signal_aware = (
-                    quality["backbone_coverage"] >= min_backbone_coverage
-                    and quality["n_fragment_groups"] >= min_fragment_groups
-                )
+                use_signal_aware = quality["backbone_coverage"] >= min_backbone_coverage and quality["n_fragment_groups"] >= min_fragment_groups
 
         if not use_signal_aware:
             # Fallback to thompson_span
             fallback_mask = thompson_sampling_span_mask(
-                intensity=intensity[b:b+1],
-                spectra_mask=spectra_mask[b:b+1],
+                intensity=intensity[b : b + 1],
+                spectra_mask=spectra_mask[b : b + 1],
                 mask_portion=mask_portion,
                 span_min=span_min,
                 span_max=span_max,
@@ -1150,8 +1147,8 @@ def signal_aware_fragment_mask(
                 kappa=kappa,
                 gamma=gamma,
                 bidirectional=bidirectional,
-                mz=mz[b:b+1],
-                charges=charges[b:b+1] if include_isotopes else None,
+                mz=mz[b : b + 1],
+                charges=charges[b : b + 1] if include_isotopes else None,
                 include_isotopes=include_isotopes,
                 isotope_ppm=isotope_ppm,
                 isotope_da_floor=isotope_da_floor,
@@ -1182,8 +1179,8 @@ def signal_aware_fragment_mask(
         if len(parent_groups) == 0:
             # No valid groups - fallback
             fallback_mask = thompson_sampling_span_mask(
-                intensity=intensity[b:b+1],
-                spectra_mask=spectra_mask[b:b+1],
+                intensity=intensity[b : b + 1],
+                spectra_mask=spectra_mask[b : b + 1],
                 mask_portion=mask_portion,
                 span_min=span_min,
                 span_max=span_max,
@@ -1192,8 +1189,8 @@ def signal_aware_fragment_mask(
                 kappa=kappa,
                 gamma=gamma,
                 bidirectional=bidirectional,
-                mz=mz[b:b+1],
-                charges=charges[b:b+1] if include_isotopes else None,
+                mz=mz[b : b + 1],
+                charges=charges[b : b + 1] if include_isotopes else None,
                 include_isotopes=include_isotopes,
                 isotope_ppm=isotope_ppm,
                 isotope_da_floor=isotope_da_floor,
@@ -1210,9 +1207,7 @@ def signal_aware_fragment_mask(
 
         # Select fragment ions to mask
         n_valid = (~spectra_mask[b]).sum().item()
-        selected_parents = _select_fragment_ions_uniform(
-            parent_groups, mask_portion, n_valid, max_total_mask_ratio
-        )
+        selected_parents = _select_fragment_ions_uniform(parent_groups, mask_portion, n_valid, max_total_mask_ratio)
 
         # Build mask from selected fragments
         batch_mask = torch.zeros(L, dtype=torch.bool, device=device)
@@ -1233,11 +1228,12 @@ def signal_aware_fragment_mask(
     # Log statistics
     if B > 0:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.debug(
             f"Signal-aware masking: {n_signal_aware}/{B} spectra "
-            f"({n_signal_aware/B*100:.1f}%), {n_fallback}/{B} fallback "
-            f"({n_fallback/B*100:.1f}%)"
+            f"({n_signal_aware / B * 100:.1f}%), {n_fallback}/{B} fallback "
+            f"({n_fallback / B * 100:.1f}%)"
         )
 
     if return_fallback_mask:
@@ -1249,9 +1245,9 @@ def signal_aware_fragment_mask(
 # Registry
 # ============================================================================
 
-def get_mask_function(strategy: str):
-    """
-    Get masking function by name.
+
+def get_mask_function(strategy: str) -> Any:
+    """Get masking function by name.
 
     Available strategies:
     - 'thompson': Thompson-sampled individual peaks
@@ -1266,8 +1262,5 @@ def get_mask_function(strategy: str):
         "signal_aware_fragment": signal_aware_fragment_mask,
     }
     if strategy not in registry:
-        raise ValueError(
-            f"Unknown masking strategy: '{strategy}'. "
-            f"Available: {list(registry.keys())}"
-        )
+        raise ValueError(f"Unknown masking strategy: '{strategy}'. Available: {list(registry.keys())}")
     return registry[strategy]

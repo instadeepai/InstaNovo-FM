@@ -65,15 +65,12 @@ class IonLadderEncoder(nn.Module):
         charge_states: tuple[int, ...] = (1, 2),
         neutral_losses: dict[str, float] | None = None,
     ) -> None:
+        """Initialise the input."""
         super().__init__()
         self.window_k = window_k
 
-        self.register_buffer(
-            "charges", torch.tensor(charge_states, dtype=torch.float32)
-        )
-        self.register_buffer(
-            "inv_sigma_sq", torch.tensor(1.0 / (sigma**2))
-        )
+        self.register_buffer("charges", torch.tensor(charge_states, dtype=torch.float32))
+        self.register_buffer("inv_sigma_sq", torch.tensor(1.0 / (sigma**2)))
 
         # Build expanded reference mass table: bare masses + loss-shifted variants
         ref_masses = sorted(residue_masses)  # bare residue masses
@@ -152,12 +149,8 @@ class IonLadderEncoder(nn.Module):
         diffs = windows - center  # (B, L, 2k+1)
 
         # Remove center (self) position
-        neighbor_diffs = torch.cat(
-            [diffs[:, :, :k], diffs[:, :, k + 1 :]], dim=2
-        )  # (B, L, 2k)
-        neighbor_mask = torch.cat(
-            [mask_windows[:, :, :k], mask_windows[:, :, k + 1 :]], dim=2
-        )  # (B, L, 2k)
+        neighbor_diffs = torch.cat([diffs[:, :, :k], diffs[:, :, k + 1 :]], dim=2)  # (B, L, 2k)
+        neighbor_mask = torch.cat([mask_windows[:, :, :k], mask_windows[:, :, k + 1 :]], dim=2)  # (B, L, 2k)
 
         # Valid neighbour mask for zeroing out invalid contributions
         neighbor_valid = (~neighbor_mask).unsqueeze(-1).float()  # (B, L, 2k, 1)

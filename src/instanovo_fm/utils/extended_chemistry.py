@@ -20,10 +20,9 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # Physical constants (must match ig_attribution_helper.py)
@@ -73,51 +72,51 @@ AMINO_ACID_MASSES: Dict[str, float] = {
 
 IMMONIUM_RELATED_IONS: Dict[str, List[Tuple[float, str]]] = {
     "V": [
-        (41.039, "rel_V_41"),      # C3H5+ (allyl cation)
-        (55.055, "rel_V_55"),      # C4H7+
-        (69.070, "rel_V_69"),      # C5H9+
+        (41.039, "rel_V_41"),  # C3H5+ (allyl cation)
+        (55.055, "rel_V_55"),  # C4H7+
+        (69.070, "rel_V_69"),  # C5H9+
     ],
     "I": [
-        (44.050, "rel_I_44"),      # CO-NH2=CH2+ (shared with Leu)
-        (72.081, "rel_I_72"),      # immonium - CO
+        (44.050, "rel_I_44"),  # CO-NH2=CH2+ (shared with Leu)
+        (72.081, "rel_I_72"),  # immonium - CO
     ],
     "L": [
-        (44.050, "rel_L_44"),      # CO-NH2=CH2+ (shared with Ile)
-        (72.081, "rel_L_72"),      # immonium - CO
+        (44.050, "rel_L_44"),  # CO-NH2=CH2+ (shared with Ile)
+        (72.081, "rel_L_72"),  # immonium - CO
     ],
     "N": [
-        (70.029, "rel_N_70"),      # immonium - NH3
+        (70.029, "rel_N_70"),  # immonium - NH3
     ],
     "D": [
-        (70.029, "rel_D_70"),      # immonium - H2O
+        (70.029, "rel_D_70"),  # immonium - H2O
     ],
     "Q": [
         (56.050, "rel_Q_56"),
-        (84.045, "rel_Q_84"),      # immonium - NH3
-        (129.066, "rel_Q_129"),    # immonium + CO
+        (84.045, "rel_Q_84"),  # immonium - NH3
+        (129.066, "rel_Q_129"),  # immonium + CO
     ],
     "K": [
         (70.066, "rel_K_70"),
-        (84.081, "rel_K_84"),      # immonium - NH3
+        (84.081, "rel_K_84"),  # immonium - NH3
         (112.076, "rel_K_112"),
-        (129.102, "rel_K_129"),    # immonium + CO
+        (129.102, "rel_K_129"),  # immonium + CO
     ],
     "M": [
-        (61.011, "rel_M_61"),      # immonium - CH2S (= loss of thioformaldehyde)
+        (61.011, "rel_M_61"),  # immonium - CH2S (= loss of thioformaldehyde)
     ],
     "H": [
-        (82.053, "rel_H_82"),      # immonium - CO
+        (82.053, "rel_H_82"),  # immonium - CO
         (121.076, "rel_H_121"),
         (123.055, "rel_H_123"),
-        (138.066, "rel_H_138"),    # immonium + CO
+        (138.066, "rel_H_138"),  # immonium + CO
         (166.061, "rel_H_166"),
     ],
     "F": [
-        (91.054, "rel_F_91"),      # tropylium C7H7+ (diagnostic for Phe/Tyr)
+        (91.054, "rel_F_91"),  # tropylium C7H7+ (diagnostic for Phe/Tyr)
     ],
     "Y": [
-        (91.054, "rel_Y_91"),      # tropylium C7H7+
-        (107.049, "rel_Y_107"),    # hydroxytropylium C7H7O+
+        (91.054, "rel_Y_91"),  # tropylium C7H7+
+        (107.049, "rel_Y_107"),  # hydroxytropylium C7H7O+
     ],
     "R": [
         (59.048, "rel_R_59"),
@@ -128,9 +127,9 @@ IMMONIUM_RELATED_IONS: Dict[str, List[Tuple[float, str]]] = {
         (112.087, "rel_R_112"),
     ],
     "W": [
-        (77.039, "rel_W_77"),      # phenyl cation C6H5+
-        (117.058, "rel_W_117"),    # indolium C8H7N+
-        (130.066, "rel_W_130"),    # 3-methylindolium C9H8N+
+        (77.039, "rel_W_77"),  # phenyl cation C6H5+
+        (117.058, "rel_W_117"),  # indolium C8H7N+
+        (130.066, "rel_W_130"),  # 3-methylindolium C9H8N+
         (132.081, "rel_W_132"),
         (170.060, "rel_W_170"),
         (171.092, "rel_W_171"),
@@ -146,11 +145,11 @@ IMMONIUM_RELATED_IONS: Dict[str, List[Tuple[float, str]]] = {
 # the precursor ion appear as unannotated.
 
 COMBINED_PRECURSOR_LOSSES: List[Tuple[str, float]] = [
-    ("2xH2O", 2 * 18.010565),              # 36.021 Da — double water loss
-    ("H2O+NH3", 18.010565 + 17.026549),    # 35.037 Da — water + ammonia
-    ("CO+H2O", 27.994915 + 18.010565),     # 46.005 Da — CO + water
-    ("CO+NH3", 27.994915 + 17.026549),     # 45.021 Da — CO + ammonia
-    ("2xNH3", 2 * 17.026549),              # 34.053 Da — double ammonia loss
+    ("2xH2O", 2 * 18.010565),  # 36.021 Da — double water loss
+    ("H2O+NH3", 18.010565 + 17.026549),  # 35.037 Da — water + ammonia
+    ("CO+H2O", 27.994915 + 18.010565),  # 46.005 Da — CO + water
+    ("CO+NH3", 27.994915 + 17.026549),  # 45.021 Da — CO + ammonia
+    ("2xNH3", 2 * 17.026549),  # 34.053 Da — double ammonia loss
 ]
 
 
@@ -158,9 +157,11 @@ COMBINED_PRECURSOR_LOSSES: List[Tuple[str, float]] = [
 # d-ion and w-ion side-chain loss data (from residue_ion_reference.csv)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SideChainLoss:
     """Side-chain loss for d-ion or w-ion computation."""
+
     formula: str
     mass: float
     source: str = ""
@@ -171,8 +172,8 @@ SIDE_CHAIN_LOSSES: Dict[str, List[SideChainLoss]] = {
     "D": [SideChainLoss("CO2H", 44.997654)],
     "E": [SideChainLoss("C2H3O2", 59.013304)],
     "I": [
-        SideChainLoss("C2H5", 29.039125),   # primary — distinguishes from Leu
-        SideChainLoss("CH3", 15.023475),     # alternative (β-branch)
+        SideChainLoss("C2H5", 29.039125),  # primary — distinguishes from Leu
+        SideChainLoss("CH3", 15.023475),  # alternative (β-branch)
     ],
     "K": [SideChainLoss("C3H8N", 58.065674)],
     "L": [SideChainLoss("C3H7", 43.054775)],  # distinguishes from Ile
@@ -196,12 +197,14 @@ RESIDUE_SPECIFIC_LOSSES: Dict[str, List[Tuple[str, float]]] = {
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ExtendedChemistryMatch:
     """A match of an observed peak to an extended chemistry hypothesis."""
-    hypothesis_type: str       # "d_ion", "w_ion", "internal_fragment", "side_chain_loss",
-                               # "immonium_related", "precursor_combined_loss"
-    hypothesis_label: str      # e.g. "d4(I,-C2H5)", "rel_H_82", "p-2xH2O^2"
+
+    hypothesis_type: str  # "d_ion", "w_ion", "internal_fragment", "side_chain_loss",
+    # "immonium_related", "precursor_combined_loss"
+    hypothesis_label: str  # e.g. "d4(I,-C2H5)", "rel_H_82", "p-2xH2O^2"
     expected_mz: float
     observed_mz: float
     error_da: float
@@ -214,6 +217,7 @@ class ExtendedChemistryMatch:
 @dataclass
 class ExtendedChemistryLibrary:
     """Precomputed extended chemistry hypotheses for a given peptide + charge."""
+
     sequence: str
     precursor_charge: int
     d_ions: List[Tuple[float, str, str, int]] = field(default_factory=list)
@@ -227,14 +231,21 @@ class ExtendedChemistryLibrary:
 
     @property
     def total_hypotheses(self) -> int:
-        return (len(self.d_ions) + len(self.w_ions) + len(self.internal_fragments)
-                + len(self.side_chain_losses) + len(self.immonium_related)
-                + len(self.precursor_combined_losses))
+        """Total hypotheses."""
+        return (
+            len(self.d_ions)
+            + len(self.w_ions)
+            + len(self.internal_fragments)
+            + len(self.side_chain_losses)
+            + len(self.immonium_related)
+            + len(self.precursor_combined_losses)
+        )
 
 
 # ---------------------------------------------------------------------------
 # Ion mass computation
 # ---------------------------------------------------------------------------
+
 
 def _get_residue_mass(
     residue: str,
@@ -265,7 +276,7 @@ def compute_d_ions(
     w-ions do NOT need this correction because z-dot is already a radical.
     """
     results: List[Tuple[float, str, str, int]] = []
-    L = len(residues)
+    L = len(residues)  # noqa: N806
     cum_mass = 0.0
     for i in range(L - 1):
         cum_mass += _get_residue_mass(residues[i], residue_mass_fn)
@@ -300,7 +311,7 @@ def compute_w_ions(
     w_j = z_j(dot) - side_chain_loss(residue at N-terminal edge of z-fragment)
     """
     results: List[Tuple[float, str, str, int]] = []
-    L = len(residues)
+    L = len(residues)  # noqa: N806
     cum_mass = 0.0
     for j in range(1, L):
         cum_mass += _get_residue_mass(residues[L - j], residue_mass_fn)
@@ -335,7 +346,7 @@ def compute_internal_fragments(
     a-type internal: neutral_mass = sum(residue_masses[i:j]) - CO
     """
     results: List[Tuple[float, str]] = []
-    L = len(residues)
+    L = len(residues)  # noqa: N806
     masses = [_get_residue_mass(r, residue_mass_fn) for r in residues]
     prefix = [0.0] * (L + 1)
     for i in range(L):
@@ -344,7 +355,7 @@ def compute_internal_fragments(
     for start in range(1, L - 1):
         for end in range(start + 1, min(start + max_length, L - 1)):
             cum = prefix[end + 1] - prefix[start]
-            subseq = "".join(r[0] for r in residues[start:end + 1])
+            subseq = "".join(r[0] for r in residues[start : end + 1])
 
             b_mz = cum + PROTON_MASS
             if b_mz > 0:
@@ -364,7 +375,7 @@ def compute_side_chain_losses(
 ) -> List[Tuple[float, str, str]]:
     """Compute residue-specific side-chain losses from backbone b/y-ions."""
     results: List[Tuple[float, str, str]] = []
-    L = len(residues)
+    L = len(residues)  # noqa: N806
     masses = [_get_residue_mass(r, residue_mass_fn) for r in residues]
 
     b_neutral = []
@@ -425,7 +436,7 @@ def compute_immonium_related_ions(
         List of (mz, label, residue) tuples. All singly charged.
     """
     # Get unique amino acids in the sequence (single-letter codes)
-    aa_set = set(r[0] for r in residues)
+    aa_set = {r[0] for r in residues}
 
     results: List[Tuple[float, str, str]] = []
     for aa in aa_set:
@@ -447,7 +458,7 @@ def compute_immonium_related_negative_control(
     Returns:
         List of (mz, label, residue) tuples for ABSENT amino acids.
     """
-    aa_set = set(r[0] for r in residues)
+    aa_set = {r[0] for r in residues}
     results: List[Tuple[float, str, str]] = []
     for aa, ions in IMMONIUM_RELATED_IONS.items():
         if aa not in aa_set:
@@ -484,6 +495,7 @@ def compute_combined_precursor_losses(
 # Library builder and matcher
 # ---------------------------------------------------------------------------
 
+
 def build_extended_chemistry_library(
     residues: Sequence[str],
     precursor_charge: int = 2,
@@ -508,15 +520,22 @@ def build_extended_chemistry_library(
         d_ions=compute_d_ions(residues, precursor_charge, residue_mass_fn),
         w_ions=compute_w_ions(residues, precursor_charge, residue_mass_fn),
         internal_fragments=compute_internal_fragments(
-            residues, max_internal_length, residue_mass_fn,
+            residues,
+            max_internal_length,
+            residue_mass_fn,
         ),
         side_chain_losses=compute_side_chain_losses(
-            residues, precursor_charge, residue_mass_fn,
+            residues,
+            precursor_charge,
+            residue_mass_fn,
         ),
         immonium_related=compute_immonium_related_ions(residues),
         precursor_combined_losses=compute_combined_precursor_losses(
-            precursor_mz, precursor_charge,
-        ) if precursor_mz > 0 else [],
+            precursor_mz,
+            precursor_charge,
+        )
+        if precursor_mz > 0
+        else [],
     )
 
 
@@ -539,61 +558,93 @@ def match_peak_to_extended_chemistry(
     for mz, label, residue, position in library.d_ions:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="d_ion", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-                residue=residue, position=position,
-                discriminates_leu_ile=residue in LEU_ILE_DISCRIMINATING,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="d_ion",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                    residue=residue,
+                    position=position,
+                    discriminates_leu_ile=residue in LEU_ILE_DISCRIMINATING,
+                )
+            )
 
     for mz, label, residue, position in library.w_ions:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="w_ion", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-                residue=residue, position=position,
-                discriminates_leu_ile=residue in LEU_ILE_DISCRIMINATING,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="w_ion",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                    residue=residue,
+                    position=position,
+                    discriminates_leu_ile=residue in LEU_ILE_DISCRIMINATING,
+                )
+            )
 
     for mz, label in library.internal_fragments:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="internal_fragment", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="internal_fragment",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                )
+            )
 
-    for mz, label, parent_type in library.side_chain_losses:
+    for mz, label, _parent_type in library.side_chain_losses:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="side_chain_loss", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="side_chain_loss",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                )
+            )
 
     for mz, label, residue in library.immonium_related:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="immonium_related", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-                residue=residue,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="immonium_related",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                    residue=residue,
+                )
+            )
 
     for mz, label in library.precursor_combined_losses:
         ok, err_da, err_ppm = _within_tol(mz)
         if ok:
-            matches.append(ExtendedChemistryMatch(
-                hypothesis_type="precursor_combined_loss", hypothesis_label=label,
-                expected_mz=mz, observed_mz=observed_mz,
-                error_da=err_da, error_ppm=err_ppm,
-            ))
+            matches.append(
+                ExtendedChemistryMatch(
+                    hypothesis_type="precursor_combined_loss",
+                    hypothesis_label=label,
+                    expected_mz=mz,
+                    observed_mz=observed_mz,
+                    error_da=err_da,
+                    error_ppm=err_ppm,
+                )
+            )
 
     return matches
 

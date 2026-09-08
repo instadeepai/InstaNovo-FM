@@ -20,11 +20,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from matplotlib.axes import Axes
 
 # ---------------------------------------------------------------------------
 # Attribution reduction (moved from legacy xai_peaks_helper.py)
 # ---------------------------------------------------------------------------
+
 
 def reduce_attributions_to_peaks(
     attributions: torch.Tensor,
@@ -194,7 +195,7 @@ def _gap_residues_from_sequence(
     """
     if ion_type not in ("a", "b", "y"):
         return None
-    L = len(sequence_residues)
+    L = len(sequence_residues)  # noqa: N806
     if L == 0:
         return None
     lo, hi = sorted((masked_position, peak_position))
@@ -213,7 +214,9 @@ def expected_mz_at_other_charges(
     base_charge: int,
     max_charge: int = 4,
 ) -> Dict[int, float]:
-    """Return ``{charge_state: expected_mz}`` for every charge in
+    """Return the expected m/z for every charge state except the base charge.
+
+    Return ``{charge_state: expected_mz}`` for every charge in
     ``1..max_charge`` **except** ``base_charge``, using neutral-mass
     equivalence (``neutral = mz*z − z*proton``).
 
@@ -224,10 +227,7 @@ def expected_mz_at_other_charges(
     if base_charge <= 0 or base_mz <= 0:
         return {}
     neutral = base_mz * base_charge - base_charge * PROTON_MASS
-    return {
-        z: (neutral + z * PROTON_MASS) / z
-        for z in range(1, max_charge + 1) if z != base_charge
-    }
+    return {z: (neutral + z * PROTON_MASS) / z for z in range(1, max_charge + 1) if z != base_charge}
 
 
 def detect_charge_variant_indices(
@@ -238,17 +238,11 @@ def detect_charge_variant_indices(
     max_charge: int = 4,
     extra_masked_mz: Optional[List[float]] = None,
 ) -> Set[int]:
-    """Return visible peak indices whose m/z matches the masked group at a
-    different charge state.
+    """Return visible peak indices whose m/z matches the masked group at a different charge state.
 
-    Tolerance uses ``<=`` so peaks exactly at the boundary (e.g. a z=2 +1
-    isotope sitting exactly 0.5 Da off the base) are still caught.
-
-    Args:
-        extra_masked_mz: additional reference m/z values (same masked_charge)
-            — e.g. the m/z of the masked group's isotopes and neutral-loss
-            siblings. Without these the detector only checks the base ion,
-            which misses variants of siblings like y8+-H2O → y8++-H2O.
+    Tolerance uses ``<=`` so peaks exactly at the boundary (e.g. a z=2 +1 isotope sitting exactly 0.5 Da off the base) are still caught. Args:
+    extra_masked_mz: additional reference m/z values (same masked_charge) — e.g. the m/z of the masked group's isotopes and neutral-loss siblings.
+    Without these the detector only checks the base ion, which misses variants of siblings like y8+-H2O → y8++-H2O.
     """
     if masked_charge <= 0 or masked_base_mz <= 0:
         return set()
@@ -257,9 +251,7 @@ def detect_charge_variant_indices(
         reference_mzs.extend(m for m in extra_masked_mz if m > 0)
     expected_mz: List[float] = []
     for ref_mz in reference_mzs:
-        expected_mz.extend(
-            expected_mz_at_other_charges(ref_mz, masked_charge, max_charge).values()
-        )
+        expected_mz.extend(expected_mz_at_other_charges(ref_mz, masked_charge, max_charge).values())
     out: Set[int] = set()
     for idx, peak_mz in enumerate(peak_mz_array):
         if peak_mz <= 0:
@@ -275,6 +267,7 @@ def detect_charge_variant_indices(
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FragmentGroup:
     """A fragment ion group: base ion + its isotopes + neutral losses.
@@ -282,6 +275,7 @@ class FragmentGroup:
     The model treats these as a single chemical entity — attribution should
     be aggregated across the group.
     """
+
     group_key: str  # e.g. "b3", "y5" — the parent annotation
     peak_indices: List[int]  # all peak indices belonging to this group
     base_idx: Optional[int]  # index of the base (monoisotopic) peak, if identifiable
@@ -292,6 +286,7 @@ class FragmentGroup:
 @dataclass
 class PeakPrediction:
     """Prediction result for a single peak within a masked fragment group."""
+
     peak_idx: int
     annotation: str  # e.g. "b4+", "b4+[+1]", "b4+-H2O"
     true_mz_da: float
@@ -312,6 +307,7 @@ class PeakPrediction:
 @dataclass
 class PredictionInfo:
     """Model prediction quality for a masked fragment group."""
+
     predicted_mz_da: float  # predicted m/z of base ion in Daltons
     true_mz_da: float  # true m/z of base ion in Daltons
     error_da: float  # |predicted - true| in Da (base ion)
@@ -333,12 +329,13 @@ class AttributionResult:
     MLM-masks the entire fragment group (training-aligned) and computes
     Integrated Gradients to identify which visible peaks the model uses.
     """
+
     spectrum_idx: int
     masked_group: FragmentGroup
     attributions: np.ndarray  # per-peak IG attribution (L,)
     prediction: Optional[PredictionInfo] = None
     convergence_delta: float = 0.0  # IG completeness axiom
-    topk: Optional['TopKAnalysis'] = None
+    topk: Optional["TopKAnalysis"] = None
     # Peak indices that are the masked fragment observed at a different charge
     # state — classified as leakage and excluded from the novel-chemistry
     # denominator so charge shortcuts don't contaminate chemistry metrics.
@@ -348,6 +345,7 @@ class AttributionResult:
 # ---------------------------------------------------------------------------
 # Fragment ion group building
 # ---------------------------------------------------------------------------
+
 
 def build_fragment_groups(
     annotations: List[str],
@@ -408,7 +406,7 @@ def build_fragment_groups(
             group_map[group_key].append(idx)
             base_ion_indices[group_key] = idx
 
-    groups = []
+    groups: list[Any] = []
     for key, indices in group_map.items():
         # Identify the base peak
         base_idx = base_ion_indices.get(key)
@@ -429,13 +427,15 @@ def build_fragment_groups(
         elif key.startswith("p"):
             ion_type = "precursor"
 
-        groups.append(FragmentGroup(
-            group_key=key,
-            peak_indices=indices,
-            base_idx=base_idx,
-            base_mz=base_mz_val,
-            ion_type=ion_type,
-        ))
+        groups.append(
+            FragmentGroup(
+                group_key=key,
+                peak_indices=indices,
+                base_idx=base_idx,
+                base_mz=base_mz_val,
+                ion_type=ion_type,
+            )
+        )
 
     return groups
 
@@ -464,6 +464,7 @@ def _extract_parent_key(annotation: str) -> Optional[str]:
 # Captum target wrapper for prediction attribution
 # ---------------------------------------------------------------------------
 
+
 class PredictionTarget(nn.Module):
     """Captum-compatible forward wrapper for IG attribution.
 
@@ -478,7 +479,8 @@ class PredictionTarget(nn.Module):
         masked_indices: List[int],
         meta: Optional[Dict[str, torch.Tensor]] = None,
         spectra_mask: Optional[torch.Tensor] = None,
-    ):
+    ) -> None:
+        """Initialise the input."""
         super().__init__()
         self.model = model
         self.masked_indices = masked_indices
@@ -486,7 +488,8 @@ class PredictionTarget(nn.Module):
         self.spectra_mask = spectra_mask
 
     def forward(self, spectra: torch.Tensor) -> torch.Tensor:
-        B, L, _ = spectra.shape
+        """Run the forward pass."""
+        B, L, _ = spectra.shape  # noqa: N806
         device = spectra.device
 
         # MLM-mask ALL group positions
@@ -504,7 +507,7 @@ class PredictionTarget(nn.Module):
         # Mean log-prob across all masked positions
         if isinstance(predictions, tuple):
             group_logits, offset_logits = predictions
-            scalars = []
+            scalars: list[Any] = []
             for idx in self.masked_indices:
                 g_lp = F.log_softmax(group_logits[:, idx], dim=-1)
                 s = g_lp.max(dim=-1).values
@@ -514,9 +517,7 @@ class PredictionTarget(nn.Module):
                 scalars.append(s)
             scalar = torch.stack(scalars, dim=-1).mean(dim=-1)  # (B,)
         else:
-            masked_preds = torch.stack(
-                [predictions[:, idx, 0] for idx in self.masked_indices], dim=-1
-            )
+            masked_preds = torch.stack([predictions[:, idx, 0] for idx in self.masked_indices], dim=-1)
             scalar = masked_preds.mean(dim=-1)
 
         return scalar
@@ -542,7 +543,7 @@ def extract_prediction(
         true_mz_all: mapping from peak index -> true m/z in Da (for all group members)
         annotations: per-peak annotation strings (for labeling per-peak predictions)
     """
-    B, L, _ = spectra.shape
+    B, L, _ = spectra.shape  # noqa: N806
     device = spectra.device
 
     mlm_mask = torch.zeros(B, L, dtype=torch.bool, device=device)
@@ -554,7 +555,7 @@ def extract_prediction(
     binning = getattr(model, "binning_strategy", None)
     pred_g, pred_o, true_g, true_o = -1, -1, -1, -1
     correct_bin = False
-    group_correct = []
+    group_correct: list[Any] = []
     peak_predictions: List[PeakPrediction] = []
 
     if isinstance(predictions, tuple):
@@ -583,7 +584,7 @@ def extract_prediction(
             true_g_t, true_o_t = binning.mz_to_bin_groups(true_mz_tensor)
             true_g = true_g_t.item()
             true_o = true_o_t.item()
-            correct_bin = (pred_g == true_g and pred_o == true_o)
+            correct_bin = pred_g == true_g and pred_o == true_o
 
             # Per-peak predictions with confidence, bin indices, and top-N candidates
             for idx in masked_indices:
@@ -602,7 +603,7 @@ def extract_prediction(
                     t_mz_val = true_mz_all[idx]
                     t_mz = torch.tensor([t_mz_val], device=device)
                     t_g, t_o = binning.mz_to_bin_groups(t_mz)
-                    p_correct = (p_g.item() == t_g.item() and p_o.item() == t_o.item())
+                    p_correct = p_g.item() == t_g.item() and p_o.item() == t_o.item()
                     group_correct.append(p_correct)
 
                     # Rank of the correct bin in the model's group predictions
@@ -611,11 +612,13 @@ def extract_prediction(
                     correct_bin_rank = int(correct_g_rank[0].item()) + 1 if len(correct_g_rank) > 0 else -1
 
                     # Top-5 candidates (group_bin, offset_bin, mz, log_prob)
-                    top_candidates = []
+                    top_candidates: list[Any] = []
                     top5_g = g_sorted[:5]
                     for cand_g in top5_g:
                         # Best offset for this group candidate
-                        cand_o = offset_logits[:, idx].argmax(dim=-1) if offset_logits is not None else torch.zeros(1, dtype=torch.long, device=device)
+                        cand_o = (
+                            offset_logits[:, idx].argmax(dim=-1) if offset_logits is not None else torch.zeros(1, dtype=torch.long, device=device)
+                        )
                         cand_mz = binning.bin_groups_to_mz(cand_g.unsqueeze(0), cand_o).item()
                         cand_lp = g_lp[0, cand_g].item()
                         if offset_logits is not None:
@@ -623,21 +626,23 @@ def extract_prediction(
                         top_candidates.append((int(cand_g.item()), int(cand_o[0].item()), cand_mz, cand_lp))
 
                     ann = str(annotations[idx]) if annotations and idx < len(annotations) and annotations[idx] else f"m/z={t_mz_val:.2f}"
-                    peak_predictions.append(PeakPrediction(
-                        peak_idx=idx,
-                        annotation=ann,
-                        true_mz_da=t_mz_val,
-                        predicted_mz_da=p_mz,
-                        correct_bin=p_correct,
-                        log_prob=peak_logprob,
-                        correct_bin_rank=correct_bin_rank,
-                        predicted_group_bin=p_g.item(),
-                        predicted_offset_bin=p_o.item(),
-                        true_group_bin=t_g.item(),
-                        true_offset_bin=t_o.item(),
-                        group_bin_distance=abs(p_g.item() - t_g.item()),
-                        top_candidates=top_candidates,
-                    ))
+                    peak_predictions.append(
+                        PeakPrediction(
+                            peak_idx=idx,
+                            annotation=ann,
+                            true_mz_da=t_mz_val,
+                            predicted_mz_da=p_mz,
+                            correct_bin=p_correct,
+                            log_prob=peak_logprob,
+                            correct_bin_rank=correct_bin_rank,
+                            predicted_group_bin=p_g.item(),
+                            predicted_offset_bin=p_o.item(),
+                            true_group_bin=t_g.item(),
+                            true_offset_bin=t_o.item(),
+                            group_bin_distance=abs(p_g.item() - t_g.item()),
+                            top_candidates=top_candidates,
+                        )
+                    )
         else:
             pred_mz = 0.0
     else:
@@ -663,8 +668,6 @@ def extract_prediction(
         group_bin_accuracy=grp_acc,
         peak_predictions=peak_predictions,
     )
-
-
 
 
 def _charge_from_group_key(group_key: str) -> int:
@@ -704,6 +707,7 @@ def _closest_aa(mz_diff: float) -> str:
 @dataclass
 class RankedPeak:
     """A peak (or fragment group) ranked by attribution magnitude."""
+
     rank: int  # 1-indexed
     peak_idx: int  # original peak index in the spectrum (base peak for groups)
     attribution: float  # sum of |attribution| across group members (single value for unannotated)
@@ -716,6 +720,7 @@ class RankedPeak:
 @dataclass
 class TopKAnalysis:
     """Per-masked-group top-k attribution analysis."""
+
     # For each k, what fraction of top-k peaks are in each category
     top1_category: str  # category of the single highest-attributed peak
     top1_annotation: str  # annotation of top-1 peak (or "unannotated")
@@ -832,13 +837,13 @@ def compute_topk_attribution_analysis(
         # Charge-state leakage takes priority over annotation-based labels —
         # a y5++ peak when y5+ is masked is information leakage regardless of
         # whether it happens to be annotated in the reference library.
-        if peak_idx in charge_variant_indices:
+        if peak_idx in charge_variant_indices:  # type: ignore[operator]
             return "charge_variant_leakage"
 
         ann = annotations[peak_idx] if peak_idx < len(annotations) else None
         if ann is None:
             # Novel-chemistry match subsumes "unannotated" when present.
-            chem_type = novel_chem_lookup.get(peak_idx)
+            chem_type = novel_chem_lookup.get(peak_idx)  # type: ignore[union-attr]
             if chem_type:
                 return chem_type
             return "unannotated"
@@ -915,11 +920,9 @@ def compute_topk_attribution_analysis(
         top_cats = peak_categories[:k]
         n = len(top_cats)
         if n == 0:
-            topk_fractions[str(k)] = {c: 0.0 for c in STRUCTURAL_CATEGORIES}
+            topk_fractions[str(k)] = dict.fromkeys(STRUCTURAL_CATEGORIES, 0.0)
         else:
-            topk_fractions[str(k)] = {
-                c: sum(1 for t in top_cats if t == c) / n for c in STRUCTURAL_CATEGORIES
-            }
+            topk_fractions[str(k)] = {c: sum(1 for t in top_cats if t == c) / n for c in STRUCTURAL_CATEGORIES}
 
     # Ladder neighbor analysis: find ±1 residue neighbors in same series
     # Uses neutral mass gap to handle ions at different charge states
@@ -934,12 +937,15 @@ def compute_topk_attribution_analysis(
         if _is_ladder_neighbor(mass_gap, da_tol):
             ladder_neighbor_indices.update(g.peak_indices)
 
-    ladder_present = len([g for g in all_groups
-                          if g.group_key != masked_group.group_key
-                          and g.ion_type == masked_ion
-                          and _is_ladder_neighbor(
-                              _neutral_mass_gap(g.base_mz, _charge_from_group_key(g.group_key),
-                                                masked_mz, masked_charge), da_tol)])
+    ladder_present = len(
+        [
+            g
+            for g in all_groups
+            if g.group_key != masked_group.group_key
+            and g.ion_type == masked_ion
+            and _is_ladder_neighbor(_neutral_mass_gap(g.base_mz, _charge_from_group_key(g.group_key), masked_mz, masked_charge), da_tol)
+        ]
+    )
 
     top5_set = set(ranked_indices[:5])
     ladder_in_top5 = len(ladder_neighbor_indices & top5_set)
@@ -990,8 +996,7 @@ def compute_topk_attribution_analysis(
         base_pi = group.base_idx
         if base_pi is None or not (0 <= base_pi < len(annotations)):
             # Fall back to a child-peak classification if the base is missing
-            child_pi = next((pi for pi in group.peak_indices
-                             if 0 <= pi < len(annotations)), None)
+            child_pi = next((pi for pi in group.peak_indices if 0 <= pi < len(annotations)), None)
             cat = _classify_peak(child_pi) if child_pi is not None else "other_annotated"
         else:
             cat = _classify_peak(base_pi)
@@ -1010,12 +1015,17 @@ def compute_topk_attribution_analysis(
         # of this ranking because we want it displayed as a distinct leakage
         # hit rather than hidden inside a group sum.
         if cat == "charge_variant_leakage":
-            individual_peaks.append(RankedPeak(
-                rank=0, peak_idx=pi, attribution=attr_val,
-                category=cat,
-                annotation=str(ann) if ann else f"m/z={peak_mz:.2f}",
-                mz=peak_mz, is_group=False,
-            ))
+            individual_peaks.append(
+                RankedPeak(
+                    rank=0,
+                    peak_idx=pi,
+                    attribution=attr_val,
+                    category=cat,
+                    annotation=str(ann) if ann else f"m/z={peak_mz:.2f}",
+                    mz=peak_mz,
+                    is_group=False,
+                )
+            )
         elif group is not None and group.group_key != masked_group.group_key:
             gk = group.group_key
             if gk in seen_groups:
@@ -1023,17 +1033,26 @@ def compute_topk_attribution_analysis(
                 seen_groups[gk].attribution += attr_val
             else:
                 seen_groups[gk] = RankedPeak(
-                    rank=0, peak_idx=pi, attribution=attr_val,
+                    rank=0,
+                    peak_idx=pi,
+                    attribution=attr_val,
                     category=_group_base_category(group),
                     annotation=gk,
-                    mz=group.base_mz, is_group=True,
+                    mz=group.base_mz,
+                    is_group=True,
                 )
         elif ann is None:
-            individual_peaks.append(RankedPeak(
-                rank=0, peak_idx=pi, attribution=attr_val,
-                category=cat, annotation=f"m/z={peak_mz:.2f}",
-                mz=peak_mz, is_group=False,
-            ))
+            individual_peaks.append(
+                RankedPeak(
+                    rank=0,
+                    peak_idx=pi,
+                    attribution=attr_val,
+                    category=cat,
+                    annotation=f"m/z={peak_mz:.2f}",
+                    mz=peak_mz,
+                    is_group=False,
+                )
+            )
 
     # Merge and sort by attribution
     all_ranked = list(seen_groups.values()) + individual_peaks
@@ -1059,6 +1078,7 @@ def compute_topk_attribution_analysis(
 # ---------------------------------------------------------------------------
 # PA Bias Dissection utilities
 # ---------------------------------------------------------------------------
+
 
 @torch.no_grad()
 @torch.no_grad()
@@ -1142,6 +1162,7 @@ def sweep_pa_per_head_bias(
 # Paper-quality plotting
 # ---------------------------------------------------------------------------
 
+
 def plot_pa_response_spectrum(
     dmz: np.ndarray,
     response: np.ndarray,
@@ -1159,14 +1180,15 @@ def plot_pa_response_spectrum(
       C: Per-AA response bar chart — response at each amino acid mass vs global mean
     """
     try:
-        import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec
+        import matplotlib.pyplot as plt
         from scipy.ndimage import gaussian_filter1d
         from scipy.signal import find_peaks as _find_peaks
     except ImportError:
         try:
-            import matplotlib.pyplot as plt
             import matplotlib.gridspec as gridspec
+            import matplotlib.pyplot as plt
+
             gaussian_filter1d = None
             _find_peaks = None
         except ImportError:
@@ -1191,23 +1213,22 @@ def plot_pa_response_spectrum(
     # ===== Panel A: Full spectrum with detected peaks + inter-peak deltas =====
     ax_a = fig.add_subplot(gs[0, :])
     ax_a.plot(dmz_pos, resp_pos, color="#d5d8dc", linewidth=0.3, alpha=0.3)
-    ax_a.plot(dmz_pos, resp_smooth, color="#2c3e50", linewidth=1.5, alpha=0.9,
-              label="Smoothed (σ=0.2 Da)")
+    ax_a.plot(dmz_pos, resp_smooth, color="#2c3e50", linewidth=1.5, alpha=0.9, label="Smoothed (σ=0.2 Da)")
     ax_a.set_xlabel("Δm/z (Da)", fontsize=11)
     ax_a.set_ylabel("Mean |attention bias|", fontsize=11)
-    ax_a.set_title("A  PA Response Spectrum — detected peaks with mass deltas",
-                    fontsize=12, fontweight="bold", loc="left")
+    ax_a.set_title("A  PA Response Spectrum — detected peaks with mass deltas", fontsize=12, fontweight="bold", loc="left")
     ax_a.set_xlim(0, 200)
 
     # Detect peaks and annotate with chemical identity + inter-peak deltas
     if _find_peaks is not None:
         peak_idx, peak_props = _find_peaks(
-            resp_smooth, prominence=0.02, distance=max(1, int(1.5 / resolution)),
+            resp_smooth,
+            prominence=0.02,
+            distance=max(1, int(1.5 / resolution)),
         )
         sorted_by_prom = np.argsort(-peak_props["prominences"])
         # Keep top-20 peaks for annotation
-        top_peak_indices = [peak_idx[si] for si in sorted_by_prom[:20]
-                           if 3 < dmz_pos[peak_idx[si]] < 200]
+        top_peak_indices = [peak_idx[si] for si in sorted_by_prom[:20] if 3 < dmz_pos[peak_idx[si]] < 200]
         top_peak_indices.sort()  # sort by m/z for delta computation
 
         prev_mz = None
@@ -1237,9 +1258,16 @@ def plot_pa_response_spectrum(
 
             color = "#e74c3c" if best_delta < 1.0 else "#7f8c8d"
             ax_a.plot(pmz, presp, "v", color=color, markersize=5, zorder=5)
-            ax_a.annotate(best_label, (pmz, presp), textcoords="offset points",
-                          xytext=(0, 8), ha="center", fontsize=6, color=color,
-                          fontweight="bold" if best_delta < 1.0 else "normal")
+            ax_a.annotate(
+                best_label,
+                (pmz, presp),
+                textcoords="offset points",
+                xytext=(0, 8),
+                ha="center",
+                fontsize=6,
+                color=color,
+                fontweight="bold" if best_delta < 1.0 else "normal",
+            )
 
             # Inter-peak delta annotation
             if prev_mz is not None:
@@ -1252,8 +1280,7 @@ def plot_pa_response_spectrum(
                         break
                 mid_mz = (pmz + prev_mz) / 2
                 mid_resp = min(presp, float(resp_smooth[np.argmin(np.abs(dmz_pos - prev_mz))]))
-                ax_a.annotate(delta_label, (mid_mz, mid_resp - 0.02),
-                              ha="center", fontsize=5, color="#566573", fontstyle="italic")
+                ax_a.annotate(delta_label, (mid_mz, mid_resp - 0.02), ha="center", fontsize=5, color="#566573", fontstyle="italic")
             prev_mz = pmz
 
     ax_a.legend(loc="upper right", fontsize=8, framealpha=0.8)
@@ -1267,17 +1294,15 @@ def plot_pa_response_spectrum(
     ax_b.set_ylabel("Mean |attention bias|", fontsize=10)
     ax_b.set_title("B  Isotope Zone (0–1.2 Da)", fontsize=11, fontweight="bold", loc="left")
 
-    iso_labels = {3: ISOTOPE_SPACING / 3, 2: ISOTOPE_SPACING / 2, 1: ISOTOPE_SPACING}
-    iso_colors = {"3": "#f1c40f", "2": "#e67e22", "1": "#e74c3c"}
+    iso_labels: dict[str, Any] = {3: ISOTOPE_SPACING / 3, 2: ISOTOPE_SPACING / 2, 1: ISOTOPE_SPACING}  # type: ignore[dict-item]
+    iso_colors: dict[str, Any] = {"3": "#f1c40f", "2": "#e67e22", "1": "#e74c3c"}
     for z, spacing in iso_labels.items():
         color = iso_colors[str(z)]
         ax_b.axvline(spacing, color=color, linewidth=1.5, linestyle="--", alpha=0.8)
-        ax_b.text(spacing + 0.01, ax_b.get_ylim()[1] * 0.95, f"z={z}\n{spacing:.3f}",
-                  fontsize=8, color=color, va="top")
+        ax_b.text(spacing + 0.01, ax_b.get_ylim()[1] * 0.95, f"z={z}\n{spacing:.3f}", fontsize=8, color=color, va="top")
 
     ax_b.axvline(PROTON_MASS, color="#9b59b6", linewidth=1.0, linestyle=":", alpha=0.7)
-    ax_b.text(PROTON_MASS + 0.01, ax_b.get_ylim()[1] * 0.75, f"H⁺\n{PROTON_MASS:.3f}",
-              fontsize=7, color="#9b59b6", va="top")
+    ax_b.text(PROTON_MASS + 0.01, ax_b.get_ylim()[1] * 0.75, f"H⁺\n{PROTON_MASS:.3f}", fontsize=7, color="#9b59b6", va="top")
     ax_b.grid(True, alpha=0.3)
 
     # ===== Panel C: Per-AA response bar chart =====
@@ -1285,7 +1310,7 @@ def plot_pa_response_spectrum(
 
     # Compute response at each AA mass and global mean
     global_mean = float(resp_smooth[(dmz_pos >= 50) & (dmz_pos <= 200)].mean())
-    aa_responses = []
+    aa_responses: list[Any] = []
     for name, mass in sorted(AMINO_ACID_MASSES.items(), key=lambda x: x[1]):
         idx = np.argmin(np.abs(dmz_pos - mass))
         # Average response in a ±0.3 Da window
@@ -1300,13 +1325,10 @@ def plot_pa_response_spectrum(
     responses = [r[2] for r in aa_responses]
     colors = ["#27ae60" if r > global_mean else "#e74c3c" for r in responses]
 
-    bars = ax_c.barh(range(len(names)), responses, color=colors, alpha=0.85,
-                     edgecolor="white", height=0.7)
-    ax_c.axvline(global_mean, color="#2c3e50", linewidth=1.5, linestyle="--",
-                 alpha=0.7, label=f"Global mean ({global_mean:.3f})")
+    ax_c.barh(range(len(names)), responses, color=colors, alpha=0.85, edgecolor="white", height=0.7)
+    ax_c.axvline(global_mean, color="#2c3e50", linewidth=1.5, linestyle="--", alpha=0.7, label=f"Global mean ({global_mean:.3f})")
     ax_c.set_yticks(range(len(names)))
-    ax_c.set_yticklabels([f"{n} ({aa_responses[i][1]:.0f})" for i, n in enumerate(names)],
-                         fontsize=7)
+    ax_c.set_yticklabels([f"{n} ({aa_responses[i][1]:.0f})" for i, n in enumerate(names)], fontsize=7)
     ax_c.set_xlabel("Mean |attention bias|", fontsize=10)
     ax_c.set_title("C  Response at Amino Acid Masses", fontsize=11, fontweight="bold", loc="left")
     ax_c.invert_yaxis()
@@ -1347,13 +1369,17 @@ def plot_pa_per_head_heatmap(
 
     vmax = np.percentile(np.abs(heatmap_data), 99)
     im = ax.imshow(
-        heatmap_data, aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax,
+        heatmap_data,
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-vmax,
+        vmax=vmax,
         extent=[dmz_plot[0], dmz_plot[-1], n_total_heads - 0.5, -0.5],
         interpolation="nearest",
     )
 
     if is_batched:
-        labels = [f"L{l}H{h}" for l in range(n_layers) for h in range(n_heads)]
+        labels = [f"L{l}H{h}" for l in range(n_layers) for h in range(n_heads)]  # noqa: E741
     else:
         labels = [f"H{h}" for h in range(n_heads)]
     ax.set_yticks(range(n_total_heads))
@@ -1393,7 +1419,7 @@ def plot_attribution_summary(
     if not all_results:
         return
 
-    category_colors = {
+    category_colors: dict[str, Any] = {
         "ladder_neighbor": "#3498db",
         "near_ladder": "#5dade2",
         "distant_same_series": "#aed6f1",
@@ -1410,7 +1436,7 @@ def plot_attribution_summary(
         "precursor_combined_loss": "#d35400",
         "unannotated": "#95a5a6",
     }
-    category_labels = {
+    category_labels: dict[str, Any] = {
         "ladder_neighbor": "Ladder\nneighbor",
         "near_ladder": "Near\nladder",
         "distant_same_series": "Distant\nsame",
@@ -1430,8 +1456,7 @@ def plot_attribution_summary(
 
     n_total = len(all_results)
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.5))
-    fig.suptitle(f"IG Attribution Summary (n={n_total} masked groups)",
-                 fontsize=13, fontweight="bold", y=1.02)
+    fig.suptitle(f"IG Attribution Summary (n={n_total} masked groups)", fontsize=13, fontweight="bold", y=1.02)
 
     # --- Panel A: Top-1 category distribution ---
     ax = axes[0]
@@ -1447,10 +1472,11 @@ def plot_attribution_summary(
         bars = ax.bar(range(len(active)), values_a, color=colors_a, edgecolor="white", alpha=0.9)
         ax.set_xticks(range(len(active)))
         ax.set_xticklabels(labels_a, fontsize=8)
-        for bar, val in zip(bars, values_a):
+        for bar, val in zip(bars, values_a, strict=False):
             if val > 3:
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
-                        f"{val:.0f}%", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5, f"{val:.0f}%", ha="center", va="bottom", fontsize=8, fontweight="bold"
+                )
     ax.set_ylabel("% of masked groups", fontsize=10)
     ax.set_title("A  Top-1 Attributed Peak Category", fontsize=11, fontweight="bold", loc="left")
     ax.grid(axis="y", alpha=0.3)
@@ -1458,8 +1484,7 @@ def plot_attribution_summary(
     # --- Panel B: Bin accuracy by 3-way split ---
     ax = axes[1]
     ladder_set = {"ladder_neighbor", "near_ladder", "complementary_pair"}
-    other_ann_set = {"distant_same_series", "opposite_series", "precursor",
-                     "other_annotated", "charge_variant_leakage"}
+    other_ann_set = {"distant_same_series", "opposite_series", "precursor", "other_annotated", "charge_variant_leakage"}
     # Extended-chemistry top-1 counts as "other annotated" for this split —
     # it's informative chemistry, just not the canonical ladder/complement.
     other_ann_set |= set(EXTENDED_CHEMISTRY_CATEGORIES)
@@ -1468,10 +1493,10 @@ def plot_attribution_summary(
     other_results = [r for r in all_results if r.topk and r.topk.top1_category in other_ann_set]
     unann_results = [r for r in all_results if r.topk and r.topk.top1_category == "unannotated"]
 
-    groups_b = []
-    accs_b = []
-    colors_b = []
-    ns_b = []
+    groups_b: list[Any] = []
+    accs_b: list[Any] = []
+    colors_b: list[Any] = []
+    ns_b: list[Any] = []
     for label, results_grp, color in [
         ("Ladder /\nnear-ladder", ladder_results, "#3498db"),
         ("Other\nannotated", other_results, "#2ecc71"),
@@ -1485,13 +1510,19 @@ def plot_attribution_summary(
             ns_b.append(len(results_grp))
 
     if groups_b:
-        bars = ax.bar(range(len(groups_b)), accs_b, color=colors_b, edgecolor="white",
-                      alpha=0.9, width=0.65)
+        bars = ax.bar(range(len(groups_b)), accs_b, color=colors_b, edgecolor="white", alpha=0.9, width=0.65)
         ax.set_xticks(range(len(groups_b)))
         ax.set_xticklabels(groups_b, fontsize=9)
-        for bar, val, n in zip(bars, accs_b, ns_b):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-                    f"{val:.0f}%\n(n={n})", ha="center", va="bottom", fontsize=9, fontweight="bold")
+        for bar, val, n in zip(bars, accs_b, ns_b, strict=False):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 1.5,
+                f"{val:.0f}%\n(n={n})",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
     ax.set_ylabel("Bin accuracy (%)", fontsize=10)
     ax.set_title("B  Prediction Accuracy by Attribution Type", fontsize=11, fontweight="bold", loc="left")
     ax.set_ylim(0, 110)
@@ -1516,22 +1547,34 @@ def plot_attribution_summary(
         ]
         funnel_colors = ["#aed6f1", "#5dade2", "#2980b9"]
 
-        bars = ax.bar(range(3), funnel_values, color=funnel_colors, edgecolor="white",
-                      alpha=0.9, width=0.65)
+        bars = ax.bar(range(3), funnel_values, color=funnel_colors, edgecolor="white", alpha=0.9, width=0.65)
         ax.set_xticks(range(3))
         ax.set_xticklabels(funnel_labels, fontsize=9)
-        for bar, val, n in zip(bars, funnel_values, [n_with_ladder, n_ladder_top5, n_ladder_top1]):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-                    f"{val:.0f}%\n({n}/{len(analyses)})", ha="center", va="bottom",
-                    fontsize=9, fontweight="bold")
+        for bar, val, n in zip(bars, funnel_values, [n_with_ladder, n_ladder_top5, n_ladder_top1], strict=False):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 1.5,
+                f"{val:.0f}%\n({n}/{len(analyses)})",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
 
         # Add median best rank annotation
         best_ranks = [a.ladder_neighbor_best_rank for a in analyses if a.ladder_neighbor_best_rank > 0]
         if best_ranks:
             median_rank = float(np.median(best_ranks))
-            ax.text(0.95, 0.95, f"Median ladder\nbest rank: {median_rank:.0f}",
-                    transform=ax.transAxes, ha="right", va="top", fontsize=9,
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor="#eaf2f8", alpha=0.9))
+            ax.text(
+                0.95,
+                0.95,
+                f"Median ladder\nbest rank: {median_rank:.0f}",
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontsize=9,
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "#eaf2f8", "alpha": 0.9},
+            )
 
     ax.set_ylabel("% of masked groups", fontsize=10)
     ax.set_title("C  Ladder Neighbor Utilization", fontsize=11, fontweight="bold", loc="left")
@@ -1554,7 +1597,6 @@ def plot_novel_chemistry_summary(
     and confidence/attribution distributions for matched vs unmatched peaks.
     """
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
     fig.suptitle("Novel Chemistry Discovery Probe", fontsize=13, fontweight="bold", y=0.98)
@@ -1566,7 +1608,7 @@ def plot_novel_chemistry_summary(
     n_unann = novel_results.get("n_unannotated_peaks", 0)
     n_matched = novel_results.get("n_matched", 0)
 
-    type_colors = {
+    type_colors: dict[str, Any] = {
         "internal_fragment": "#3498db",
         "immonium_related": "#e74c3c",
         "precursor_combined_loss": "#f39c12",
@@ -1574,7 +1616,7 @@ def plot_novel_chemistry_summary(
         "d_ion": "#9b59b6",
         "w_ion": "#1abc9c",
     }
-    type_labels = {
+    type_labels: dict[str, Any] = {
         "internal_fragment": "Internal\nfragment",
         "immonium_related": "Immonium\nrelated",
         "precursor_combined_loss": "Precursor\ncomb. loss",
@@ -1585,16 +1627,14 @@ def plot_novel_chemistry_summary(
 
     # --- Panel A: Per-type hit rates ---
     ax = axes[0, 0]
-    types_ordered = ["internal_fragment", "side_chain_loss", "precursor_combined_loss",
-                     "immonium_related", "w_ion", "d_ion"]
+    types_ordered = ["internal_fragment", "side_chain_loss", "precursor_combined_loss", "immonium_related", "w_ion", "d_ion"]
     vals = [hit_rates.get(t, 0) * 100 for t in types_ordered]
     colors = [type_colors.get(t, "#95a5a6") for t in types_ordered]
     labels = [type_labels.get(t, t) for t in types_ordered]
     bars = ax.bar(range(len(types_ordered)), vals, color=colors, edgecolor="white", linewidth=0.5)
-    for bar, val in zip(bars, vals):
+    for bar, val in zip(bars, vals, strict=False):
         if val > 0.05:
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                    f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3, f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
     ax.set_xticks(range(len(types_ordered)))
     ax.set_xticklabels(labels, fontsize=7)
     ax.set_ylabel("Hit rate (%)")
@@ -1606,21 +1646,21 @@ def plot_novel_chemistry_summary(
     overall = novel_results.get("overall_hit_rate", 0) * 100
     shift_rate = nulls.get("shift", {}).get("hit_rate", 0) * 100
     scramble_rate = nulls.get("scramble", {}).get("hit_rate", 0) * 100
-    shift_enrich = nulls.get("shift", {}).get("enrichment", 0)
+    nulls.get("shift", {}).get("enrichment", 0)
     scramble_enrich = nulls.get("scramble", {}).get("enrichment", 0)
 
     bar_labels = ["Real", "Scramble\nnull", "Shift\nnull"]
     bar_vals = [overall, scramble_rate, shift_rate]
     bar_colors = ["#3498db", "#e74c3c", "#95a5a6"]
     bars = ax.bar(range(3), bar_vals, color=bar_colors, edgecolor="white", linewidth=0.5)
-    for bar, val, lbl in zip(bars, bar_vals, bar_labels):
+    for bar, val, _lbl in zip(bars, bar_vals, bar_labels, strict=False):
         if val > 0:
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                    f"{val:.2f}%", ha="center", va="bottom", fontsize=9)
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3, f"{val:.2f}%", ha="center", va="bottom", fontsize=9)
     # Add enrichment annotations
     if scramble_enrich > 0 and scramble_enrich != float("inf"):
-        ax.annotate(f"{scramble_enrich:.1f}×", xy=(0.5, max(overall, scramble_rate) * 0.5),
-                    fontsize=10, fontweight="bold", ha="center", color="#e74c3c")
+        ax.annotate(
+            f"{scramble_enrich:.1f}×", xy=(0.5, max(overall, scramble_rate) * 0.5), fontsize=10, fontweight="bold", ha="center", color="#e74c3c"
+        )
     ax.set_xticks(range(3))
     ax.set_xticklabels(bar_labels, fontsize=9)
     ax.set_ylabel("Hit rate (%)")
@@ -1639,9 +1679,8 @@ def plot_novel_chemistry_summary(
         x = np.arange(2)
         bars_mean = ax.bar(x - 0.15, means, 0.3, label="Mean", color=["#3498db", "#95a5a6"], alpha=0.8)
         bars_med = ax.bar(x + 0.15, medians, 0.3, label="Median", color=["#3498db", "#95a5a6"], alpha=0.5, hatch="//")
-        for bar, val in zip(list(bars_mean) + list(bars_med), means + medians):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.003,
-                    f"{val:.3f}", ha="center", va="bottom", fontsize=8)
+        for bar, val in zip(list(bars_mean) + list(bars_med), means + medians, strict=False):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.003, f"{val:.3f}", ha="center", va="bottom", fontsize=8)
         ax.set_xticks(x)
         ax.set_xticklabels([f"Matched\n(n={n_conf_m})", f"Unmatched\n(n={n_conf_u})"], fontsize=9)
         ax.legend(fontsize=8)
@@ -1665,9 +1704,8 @@ def plot_novel_chemistry_summary(
         x = np.arange(2)
         bars_mean = ax.bar(x - 0.15, means, 0.3, label="Mean", color=["#3498db", "#95a5a6"], alpha=0.8)
         bars_med = ax.bar(x + 0.15, medians, 0.3, label="Median", color=["#3498db", "#95a5a6"], alpha=0.5, hatch="//")
-        for bar, val in zip(list(bars_mean) + list(bars_med), means + medians):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.001,
-                    f"{val:.4f}", ha="center", va="bottom", fontsize=8)
+        for bar, val in zip(list(bars_mean) + list(bars_med), means + medians, strict=False):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.001, f"{val:.4f}", ha="center", va="bottom", fontsize=8)
         ax.set_xticks(x)
         ax.set_xticklabels([f"Matched\n(n={n_attr_m})", f"Unmatched\n(n={n_attr_u})"], fontsize=9)
         ax.legend(fontsize=8)
@@ -1713,9 +1751,9 @@ def plot_hero_spectrum_attribution(
 
     try:
         from instanovo_fm.utils.ion_visualization import (
+            CATEGORY_COLORS,
             categorize_ion,
             format_annotation_display,
-            CATEGORY_COLORS,
         )
     except ImportError:
         return
@@ -1733,7 +1771,7 @@ def plot_hero_spectrum_attribution(
     v_int = intensity[valid_idx]
 
     # Map original indices to valid-peak indices
-    masked_set = set(masked_indices)
+    set(masked_indices)
     masked_valid_set = set()
     for orig_idx in masked_indices:
         pos = np.searchsorted(valid_idx, orig_idx)
@@ -1753,8 +1791,8 @@ def plot_hero_spectrum_attribution(
     norm_int = v_int / max_int if max_int > 0 else v_int
 
     # Build per-peak categories
-    peak_categories = []
-    peak_ann_display = []
+    peak_categories: list[Any] = []
+    peak_ann_display: list[Any] = []
     if annotations is not None:
         for vi in valid_idx:
             ann = annotations[vi] if vi < len(annotations) else ""
@@ -1792,18 +1830,22 @@ def plot_hero_spectrum_attribution(
 
     if has_conf_panel:
         gs = fig.add_gridspec(
-            4, 2,
+            4,
+            2,
             height_ratios=[4, 4, 1.2, 3],
             width_ratios=[1, 0.02],
-            hspace=0.32, wspace=0.02,
+            hspace=0.32,
+            wspace=0.02,
             top=0.96,
         )
     else:
         gs = fig.add_gridspec(
-            3, 2,
+            3,
+            2,
             height_ratios=[4, 4, 3],
             width_ratios=[1, 0.02],
-            hspace=0.32, wspace=0.02,
+            hspace=0.32,
+            wspace=0.02,
             top=0.96,
         )
     fig.suptitle(title or "IG Attribution Spectrum", fontsize=13, fontweight="bold", y=0.99)
@@ -1812,8 +1854,7 @@ def plot_hero_spectrum_attribution(
     ax1 = fig.add_subplot(gs[0, 0])
     ax1_spare = fig.add_subplot(gs[0, 1])
     ax1_spare.axis("off")
-    _draw_index_panel_xai(ax1, v_mz, norm_int, peak_categories, peak_ann_display,
-                          masked_valid_set, n_valid, CATEGORY_COLORS)
+    _draw_index_panel_xai(ax1, v_mz, norm_int, peak_categories, peak_ann_display, masked_valid_set, n_valid, CATEGORY_COLORS)
 
     # ===== Panel 2: IG Attribution — full group MLM-masked =====
     ax2 = fig.add_subplot(gs[1, 0])
@@ -1822,17 +1863,26 @@ def plot_hero_spectrum_attribution(
     if pred is not None:
         bin_str = "BIN CORRECT" if pred.correct_bin else "BIN WRONG"
         grp_acc = f"GrpAcc: {pred.group_bin_accuracy:.0%}" if pred.group_bin_accuracy >= 0 else ""
-        attr_title = (f"IG Attribution (full group MLM-masked) | "
-                      f"Pred: {pred.predicted_mz_da:.2f} Da | "
-                      f"True: {pred.true_mz_da:.2f} Da | "
-                      f"Err: {pred.error_da:.3f} Da ({pred.error_ppm:.1f} ppm) | "
-                      f"{bin_str} | {grp_acc} | LogProb: {pred.confidence:.4f}")
+        attr_title = (
+            f"IG Attribution (full group MLM-masked) | "
+            f"Pred: {pred.predicted_mz_da:.2f} Da | "
+            f"True: {pred.true_mz_da:.2f} Da | "
+            f"Err: {pred.error_da:.3f} Da ({pred.error_ppm:.1f} ppm) | "
+            f"{bin_str} | {grp_acc} | LogProb: {pred.confidence:.4f}"
+        )
     else:
         attr_title = "IG Attribution (full group MLM-masked)"
     _draw_attribution_panel(
-        ax2, ax2_cbar, v_mz, norm_int, v_attr,
-        peak_categories, peak_ann_display,
-        masked_valid_set, child_valid_set, n_valid,
+        ax2,
+        ax2_cbar,
+        v_mz,
+        norm_int,
+        v_attr,
+        peak_categories,
+        peak_ann_display,
+        masked_valid_set,
+        child_valid_set,
+        n_valid,
         panel_title=attr_title,
         show_children_as="masked",
     )
@@ -1841,8 +1891,7 @@ def plot_hero_spectrum_attribution(
     if has_conf_panel:
         ax_conf = fig.add_subplot(gs[2, 0])
         ax_conf_cbar = fig.add_subplot(gs[2, 1])
-        _draw_confidence_strip(ax_conf, ax_conf_cbar, v_conf, peak_categories,
-                               masked_valid_set, n_valid)
+        _draw_confidence_strip(ax_conf, ax_conf_cbar, v_conf, peak_categories, masked_valid_set, n_valid)
 
     # ===== Panel 3: Two sub-panels (prediction + ranked attribution) =====
     bottom_row = 3 if has_conf_panel else 2
@@ -1857,15 +1906,14 @@ def plot_hero_spectrum_attribution(
     plt.close()
 
 
-def _draw_prediction_panel(ax, result: "AttributionResult") -> None:
+def _draw_prediction_panel(ax: Axes, result: "AttributionResult") -> None:
     """Sub-panel 3a: per-peak prediction confidence and correctness.
 
     X-axis is negative log-prob (0 = perfect confidence, larger = less confident).
     """
     pred = result.prediction
     if pred is None or not pred.peak_predictions:
-        ax.text(0.5, 0.5, "No per-peak predictions", ha="center", va="center",
-                transform=ax.transAxes, fontsize=10, color="#999999")
+        ax.text(0.5, 0.5, "No per-peak predictions", ha="center", va="center", transform=ax.transAxes, fontsize=10, color="#999999")
         ax.set_title("Per-Peak Prediction Confidence", fontsize=10, fontweight="bold")
         ax.axis("off")
         return
@@ -1889,26 +1937,33 @@ def _draw_prediction_panel(ax, result: "AttributionResult") -> None:
     ax.set_xlim(0, None)
 
     # Show correct-bin rank inside wrong prediction bars
-    for bar, p in zip(bars, peaks):
+    for bar, p in zip(bars, peaks, strict=False):
         if not p.correct_bin and p.correct_bin_rank > 0:
-            ax.text(bar.get_width() + 0.02, bar.get_y() + bar.get_height() / 2,
-                    f"rank {p.correct_bin_rank}", ha="left", va="center",
-                    fontsize=7, color="#e74c3c", fontstyle="italic")
+            ax.text(
+                bar.get_width() + 0.02,
+                bar.get_y() + bar.get_height() / 2,
+                f"rank {p.correct_bin_rank}",
+                ha="left",
+                va="center",
+                fontsize=7,
+                color="#e74c3c",
+                fontstyle="italic",
+            )
 
     ax.legend(
-        handles=[Patch(color="#27ae60", label="BIN CORRECT"),
-                 Patch(color="#e74c3c", label="BIN WRONG")],
-        loc="lower right", fontsize=7, framealpha=0.8,
+        handles=[Patch(color="#27ae60", label="BIN CORRECT"), Patch(color="#e74c3c", label="BIN WRONG")],
+        loc="lower right",
+        fontsize=7,
+        framealpha=0.8,
     )
     ax.grid(axis="x", alpha=0.3)
 
 
-def _draw_ranked_attribution_panel(ax, result: "AttributionResult") -> None:
+def _draw_ranked_attribution_panel(ax: Axes, result: "AttributionResult") -> None:
     """Sub-panel 3b: horizontal bar chart of top-N ranked peaks by attribution."""
     topk = result.topk
     if topk is None or not topk.ranked_peaks:
-        ax.text(0.5, 0.5, "No ranked attribution data", ha="center", va="center",
-                transform=ax.transAxes, fontsize=10, color="#999999")
+        ax.text(0.5, 0.5, "No ranked attribution data", ha="center", va="center", transform=ax.transAxes, fontsize=10, color="#999999")
         ax.set_title("Ranked Attribution (Fragment Groups)", fontsize=10, fontweight="bold")
         ax.axis("off")
         return
@@ -1948,14 +2003,19 @@ def _draw_ranked_attribution_panel(ax, result: "AttributionResult") -> None:
 
     # Legend for categories
     from matplotlib.patches import Patch
+
     seen_cats = list(dict.fromkeys(rp.category for rp in ranked))
-    legend_handles = [Patch(color=category_colors.get(c, "#bdc3c7"), label=c.replace("_", " "))
-                      for c in seen_cats]
+    legend_handles = [Patch(color=category_colors.get(c, "#bdc3c7"), label=c.replace("_", " ")) for c in seen_cats]
     ax.legend(handles=legend_handles, loc="lower right", fontsize=7, framealpha=0.8)
 
 
 def _draw_confidence_strip(
-    ax, ax_cbar, v_conf, peak_categories, masked_valid_set, n_valid,
+    ax: Axes,
+    ax_cbar: Any,
+    v_conf: Any,
+    peak_categories: Any,
+    masked_valid_set: Any,
+    n_valid: Any,
 ) -> None:
     """Thin strip showing per-peak model confidence for visible peaks.
 
@@ -1972,7 +2032,7 @@ def _draw_confidence_strip(
     vmax = max(float(np.percentile(v_conf, 99)), 0.01)
     norm = Normalize(vmin=0, vmax=vmax)
 
-    x = np.arange(n_valid)
+    np.arange(n_valid)
     for i in range(n_valid):
         color = cmap(norm(v_conf[i]))
         if i in masked_valid_set:
@@ -1995,19 +2055,24 @@ def _draw_confidence_strip(
     ax.grid(axis="y", alpha=0.2)
 
     # Annotated vs unannotated mean confidence
-    ann_conf = [v_conf[i] for i in range(n_valid)
-                if i not in masked_valid_set and peak_categories[i] != "unannotated"]
-    unann_conf = [v_conf[i] for i in range(n_valid)
-                  if i not in masked_valid_set and peak_categories[i] == "unannotated"]
-    legend_parts = []
+    ann_conf = [v_conf[i] for i in range(n_valid) if i not in masked_valid_set and peak_categories[i] != "unannotated"]
+    unann_conf = [v_conf[i] for i in range(n_valid) if i not in masked_valid_set and peak_categories[i] == "unannotated"]
+    legend_parts: list[Any] = []
     if ann_conf:
         legend_parts.append(f"Annotated mean: {np.mean(ann_conf):.3f}")
     if unann_conf:
         legend_parts.append(f"Unannotated mean: {np.mean(unann_conf):.3f}")
     if legend_parts:
-        ax.text(0.99, 0.92, " | ".join(legend_parts),
-                transform=ax.transAxes, ha="right", va="top", fontsize=7,
-                bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.8))
+        ax.text(
+            0.99,
+            0.92,
+            " | ".join(legend_parts),
+            transform=ax.transAxes,
+            ha="right",
+            va="top",
+            fontsize=7,
+            bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "alpha": 0.8},
+        )
 
     # Colorbar
     sm = ScalarMappable(cmap=cmap, norm=norm)
@@ -2018,12 +2083,18 @@ def _draw_confidence_strip(
 
 
 def _draw_mz_panel_xai(
-    ax, mz, norm_int, peak_categories, peak_ann_display,
-    masked_valid_set, n_valid, max_mz, cat_colors, text_colors,
-):
+    ax: Axes,
+    mz: Any,
+    norm_int: Any,
+    peak_categories: Any,
+    peak_ann_display: Any,
+    masked_valid_set: Any,
+    n_valid: Any,
+    max_mz: Any,
+    cat_colors: Any,
+    text_colors: Any,
+) -> None:
     """Panel 1: m/z spectrum with ion-type coloring. Masked peaks in red."""
-    import matplotlib.pyplot as plt
-
     # Draw unannotated first, annotated on top, masked last
     for layer in ("unannotated", "annotated", "masked"):
         for i in range(n_valid):
@@ -2042,12 +2113,9 @@ def _draw_mz_panel_xai(
                 zorder = 2 if cat == "unannotated" else 3
                 lw = 1.2
 
-            ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=lw,
-                    alpha=alpha, zorder=zorder)
+            ax.plot([mz[i], mz[i]], [0, norm_int[i]], color=color, linewidth=lw, alpha=alpha, zorder=zorder)
             marker_s = 40 if i in masked_valid_set else 20
-            ax.scatter([mz[i]], [norm_int[i]], color=color, s=marker_s,
-                       alpha=alpha, zorder=zorder,
-                       marker="*" if i in masked_valid_set else "o")
+            ax.scatter([mz[i]], [norm_int[i]], color=color, s=marker_s, alpha=alpha, zorder=zorder, marker="*" if i in masked_valid_set else "o")
 
     # Annotation labels (same approach as confidence task)
     max_int = norm_int.max() if n_valid > 0 else 1.0
@@ -2055,11 +2123,7 @@ def _draw_mz_panel_xai(
     min_mz_gap = 20.0
     placed_mz: List[float] = []
 
-    annotated = [
-        (i, mz[i], norm_int[i], peak_ann_display[i])
-        for i in range(n_valid)
-        if peak_categories[i] != "unannotated" and peak_ann_display[i]
-    ]
+    annotated = [(i, mz[i], norm_int[i], peak_ann_display[i]) for i in range(n_valid) if peak_categories[i] != "unannotated" and peak_ann_display[i]]
     annotated.sort(key=lambda t: t[2], reverse=True)
 
     for idx, m, inten, display in annotated:
@@ -2073,9 +2137,16 @@ def _draw_mz_panel_xai(
         if idx in masked_valid_set:
             text_color = "red"
         ax.annotate(
-            display, xy=(m, inten), xytext=(0, 5), textcoords="offset points",
-            ha="center", fontsize=7, color=text_color, rotation=90,
-            alpha=0.9, fontweight="bold",
+            display,
+            xy=(m, inten),
+            xytext=(0, 5),
+            textcoords="offset points",
+            ha="center",
+            fontsize=7,
+            color=text_color,
+            rotation=90,
+            alpha=0.9,
+            fontweight="bold",
         )
 
     # Mark masked group in legend
@@ -2092,11 +2163,16 @@ def _draw_mz_panel_xai(
 
 
 def _draw_index_panel_xai(
-    ax, mz, norm_int, peak_categories, peak_ann_display,
-    masked_valid_set, n_valid, cat_colors,
-):
+    ax: Axes,
+    mz: Any,
+    norm_int: Any,
+    peak_categories: Any,
+    peak_ann_display: Any,
+    masked_valid_set: Any,
+    n_valid: Any,
+    cat_colors: Any,
+) -> None:
     """Panel 2: index-based bar plot with ion-type coloring. Masked peaks in red."""
-    import matplotlib.pyplot as plt
     x_pos = np.arange(n_valid)
 
     # Group by category
@@ -2114,8 +2190,7 @@ def _draw_index_panel_xai(
         if idxs:
             arr = np.array(idxs)
             color, alpha = cat_colors.get(cat, ("#BDBDBD", 0.5))
-            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label=cat)
+            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
     # Annotated categories
     for cat in sorted(set(peak_categories) - {"unannotated"}):
@@ -2123,24 +2198,29 @@ def _draw_index_panel_xai(
         if idxs:
             arr = np.array(idxs)
             color, alpha = cat_colors.get(cat, ("#9467bd", 0.8))
-            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha,
-                   width=1.0, linewidth=0, label=cat)
+            ax.bar(x_pos[arr], norm_int[arr], color=color, alpha=alpha, width=1.0, linewidth=0, label=cat)
 
     # Masked group in red
     masked_idxs = category_groups.get("__masked__", [])
     if masked_idxs:
         arr = np.array(masked_idxs)
-        ax.bar(x_pos[arr], norm_int[arr], color="#ff0000", alpha=1.0,
-               width=1.0, linewidth=0.8, edgecolor="darkred", label="MASKED")
+        ax.bar(x_pos[arr], norm_int[arr], color="#ff0000", alpha=1.0, width=1.0, linewidth=0.8, edgecolor="darkred", label="MASKED")
 
     # Annotation labels
     for i in range(n_valid):
         if peak_categories[i] != "unannotated" and peak_ann_display[i]:
             color = "red" if i in masked_valid_set else "black"
             ax.annotate(
-                peak_ann_display[i], xy=(i, norm_int[i]), xytext=(0, 4),
-                textcoords="offset points", ha="center", fontsize=7,
-                rotation=90, alpha=0.9, fontweight="bold", color=color,
+                peak_ann_display[i],
+                xy=(i, norm_int[i]),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
+                color=color,
             )
 
     # X-ticks
@@ -2159,16 +2239,23 @@ def _draw_index_panel_xai(
 
 
 def _draw_attribution_panel(
-    ax, ax_cbar, mz, norm_int, attr_abs,
-    peak_categories, peak_ann_display,
-    masked_valid_set, child_valid_set, n_valid,
+    ax: Axes,
+    ax_cbar: Any,
+    mz: Any,
+    norm_int: Any,
+    attr_abs: Any,
+    peak_categories: Any,
+    peak_ann_display: Any,
+    masked_valid_set: Any,
+    child_valid_set: Any,
+    n_valid: Any,
     panel_title: str = "IG Attribution",
     show_children_as: str = "masked",
-):
+) -> None:
     """Attribution panel: bars colored by IG magnitude (viridis)."""
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
     from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
     from matplotlib.patches import Patch
 
     x_pos = np.arange(n_valid)
@@ -2188,42 +2275,50 @@ def _draw_attribution_panel(
     for i in range(n_valid):
         if i in base_valid_set:
             # Base ion: solid red with star
-            ax.bar(x_pos[i], norm_int[i], color="#ff0000", alpha=1.0,
-                   width=1.0, edgecolor="darkred", linewidth=1.2)
+            ax.bar(x_pos[i], norm_int[i], color="#ff0000", alpha=1.0, width=1.0, edgecolor="darkred", linewidth=1.2)
         elif i in child_valid_set:
             # Children are MLM-masked (model sees mask tokens).
             # Show as red bars with hatching to distinguish from base.
-            ax.bar(x_pos[i], norm_int[i], color="#ff0000", alpha=0.6,
-                   width=1.0, edgecolor="darkred", linewidth=0.8,
-                   hatch="//")
+            ax.bar(x_pos[i], norm_int[i], color="#ff0000", alpha=0.6, width=1.0, edgecolor="darkred", linewidth=0.8, hatch="//")
         elif is_annotated[i]:
-            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(attr_abs[i])),
-                   alpha=0.85, width=1.0, edgecolor="red", linewidth=0.8)
+            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(attr_abs[i])), alpha=0.85, width=1.0, edgecolor="red", linewidth=0.8)
         else:
-            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(attr_abs[i])),
-                   alpha=0.85, width=1.0, linewidth=0)
+            ax.bar(x_pos[i], norm_int[i], color=cmap(norm(attr_abs[i])), alpha=0.85, width=1.0, linewidth=0)
 
     # Annotation labels
     for i in range(n_valid):
         if peak_categories[i] != "unannotated" and peak_ann_display[i]:
             color = "red" if i in masked_valid_set else "black"
             ax.annotate(
-                peak_ann_display[i], xy=(i, norm_int[i]), xytext=(0, 4),
-                textcoords="offset points", ha="center", fontsize=7,
-                rotation=90, alpha=0.9, fontweight="bold", color=color,
+                peak_ann_display[i],
+                xy=(i, norm_int[i]),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                rotation=90,
+                alpha=0.9,
+                fontweight="bold",
+                color=color,
             )
 
     # Top-20 unannotated peaks labeled with m/z
-    unann_idx = np.array([i for i in range(n_valid)
-                          if not is_annotated[i] and i not in masked_valid_set])
+    unann_idx = np.array([i for i in range(n_valid) if not is_annotated[i] and i not in masked_valid_set])
     if len(unann_idx) > 0:
         top_k = min(20, len(unann_idx))
         top_unann = unann_idx[np.argsort(norm_int[unann_idx])[-top_k:]]
         for i in top_unann:
             ax.annotate(
-                f"{mz[i]:.2f}", xy=(i, norm_int[i]), xytext=(0, 4),
-                textcoords="offset points", ha="center", fontsize=6,
-                rotation=90, alpha=0.7, fontstyle="italic", color="#555555",
+                f"{mz[i]:.2f}",
+                xy=(i, norm_int[i]),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                fontsize=6,
+                rotation=90,
+                alpha=0.7,
+                fontstyle="italic",
+                color="#555555",
             )
 
     # Colorbar
@@ -2246,24 +2341,29 @@ def _draw_attribution_panel(
     if child_valid_set:
         if show_children_as == "blanked":
             from matplotlib.lines import Line2D
+
             legend_elements.append(
-                Line2D([0], [0], marker="x", color="#ff0000", linestyle="None",
-                       markersize=8, label=f"Children removed ({len(child_valid_set)})"))
+                Line2D([0], [0], marker="x", color="#ff0000", linestyle="None", markersize=8, label=f"Children removed ({len(child_valid_set)})")
+            )
         elif show_children_as == "masked":
             legend_elements.append(
-                Patch(facecolor="#ff0000", edgecolor="darkred", linewidth=0.8,
-                      alpha=0.6, hatch="//",
-                      label=f"Children MLM-masked ({len(child_valid_set)})"))
+                Patch(
+                    facecolor="#ff0000",
+                    edgecolor="darkred",
+                    linewidth=0.8,
+                    alpha=0.6,
+                    hatch="//",
+                    label=f"Children MLM-masked ({len(child_valid_set)})",
+                )
+            )
         else:
-            legend_elements.append(
-                Patch(facecolor=cmap(0.5), edgecolor="#ff6666", linewidth=0.8,
-                      label=f"Children visible ({len(child_valid_set)})"))
-    legend_elements.extend([
-        Patch(facecolor=cmap(0.7), edgecolor="red", linewidth=0.8,
-              label=f"Annotated (mean {mean_ann:.1f})"),
-        Patch(facecolor=cmap(0.3), alpha=0.85,
-              label=f"Unannotated (mean {mean_unann:.1f})"),
-    ])
+            legend_elements.append(Patch(facecolor=cmap(0.5), edgecolor="#ff6666", linewidth=0.8, label=f"Children visible ({len(child_valid_set)})"))
+    legend_elements.extend(
+        [
+            Patch(facecolor=cmap(0.7), edgecolor="red", linewidth=0.8, label=f"Annotated (mean {mean_ann:.1f})"),
+            Patch(facecolor=cmap(0.3), alpha=0.85, label=f"Unannotated (mean {mean_unann:.1f})"),
+        ]
+    )
     ax.legend(handles=legend_elements, fontsize=8, loc="upper right")
 
     # X-ticks

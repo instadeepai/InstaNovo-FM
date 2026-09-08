@@ -1,15 +1,13 @@
-"""
-Utility functions for the foundational model.
-"""
+"""Utility functions for the foundational model."""
 
 from typing import Optional, Tuple
+
 import torch
 import torch.nn.functional as F
 
 
 def mu_law_encode(x: torch.Tensor, k: int = 255) -> torch.Tensor:
-    """
-    μ-law encoding for compressing m/z values.
+    """μ-law encoding for compressing m/z values.
 
     Args:
         x: Input tensor in [0, 1] range
@@ -32,8 +30,7 @@ def mu_law_encode(x: torch.Tensor, k: int = 255) -> torch.Tensor:
 
 
 def mu_law_decode(x_mu: torch.Tensor, k: int = 255) -> torch.Tensor:
-    """
-    μ-law decoding for decompressing m/z values.
+    """μ-law decoding for decompressing m/z values.
 
     Args:
         x_mu: Encoded tensor in [-1, 1] range
@@ -60,10 +57,9 @@ def mz_to_bins(
     bin_size: Optional[float] = None,
     max_mz: Optional[float] = None,
     min_mz: float = 0.0,
-    bin_edges: Optional[torch.Tensor] = None
+    bin_edges: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """
-    Convert m/z values to bin indices for classification.
+    """Convert m/z values to bin indices for classification.
 
     Supports both uniform (bin_size) and non-uniform (bin_edges) binning.
 
@@ -101,13 +97,9 @@ def mz_to_bins(
 
 
 def bins_to_mz(
-    bin_indices: torch.Tensor,
-    bin_size: Optional[float] = None,
-    min_mz: float = 0.0,
-    bin_edges: Optional[torch.Tensor] = None
+    bin_indices: torch.Tensor, bin_size: Optional[float] = None, min_mz: float = 0.0, bin_edges: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
-    """
-    Convert bin indices back to m/z values (center of bin).
+    """Convert bin indices back to m/z values (center of bin).
 
     Supports both uniform (bin_size) and non-uniform (bin_edges) binning.
 
@@ -137,12 +129,11 @@ def mz_to_bin_groups(
     mz_values: torch.Tensor,
     bin_size: Optional[float] = None,
     max_mz: Optional[float] = None,
-    group_size: int = None,
+    group_size: int | None = None,
     min_mz: float = 0.0,
-    bin_edges: Optional[torch.Tensor] = None
+    bin_edges: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Convert m/z values to bin group indices and offsets.
+    """Convert m/z values to bin group indices and offsets.
 
     Supports both uniform (bin_size) and non-uniform (bin_edges) binning.
 
@@ -171,12 +162,11 @@ def bin_groups_to_mz(
     group_indices: torch.Tensor,
     offset_indices: torch.Tensor,
     bin_size: Optional[float] = None,
-    group_size: int = None,
+    group_size: int | None = None,
     min_mz: float = 0.0,
-    bin_edges: Optional[torch.Tensor] = None
+    bin_edges: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    """
-    Convert bin group indices and offsets back to m/z values.
+    """Convert bin group indices and offsets back to m/z values.
 
     Supports both uniform (bin_size) and non-uniform (bin_edges) binning.
 
@@ -196,8 +186,7 @@ def bin_groups_to_mz(
 
 
 def focal_loss(logits: torch.Tensor, targets: torch.Tensor, gamma: float = 2.0, alpha: float = 0.25) -> torch.Tensor:
-    """
-    Focal Loss for handling class imbalance.
+    """Focal Loss for handling class imbalance.
 
     Args:
         logits: Model predictions (N, num_classes) - flattened batch

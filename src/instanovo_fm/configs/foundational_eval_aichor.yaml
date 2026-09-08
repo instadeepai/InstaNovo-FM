@@ -19,7 +19,7 @@ evaluation:
   checkpoint_path: "s3://<your-bucket>/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
 
   # Output directory (will be uploaded to S3 automatically on Aichor)
-  output_dir: "instanovo/foundational/eval/embed_eval_results"
+  output_dir: "instanovo_fm/eval/embed_eval_results"
 
   # Sampling
   max_samples: 10_000

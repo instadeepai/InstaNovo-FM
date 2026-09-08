@@ -19,17 +19,17 @@ import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
 
 from instanovo.__init__ import console
-from instanovo.common import AccelerateDeNovoTrainer, DataProcessor
+from instanovo_fm.common import AccelerateDeNovoTrainer, DataProcessor
 from instanovo_fm.data import FoundationalDataProcessor
 from instanovo_fm.data.search_data_manager import create_search_data_manager
-from instanovo_fm.trainer.profiling import TrainingProfiler, profile_component, create_profiler_from_config
+from instanovo_fm.trainer.profiling import create_profiler_from_config, profile_component
 from instanovo.inference import Decoder
 from instanovo.utils.colorlogging import ColorLog
 from instanovo.utils.s3 import S3FileHandler
 
 logger = ColorLog(console, __name__).logger
 
-CONFIG_PATH = Path(__file__).parent.parent.parent / "configs"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs"
 
 
 class FoundationalTrainer(AccelerateDeNovoTrainer):
@@ -80,20 +80,19 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
         logger.info("FoundationalTrainer initialized for self-supervised learning")
 
-    def _get_compiled_classification_loss(self):
+    def _get_compiled_classification_loss(self) -> Any:
         """Return a compiled version of compute_classification_loss if enabled."""
         if not hasattr(self, "_compiled_classification_loss"):
             from instanovo_fm.trainer.losses import compute_classification_loss
+
             if self.config.get("compile_loss", False):
                 logger.info("Compiling classification loss function...")
-                self._compiled_classification_loss = torch.compile(
-                    compute_classification_loss, mode="default"
-                )
+                self._compiled_classification_loss = torch.compile(compute_classification_loss, mode="default")
             else:
                 self._compiled_classification_loss = compute_classification_loss
         return self._compiled_classification_loss
 
-    def _unwrap_model(self):
+    def _unwrap_model(self) -> Any:
         """Unwrap model from accelerate DDP and/or torch.compile wrappers.
 
         accelerate's unwrap_model can fail with KeyError('_orig_mod') when
@@ -138,7 +137,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 self._mz_last_group = int(unwrapped_model.last_group_size_tensor.item())  # type: ignore[attr-defined]
 
                 # Cache bin_size (for uniform binning strategies)
-                if hasattr(self, '_binning_strategy') and hasattr(self._binning_strategy, "bin_size"):
+                if hasattr(self, "_binning_strategy") and hasattr(self._binning_strategy, "bin_size"):
                     self._mz_bin_size = self._binning_strategy.bin_size
                 elif hasattr(unwrapped_model, "bin_size_tensor"):
                     self._mz_bin_size = float(unwrapped_model.bin_size_tensor.item())  # type: ignore[attr-defined]
@@ -147,7 +146,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                     self._mz_bin_size = None
 
                 # Log binning configuration
-                strategy_info = f", strategy={self._binning_strategy}" if hasattr(self, '_binning_strategy') else ""
+                strategy_info = f", strategy={self._binning_strategy}" if hasattr(self, "_binning_strategy") else ""
                 bin_size_info = f", bin_size={self._mz_bin_size}" if self._mz_bin_size is not None else ""
                 logger.info(
                     f"Cached bin parameters: "
@@ -162,14 +161,10 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 # Create binning strategy from config
                 from instanovo_fm.trainer.binning import create_binning_strategy
 
-                max_mz_val = float(self.config.model.get('max_mz', 2500.0))
-                min_mz_val = float(self.config.model.get('min_mz', 0.0))
+                max_mz_val = float(self.config.model.get("max_mz", 2500.0))
+                min_mz_val = float(self.config.model.get("min_mz", 0.0))
 
-                self._binning_strategy = create_binning_strategy(
-                    self.config.model,
-                    min_mz_val,
-                    max_mz_val
-                )
+                self._binning_strategy = create_binning_strategy(self.config.model, min_mz_val, max_mz_val)
 
                 # Cache bin edges (if non-uniform)
                 self._bin_edges = self._binning_strategy.bin_edges
@@ -189,9 +184,9 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         else:
             # Not a classification task - no bin parameters needed
             self._mz_bin_size = None
-            self._mz_group_size = None
-            self._mz_n_groups = None
-            self._mz_last_group = None
+            self._mz_group_size = None  # type: ignore[assignment]
+            self._mz_n_groups = None  # type: ignore[assignment]
+            self._mz_last_group = None  # type: ignore[assignment]
 
     def setup_model(self) -> nn.Module:
         """Setup the foundation model.
@@ -199,8 +194,9 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         Returns:
             Foundation model (encoder-only transformer).
         """
-        from instanovo_fm.model import FoundationModel
         from omegaconf import OmegaConf
+
+        from instanovo_fm.model import FoundationModel
 
         config = self.config.get("model", {})
 
@@ -210,13 +206,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         ion_ladder_cfg = config.get("ion_ladder", {})
         if ion_ladder_cfg.get("enabled", False):
             config = OmegaConf.to_container(config, resolve=False)
-            config.setdefault("ion_ladder", {})["residue_masses"] = (
-                self.residue_set.residue_masses
-            )
-            logger.info(
-                f"IonLadder: injected {len(self.residue_set.residue_masses)} "
-                f"residue masses from config"
-            )
+            config.setdefault("ion_ladder", {})["residue_masses"] = self.residue_set.residue_masses
+            logger.info(f"IonLadder: injected {len(self.residue_set.residue_masses)} residue masses from config")
 
         # Create model with full config for advanced settings
         model = FoundationModel(
@@ -230,8 +221,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             min_mz=config.get("min_mz", 0.0),
             max_charge=config.get("max_charge", 10),
             peak_encoder_type=config.get("peak_encoder", {}).get("type", "multiscale")
-                if isinstance(config.get("peak_encoder"), dict)
-                else config.get("peak_encoder", "multiscale"),
+            if isinstance(config.get("peak_encoder"), dict)
+            else config.get("peak_encoder", "multiscale"),
             mz_task=config.get("mz_head", {}).get("task", "regression"),
             use_meta_token=config.get("meta_token", {}).get("enabled", False),
             cfg=config,  # Pass full config for advanced settings
@@ -273,8 +264,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         Returns:
             Adam optimizer.
         """
-
         from torch.optim.adamw import AdamW
+
         return AdamW(
             self.model.parameters(),
             lr=float(self.config.get("learning_rate", 5e-4)),
@@ -331,21 +322,16 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             for col in required_metadata:
                 if col not in metadata_columns_filtered and metadata_columns:
                     metadata_columns_filtered.append(col)
-            logger.info(
-                f"Filtered metadata_columns: "
-                f"{len(metadata_columns)} -> {len(metadata_columns_filtered)} columns"
-            )
+            logger.info(f"Filtered metadata_columns: {len(metadata_columns)} -> {len(metadata_columns_filtered)} columns")
         elif required_metadata and not metadata_columns:
             # No metadata_columns configured but we need some — create minimal list
             metadata_columns_filtered = list(required_metadata)
-            logger.info(
-                f"Auto-adding metadata_columns for required fields: {metadata_columns_filtered}"
-            )
+            logger.info(f"Auto-adding metadata_columns for required fields: {metadata_columns_filtered}")
         else:
             metadata_columns_filtered = metadata_columns
 
         # Setup search data manager if enabled
-        search_data_config = {
+        search_data_config: dict[str, Any] = {
             "use_search_data": self.config.dataset.get("use_search_data", False),
             "search_data_path": self.config.dataset.get("search_data_path", None),
             "search_data_filepath_column": self.config.dataset.get("search_data_filepath_column", "file path"),
@@ -470,10 +456,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
         # Determine checkpoint path
         if self.config.get("keep_model_every_interval", False):
-            model_path = os.path.join(
-                checkpoint_dir,
-                f"model_epoch_{self.epoch:02d}_step_{self.global_step + 1}.ckpt"
-            )
+            model_path = os.path.join(checkpoint_dir, f"model_epoch_{self.epoch:02d}_step_{self.global_step + 1}.ckpt")
         else:
             model_path = os.path.join(checkpoint_dir, "model_latest.ckpt")
             if Path(model_path).exists() and Path(model_path).is_file():
@@ -483,7 +466,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         unwrapped_model = self._unwrap_model()
 
         # Create checkpoint
-        checkpoint_state = {
+        checkpoint_state: dict[str, Any] = {
             "state_dict": unwrapped_model.state_dict(),
             "config": OmegaConf.to_container(self.config.model),
             "residues": self.residue_set.residue_masses,
@@ -509,19 +492,15 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             logger.info(f"Saved best checkpoint to {best_model_path}")
 
             if S3FileHandler._aichor_enabled():
-                self.s3.upload(
-                    best_model_path,
-                    S3FileHandler.convert_to_s3_output(best_model_path)
-                )
+                self.s3.upload(best_model_path, S3FileHandler.convert_to_s3_output(best_model_path))
 
     # we don't track sequence-level metrics ⇒ disable Metrics object
-    def setup_metrics(self):
+    def setup_metrics(self) -> Any:
+        """Set up metrics."""
         return None
 
     def forward(
-        self,
-        batch: Any,
-        return_preds: bool = False
+        self, batch: Any, return_preds: bool = False
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]] | tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, dict[str, torch.Tensor]]:
         """Forward pass for masked reconstruction loss.
 
@@ -555,7 +534,6 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         """
         # Import loss functions
         from instanovo_fm.trainer.losses import (
-            compute_classification_loss,
             compute_auxiliary_losses,
             compute_total_loss,
         )
@@ -574,12 +552,17 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             target_offsets = None
             if self._offset_conditioning != "none":
                 from instanovo_fm.trainer.utils import mz_to_bin_groups
+
                 max_mz = self.config.model.get("max_mz", 2500.0)
                 min_mz = self.config.model.get("min_mz", 0.0)
                 target_mz_da = batch["spectra"][:, :, 0] * max_mz
                 target_groups, target_offsets = mz_to_bin_groups(
-                    target_mz_da, self._mz_bin_size, max_mz,
-                    self._mz_group_size, min_mz, bin_edges=self._bin_edges,
+                    target_mz_da,
+                    self._mz_bin_size,
+                    max_mz,
+                    self._mz_group_size,
+                    min_mz,
+                    bin_edges=self._bin_edges,
                 )
 
             preds, aux_out = self.model(
@@ -632,18 +615,23 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
             cls_loss_fn = self._get_compiled_classification_loss()
             total_loss, classification_loss, group_loss, offset_loss = cls_loss_fn(
-                preds, target_mz, valid_mask, self.config.model, group_size, n_groups, last_group_size,
+                preds,
+                target_mz,
+                valid_mask,
+                self.config.model,
+                group_size,
+                n_groups,
+                last_group_size,
                 bin_edges=self._bin_edges,
             )
 
             # Loss components for logging
-            loss_components = {
+            loss_components: dict[str, Any] = {
                 "classification_loss": classification_loss.detach(),
                 "mlm_loss": total_loss.detach(),
                 "group_ce_loss": group_loss.detach(),
                 "offset_ce_loss": offset_loss.detach(),
             }
-
 
             # Auxiliary losses (if enabled)
             aux_config = self.config.model.get("auxiliary", {})
@@ -662,13 +650,15 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 aux_loss = torch.tensor(0.0, device=device)
 
             # Add auxiliary losses to loss_components
-            loss_components.update({
-                "charge_loss": charge_loss.detach(),
-                "rt_nll": rt_loss.detach(),
-                "dmz_loss": dmz_loss.detach(),
-                "ptm_loss": ptm_loss.detach(),
-                "intensity_loss": intensity_loss.detach(),
-            })
+            loss_components.update(
+                {
+                    "charge_loss": charge_loss.detach(),
+                    "rt_nll": rt_loss.detach(),
+                    "dmz_loss": dmz_loss.detach(),
+                    "ptm_loss": ptm_loss.detach(),
+                    "intensity_loss": intensity_loss.detach(),
+                }
+            )
 
             # Combine all losses
             total_loss = compute_total_loss(total_loss, aux_loss)
@@ -696,27 +686,22 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                     group_logits, offset_logits = preds
 
                     eval_topk = self._eval_topk_groups
-                    use_topk = (
-                        eval_topk > 1
-                        and self._offset_conditioning != "none"
-                        and "x_tokens" in aux_out
-                    )
+                    use_topk = eval_topk > 1 and self._offset_conditioning != "none" and "x_tokens" in aux_out
 
                     if use_topk:
                         # Top-K joint decoding: recompute offset logits per candidate group
                         unwrapped = self._unwrap_model()
                         mz_head = unwrapped.prediction_heads.mz_head
 
-                        top_k_probs, top_k_groups = torch.topk(
-                            F.softmax(group_logits, dim=-1), eval_topk, dim=-1
-                        )  # (B, L, K)
+                        top_k_probs, top_k_groups = torch.topk(F.softmax(group_logits, dim=-1), eval_topk, dim=-1)  # (B, L, K)
 
                         x_tok = aux_out["x_tokens"]
                         best_mz = None
                         best_groups = None
                         best_offsets = None
                         best_joint_prob = torch.full(
-                            group_logits.shape[:2], -1.0,
+                            group_logits.shape[:2],
+                            -1.0,
                             device=group_logits.device,
                         )
 
@@ -738,7 +723,11 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                             o_prob_k, o_k = F.softmax(olog_k, dim=-1).max(dim=-1)
                             joint_prob = g_prob_k * o_prob_k
                             mz_k = bin_groups_to_mz(
-                                g_k, o_k, self._mz_bin_size, group_size, min_mz,
+                                g_k,
+                                o_k,
+                                self._mz_bin_size,
+                                group_size,
+                                min_mz,
                                 bin_edges=self._bin_edges,
                             )
 
@@ -769,12 +758,15 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                         pred_offsets = offset_logits_masked.argmax(dim=-1)  # (B, L)
 
                         pred_mz_bin = bin_groups_to_mz(
-                            pred_groups, pred_offsets, self._mz_bin_size, group_size, min_mz,
+                            pred_groups,
+                            pred_offsets,
+                            self._mz_bin_size,
+                            group_size,
+                            min_mz,
                             bin_edges=self._bin_edges,
                         )  # (B, L) in Da
 
                     pred_mz = pred_mz_bin
-
 
                     # Compute classifier confidence metrics (conf_group/offset/joint).
                     # Consumed by StreamingMetrics to emit conf_joint_mean + ECE.
@@ -869,6 +861,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
         # Foundation model metrics: track loss and m/z reconstruction quality
         from instanovo_fm.trainer.metrics import StreamingMetrics
+
         metrics_tracker = StreamingMetrics()
 
         # Cache config values to avoid repeated lookups in hot loop
@@ -893,7 +886,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             effective_max_steps = None
 
         timer_steps = effective_max_steps or num_batches or 0
-        from instanovo.common.utils import Timer
+        from instanovo_fm.common.utils import Timer
+
         valid_timer = Timer(timer_steps)
 
         for batch_idx, batch in enumerate(self.valid_dataloader):
@@ -908,7 +902,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
             # Track prediction IDs if available
             if "prediction_id" in batch:
-                valid_prediction_ids.extend([x.item() if hasattr(x, 'item') else x for x in batch["prediction_id"]])
+                valid_prediction_ids.extend([x.item() if hasattr(x, "item") else x for x in batch["prediction_id"]])
 
             # Update metrics tracker
             with profile_component(self.profiler, "val_metrics"):
@@ -934,43 +928,35 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 # Update entropy metrics for epistemic uncertainty (classification only)
                 # Use cached mz_task from loop initialization
                 if mz_task == "classification" and "group_logits" in aux_out and "offset_logits" in aux_out:
-                    metrics_tracker.update_entropy_metrics(
-                        aux_out["group_logits"], aux_out["offset_logits"], valid_mask
-                    )
+                    metrics_tracker.update_entropy_metrics(aux_out["group_logits"], aux_out["offset_logits"], valid_mask)
 
                 # Compute classification targets (shared by confidence + annotated/unannotated)
                 group_targets = None
                 offset_targets = None
                 if mz_task == "classification" and "group_logits" in aux_out:
                     from instanovo_fm.trainer.utils import mz_to_bin_groups
+
                     assert self._mz_group_size is not None, "group_size must be set for classification task"
                     min_mz = self.config.model.get("min_mz", 0.0)
 
                     group_targets, offset_targets = mz_to_bin_groups(
-                        tgt_mz, self._mz_bin_size, max_mz,
-                        self._mz_group_size, min_mz,
-                        bin_edges=self._bin_edges
+                        tgt_mz, self._mz_bin_size, max_mz, self._mz_group_size, min_mz, bin_edges=self._bin_edges
                     )
 
                 # Update bin accuracy (unconditional, streaming counters)
                 if group_targets is not None and "group_logits" in aux_out:
-                    metrics_tracker.update_bin_accuracy(
-                        aux_out["group_logits"], aux_out["offset_logits"],
-                        group_targets, offset_targets, valid_mask
-                    )
+                    metrics_tracker.update_bin_accuracy(aux_out["group_logits"], aux_out["offset_logits"], group_targets, offset_targets, valid_mask)
 
                 # Update confidence metrics if available
                 if mz_task == "classification" and "conf_group" in aux_out and group_targets is not None:
                     metrics_tracker.update_confidence_metrics(
-                        aux_out, aux_out["group_logits"], aux_out["offset_logits"],
-                        group_targets, offset_targets, valid_mask
+                        aux_out, aux_out["group_logits"], aux_out["offset_logits"], group_targets, offset_targets, valid_mask
                     )
 
                 # Update auxiliary metrics if enabled
                 # Use cached aux_enabled and aux_config from loop initialization
                 if aux_enabled and aux_out is not None:
                     metrics_tracker.update_auxiliary_metrics(aux_out, batch, aux_config)
-
 
             valid_epoch_step += 1
             valid_timer.step()
@@ -979,9 +965,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             if (valid_epoch_step + 1) % int(self.config.get("console_logging_steps", 2000)) == 0:
                 total_display = effective_max_steps or num_batches
                 batch_progress = (
-                    f"[Batch {valid_epoch_step:05d}/{total_display:05d}]"
-                    if total_display is not None
-                    else f"[Batch {valid_epoch_step:05d}]"
+                    f"[Batch {valid_epoch_step:05d}/{total_display:05d}]" if total_display is not None else f"[Batch {valid_epoch_step:05d}]"
                 )
 
                 logger.info(
@@ -1041,18 +1025,10 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                     self.tracker.log_scalar(f"eval/{k}", v, validation_step)
 
             # Log to console — compact summary for monitoring
-            log_msg = (
-                f"[VALIDATION] [Epoch {self.epoch:02d}] "
-                f"[Step {self.global_step + 1:06d}] "
-                f"Loss: {metrics['loss']:.4f}"
-            )
+            log_msg = f"[VALIDATION] [Epoch {self.epoch:02d}] [Step {self.global_step + 1:06d}] Loss: {metrics['loss']:.4f}"
 
             if "bin_accuracy" in metrics:
-                log_msg += (
-                    f" | BinAcc: {metrics['bin_accuracy']:.1f}%"
-                    f" | Grp: {metrics['group_accuracy']:.1f}%"
-                    f" Off: {metrics['offset_accuracy']:.1f}%"
-                )
+                log_msg += f" | BinAcc: {metrics['bin_accuracy']:.1f}% | Grp: {metrics['group_accuracy']:.1f}% Off: {metrics['offset_accuracy']:.1f}%"
 
             log_msg += f" | <=20ppm: {metrics['pct_within_20ppm']:.1f}%"
 
@@ -1077,15 +1053,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             torch.cuda.set_rng_state_all(_rng_state_cuda)
         random.setstate(_rng_state_python)
 
-    def log_training_metrics(
-        self,
-        loss: torch.Tensor,
-        loss_components: dict[str, torch.Tensor],
-        lr: float,
-        step: int
-    ) -> None:
-        """
-        Log training metrics to TensorBoard/Neptune.
+    def log_training_metrics(self, loss: torch.Tensor, loss_components: dict[str, torch.Tensor], lr: float, step: int) -> None:
+        """Log training metrics to TensorBoard/Neptune.
 
         This method is called during training to log loss components,
         learning rate, and other training metrics.
@@ -1143,13 +1112,14 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         self.optimizer.zero_grad()
         self.running_loss = None
 
-        from instanovo.common.utils import Timer
+        from instanovo_fm.common.utils import Timer
+
         epoch_timer = Timer()
 
         print_batch_size = True
 
         # Manual iteration to support IterableDataset and enable dataloader profiling
-        dataloader_iter = iter(self.train_dataloader)
+        dataloader_iter = iter(self.train_dataloader)  # type: ignore[call-overload]
         batch_count = 0
         step_start = time.perf_counter()
 
@@ -1181,10 +1151,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 with profile_component(self.profiler, "optimizer"):
                     _is_optimizer_step = self.accelerator.sync_gradients
                     if _is_optimizer_step:
-                        self.accelerator.clip_grad_norm_(
-                            self.model.parameters(),
-                            self.config.get("gradient_clip_val", 10.0)
-                        )
+                        self.accelerator.clip_grad_norm_(self.model.parameters(), self.config.get("gradient_clip_val", 10.0))
                     self.optimizer.step()
                     self.lr_scheduler.step()
                     self.optimizer.zero_grad()
@@ -1304,12 +1271,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         epoch_timer.step()
 
         # Gather losses from all devices for logging
-        gathered_losses = self.accelerator.gather_for_metrics(
-            torch.tensor(total_loss, device=self.accelerator.device)
-        )
-        gathered_num_batches = self.accelerator.gather_for_metrics(
-            torch.tensor(batch_count, device=self.accelerator.device)
-        )
+        gathered_losses = self.accelerator.gather_for_metrics(torch.tensor(total_loss, device=self.accelerator.device))
+        gathered_num_batches = self.accelerator.gather_for_metrics(torch.tensor(batch_count, device=self.accelerator.device))
 
         if self.accelerator.is_main_process and self.tracker is not None:
             # Sum the losses and batch counts from all devices
@@ -1352,11 +1315,11 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         logger.info("=" * 80)
 
         try:
-            from instanovo_fm.eval.evaluator import EmbeddingEvaluator
             from instanovo_fm.eval import embedding_io
+            from instanovo_fm.eval.evaluator import EmbeddingEvaluator
 
             # Create evaluator config with step-specific output directory
-            eval_config_dict = {
+            eval_config_dict: dict[str, Any] = {
                 "evaluation": OmegaConf.to_container(self.config.evaluation, resolve=True),
                 "dataset": OmegaConf.to_container(self.config.dataset, resolve=True),
                 "residues": OmegaConf.to_container(self.config.residues, resolve=True),
@@ -1428,6 +1391,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
                 # Override pooling strategy for this iteration
                 from omegaconf import open_dict
+
                 with open_dict(evaluator.eval_config):
                     evaluator.eval_config.embedding_pooling = strategy
 
@@ -1443,7 +1407,10 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 # Run evaluation tasks with strategy-specific output subdirectory
                 output_subdir = strategy if len(pooling_strategies) > 1 else None
                 results = evaluator.run_evaluation_tasks(
-                    embeddings, metadata, faiss_index, output_subdir=output_subdir,
+                    embeddings,
+                    metadata,
+                    faiss_index,
+                    output_subdir=output_subdir,
                 )
 
                 for task_name, task_results in results.items():
@@ -1473,6 +1440,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             logger.error(f"Embedding evaluation failed: {e}")
             logger.error("Training will continue...")
             import traceback
+
             traceback.print_exc()
 
             # Ensure model is back in train mode
@@ -1485,7 +1453,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             # severe memory fragmentation (5 GB → 85 GB → OOM). Let the CUDA
             # allocator keep its existing blocks for stable memory reuse.
             import gc
-            if 'evaluator' in dir():
+
+            if "evaluator" in dir():
                 del evaluator
             gc.collect()
 
@@ -1508,9 +1477,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         best_checkpoint = os.path.join(checkpoint_dir, "model_best.ckpt")
 
         if not Path(best_checkpoint).exists():
-            logger.warning(
-                f"Best checkpoint not found at {best_checkpoint}, skipping post-training evaluation"
-            )
+            logger.warning(f"Best checkpoint not found at {best_checkpoint}, skipping post-training evaluation")
             return
 
         logger.info("Running post-training full evaluation on best checkpoint...")
@@ -1525,9 +1492,10 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         # GPU and CPU memory before loading the evaluator's own model copy.
         self.cleanup()
         del self.model, self.optimizer
-        if hasattr(self, 'lr_scheduler_obj'):
+        if hasattr(self, "lr_scheduler_obj"):
             del self.lr_scheduler_obj
         import gc
+
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -1555,9 +1523,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 eval_config_dict["evaluation"]["tasks_to_run"] = list(tasks_to_run)
 
             # Save results under a dedicated post_training subdirectory
-            base_output_dir = Path(
-                eval_config_dict["evaluation"].get("output_dir", "./evaluation_results")
-            )
+            base_output_dir = Path(eval_config_dict["evaluation"].get("output_dir", "./evaluation_results"))
             eval_config_dict["evaluation"]["output_dir"] = str(base_output_dir / "post_training")
 
             evaluator_config = OmegaConf.create(eval_config_dict)
@@ -1568,11 +1534,14 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             if mlflow_run_id and results:
                 try:
                     import mlflow
+
                     embeddings_info = getattr(evaluator, "_last_embeddings_info", {}) or {}
                     loggable = evaluator.get_metrics_for_logging(results, embeddings_info)
-                    logger.info(f"MLflow post-eval: run_id={mlflow_run_id}, "
-                                f"{len(loggable)} metrics to log, "
-                                f"active_run={'yes' if mlflow.active_run() else 'no'}")
+                    logger.info(
+                        f"MLflow post-eval: run_id={mlflow_run_id}, "
+                        f"{len(loggable)} metrics to log, "
+                        f"active_run={'yes' if mlflow.active_run() else 'no'}"
+                    )
                     # The run may still be active (accelerate doesn't always end it).
                     # End any active run first, then reopen by ID to log metrics.
                     try:
@@ -1592,17 +1561,13 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         except Exception as e:
             logger.error(f"Post-training evaluation failed: {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def _log_embedding_metrics(
-        self,
-        evaluator: Any,
-        results: dict[str, Any],
-        embeddings_info: dict[str, Any]
-    ) -> None:
+    def _log_embedding_metrics(self, evaluator: Any, results: dict[str, Any], embeddings_info: dict[str, Any]) -> None:
         """Log embedding evaluation metrics to TensorBoard/Neptune.
 
         This method uses the evaluator's get_metrics_for_logging() to extract
@@ -1648,6 +1613,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         self.valid_dataloader = None  # type: ignore[assignment]
 
         import gc
+
         gc.collect()
 
         logger.info("Cleanup complete.")
@@ -1668,11 +1634,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             # Upload profiling results to S3 if enabled
             if S3FileHandler._aichor_enabled():
                 logger.info("Uploading profiling results to S3...")
-                profiling_files = [
-                    "profiling_summary.json",
-                    "component_timing_detailed.json",
-                    "profiling_report.txt"
-                ]
+                profiling_files = ["profiling_summary.json", "component_timing_detailed.json", "profiling_report.txt"]
 
                 for filename in profiling_files:
                     local_file = self.profiling_output_dir / filename
@@ -1702,7 +1664,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 logger.info("=" * 80)
                 logger.info("DETAILED PROFILING REPORT")
                 logger.info("=" * 80)
-                with open(report_file, 'r') as f:
+                with open(report_file, "r") as f:
                     for line in f:
                         logger.info(line.rstrip())
                 logger.info("=" * 80)

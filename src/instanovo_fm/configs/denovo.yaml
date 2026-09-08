@@ -1,0 +1,80 @@
+# De novo sequencing training config.
+# Inherits training parameters from instanovo.yaml and overrides the model
+# config to use denovo_base (which matches the foundation model architecture).
+
+defaults:
+  - instanovo
+  - override model: denovo_base
+  - override dataset: default #lcfm
+  - _self_
+
+# `instanovo`, `model: instanovo_base` and `dataset: default` above are the
+# pinned dependency's own configs, not copies kept here. They live in the
+# installed package, so that directory has to be on Hydra's search path; the
+# resolver is registered in instanovo_fm/__init__.py. See
+# instanovo_fm/utils/hydra_config.py for why `pkg://instanovo.configs` cannot
+# be used instead.
+hydra:
+  searchpath:
+    - file://${instanovo_configs:}
+
+run_name: instanovo-denovo
+# `instanovo.yaml` above declares `tags` as a list of strings -- that is what its
+# consumer takes, `neptune.init_run(tags=...)` in instanovo/common/trainer.py --
+# while the internal repo redefined it as a mapping. A mapping cannot merge onto
+# the inherited list, so this config could not compose at all. Kept as a list
+# here, with the internal labels preserved as `key:value` strings.
+tags:
+  - variant:downstream_denovo
+  - method:finetune # from_scratch | finetune
+  - ckpt:fm_lcfm_nopa
+  - dataset:lcfm
+
+# Training parameters
+seed: 101
+warmup_iters: 100_000
+learning_rate: 5e-5
+weight_decay: 0 #1e-5
+train_batch_size: 128
+grad_accumulation: 1
+gradient_clip_val: 10.0
+predict_batch_size: 128
+lr_scheduler: cosine_warmup_hold
+lr_hold_steps: 100_000
+
+# Logging parameters
+training_steps: 2_500_000
+validate_before_training: False
+
+mlflow_enabled: True  # Set to False to disable all MLFlow tracking
+mlflow_experiment_name: downstream_denovo
+mlflow_workspace: instanovo
+
+# Training data parameters
+train_subset: 1.0
+valid_subset: 1.0
+
+model_save_folder_path: "checkpoints/instanovo-downstream-denovo"
+
+# Foundation model parameters
+use_pretrained_model: True
+foundational_checkpoint: s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt #s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt  #s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt
+
+# Comment out if training from scratch
+# Finetuning schedule
+finetune:
+  unfreeze_format: start_step
+  unfreeze_schedule:
+    - start_step: 0
+      params:
+        - decoder.*
+        - head.*
+        - aa_embed.*
+        - aa_pos_embed.*
+    - start_step: 100_000 #0 #3_500_000 #100_000
+      params:
+        - peak_encoder.*
+        - encoder.*
+        # - meta_embed* # not using meta token
+        # - latent_token*
+        # - pad_token* # why would we unfreeze this?

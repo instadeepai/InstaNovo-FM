@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-import math
-from typing import Optional
+from math import ceil
+from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
-from math import ceil
 
-from instanovo.__init__ import console
-from instanovo.types import Spectrum, SpectrumEmbedding, SpectrumMask
-from instanovo.utils.colorlogging import ColorLog
+from instanovo.types import Spectrum, SpectrumEmbedding
+
 
 class MultiScalePeakEmbedding(nn.Module):
     """Multi-scale sinusoidal embedding based on Voronov et. al."""
 
     def __init__(self, h_size: int, dropout: float = 0) -> None:
+        """Initialise the input."""
         super().__init__()
         self.h_size = h_size
 
@@ -60,10 +59,14 @@ class MultiScalePeakEmbedding(nn.Module):
 
 
 class FourierFeatures(nn.Module):
-    def __init__(self, strategy, x_min, x_max, trainable=True, funcs='both', sigma=10, num_freqs=512):
+    """Fourier features."""
 
-        assert strategy in {'random', 'voronov_et_al', 'lin_float_int'}
-        assert funcs in {'both', 'sin', 'cos'}
+    def __init__(
+        self, strategy: Any, x_min: Any, x_max: Any, trainable: Any = True, funcs: Any = "both", sigma: Any = 10, num_freqs: Any = 512
+    ) -> None:
+        """Initialise the input."""
+        assert strategy in {"random", "voronov_et_al", "lin_float_int"}
+        assert funcs in {"both", "sin", "cos"}
         assert 0 < x_min < x_max
 
         super().__init__()
@@ -72,87 +75,92 @@ class FourierFeatures(nn.Module):
         self.trainable = trainable
         self.num_freqs = num_freqs
 
-        if strategy == 'random':
+        if strategy == "random":
             # Store on CPU initially - will be moved to correct device during first forward
             self.b = torch.randn(num_freqs, dtype=torch.float32) * sigma
-        elif self.strategy == 'voronov_et_al':
+        elif self.strategy == "voronov_et_al":
+            self.b = torch.tensor([1 / (x_min * (x_max / x_min) ** (2 * i / (num_freqs - 1))) for i in range(num_freqs)], dtype=torch.float32)
+        elif self.strategy == "lin_float_int":
             self.b = torch.tensor(
-                [1 / (x_min * (x_max / x_min) ** (2 * i / (num_freqs - 1))) for i in range(num_freqs)],
-                dtype=torch.float32
-            )
-        elif self.strategy == 'lin_float_int':
-            self.b = torch.tensor(
-                [1 / (x_min * i) for i in range(2, ceil(1 / x_min), 2)] +
-                [1 / (1 * i) for i in range(2, ceil(x_max), 1)],
-                dtype=torch.float32
+                [1 / (x_min * i) for i in range(2, ceil(1 / x_min), 2)] + [1 / (1 * i) for i in range(2, ceil(x_max), 1)], dtype=torch.float32
             )
         self.b = self.b.unsqueeze(0)
 
         self.b = nn.Parameter(self.b, requires_grad=self.trainable)
-        self.register_parameter('fourier_frequencies', self.b)
+        self.register_parameter("fourier_frequencies", self.b)
 
         # Track if frequencies have been frozen
         self._frequencies_frozen = False
 
-    def forward(self, x):
+    def forward(self, x: Any) -> Any:
         # Force float32 for the matmul to prevent autocast downcast to float16/bfloat16
         # which causes NaN (float16 overflow) or high RMSE (bfloat16 precision loss).
+        """Run the forward pass."""
         x = x.float()
-        with torch.amp.autocast('cuda', enabled=False):
+        with torch.amp.autocast("cuda", enabled=False):
             x = 2 * torch.pi * x @ self.b.float()
-        if self.funcs == 'both':
+        if self.funcs == "both":
             x = torch.cat((torch.cos(x), torch.sin(x)), dim=-1)
-        elif self.funcs == 'cos':
+        elif self.funcs == "cos":
             x = torch.cos(x)
-        elif self.funcs == 'sin':
+        elif self.funcs == "sin":
             x = torch.sin(x)
         return x
 
-    def freeze_frequencies(self):
+    def freeze_frequencies(self) -> None:
         """Freeze the Fourier frequencies to prevent further training."""
         if not self._frequencies_frozen:
             self.b.requires_grad_(False)
             self._frequencies_frozen = True
 
-    def num_features(self):
-        return self.b.shape[1] if self.funcs != 'both' else 2 * self.b.shape[1]
+    def num_features(self) -> Any:
+        """Num features."""
+        return self.b.shape[1] if self.funcs != "both" else 2 * self.b.shape[1]
 
 
 class FourierPeakEmbedding(nn.Module):
-    """
+    """DreaMS-style peak encoder.
+
     DreaMS-style peak encoder:
         Fourier(m/z)  →  MLP  →  concat(norm-I)  →  MLP
     Output dim == h_size, just like MultiScalePeakEmbedding.
     """
 
-    def __init__(self, h_size: int, dropout: float = 0,
-                 num_freqs: int | None = None, strategy: str = "voronov_et_al",
-                 trainable_fourier: bool = True,
-                 x_min: float = 0.001, x_max: float = 1.5):
+    def __init__(
+        self,
+        h_size: int,
+        dropout: float = 0,
+        num_freqs: int | None = None,
+        strategy: str = "voronov_et_al",
+        trainable_fourier: bool = True,
+        x_min: float = 0.001,
+        x_max: float = 1.5,
+    ) -> None:
+        """Initialise the input."""
         super().__init__()
         if num_freqs is None:
-            num_freqs = h_size // 4          # keeps Fourier+I <= h_size
-        self.ff_mz  = FourierFeatures(strategy, x_min, x_max,
-                                      trainable=trainable_fourier, num_freqs=num_freqs)
-        d_ff = self.ff_mz.num_features()              # ~ num_freqs*2
+            num_freqs = h_size // 4  # keeps Fourier+I <= h_size
+        self.ff_mz = FourierFeatures(strategy, x_min, x_max, trainable=trainable_fourier, num_freqs=num_freqs)
+        d_ff = self.ff_mz.num_features()  # ~ num_freqs*2
         self.mlp1 = nn.Sequential(
-            nn.Linear(d_ff, h_size//2),
+            nn.Linear(d_ff, h_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(h_size//2, h_size//2),
+            nn.Linear(h_size // 2, h_size // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
         )
         # +1 for intensity
         self.mlp2 = nn.Sequential(
-            nn.Linear(h_size//2 + 1, h_size),
+            nn.Linear(h_size // 2 + 1, h_size),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(h_size, h_size),
             nn.Dropout(dropout),
         )
 
-    def forward(self, spectra):          # spectra: (B,L,2) [m/z, I]
+    def forward(self, spectra: Any) -> Any:  # spectra: (B,L,2) [m/z, I]
+        """Run the forward pass."""
         mz, intens = spectra[..., 0:1], spectra[..., 1:2]
         x = self.ff_mz(mz)
         x = self.mlp1(x)
@@ -169,6 +177,7 @@ class LinearPeakEmbedding(nn.Module):
     """
 
     def __init__(self, h_size: int, dropout: float = 0.0) -> None:
+        """Initialise the input."""
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(2, h_size),
@@ -178,9 +187,8 @@ class LinearPeakEmbedding(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(
-        self, spectra: Float[Spectrum, " batch"]
-    ) -> Float[SpectrumEmbedding, " batch"]:
+    def forward(self, spectra: Float[Spectrum, " batch"]) -> Float[SpectrumEmbedding, " batch"]:
+        """Run the forward pass."""
         return self.mlp(spectra)
 
 
@@ -201,13 +209,14 @@ class RBFPeakEmbedding(nn.Module):
         num_rbf: int = 1024,
         normalize_mz: bool = True,
     ) -> None:
+        """Initialise the input."""
         super().__init__()
         self.h_size = h_size
         self.num_rbf = num_rbf
 
         # Place centers in the actual input domain
         lo = min_mz / max_mz if normalize_mz else min_mz  # 0.02 when normalized
-        hi = 1.0 if normalize_mz else max_mz               # 1.0 when normalized
+        hi = 1.0 if normalize_mz else max_mz  # 1.0 when normalized
         centers = torch.linspace(lo, hi, num_rbf)
         self.register_buffer("centers", centers)
         self.sigma = max((hi - lo) / num_rbf, 1e-6)
@@ -220,19 +229,15 @@ class RBFPeakEmbedding(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(
-        self, spectra: Float[Spectrum, " batch"]
-    ) -> Float[SpectrumEmbedding, " batch"]:
+    def forward(self, spectra: Float[Spectrum, " batch"]) -> Float[SpectrumEmbedding, " batch"]:
         """Encode peaks via RBF expansion + intensity."""
-        mz = spectra[..., 0:1]          # (B, L, 1)
+        mz = spectra[..., 0:1]  # (B, L, 1)
         intensities = spectra[..., 1:2]  # (B, L, 1)
-        rbf = self._rbf_expand(mz)       # (B, L, num_rbf)
+        rbf = self._rbf_expand(mz)  # (B, L, num_rbf)
         x = torch.cat([rbf, intensities], dim=-1)  # (B, L, num_rbf+1)
         return self.mlp(x)
 
-    def encode_mass(
-        self, x: Float[Tensor, " batch"]
-    ) -> Float[Tensor, "batch embedding"]:
+    def encode_mass(self, x: Float[Tensor, " batch"]) -> Float[Tensor, "batch embedding"]:
         """RBF expansion for precursor mass (API parity with MultiScale)."""
         return self._rbf_expand(x)
 
@@ -261,6 +266,7 @@ class DualPeakEmbedding(nn.Module):
         num_rbf: int = 2048,
         normalize_mz: bool = True,
     ) -> None:
+        """Initialise the input."""
         super().__init__()
         self.sin_encoder = MultiScalePeakEmbedding(h_size, dropout=dropout)
         self.rbf_encoder = RBFPeakEmbedding(
@@ -273,9 +279,7 @@ class DualPeakEmbedding(nn.Module):
         )
         self.rbf_gate = nn.Parameter(torch.zeros(1))  # ReZero
 
-    def forward(
-        self, spectra: Float[Spectrum, " batch"]
-    ) -> Float[SpectrumEmbedding, " batch"]:
+    def forward(self, spectra: Float[Spectrum, " batch"]) -> Float[SpectrumEmbedding, " batch"]:
         """Encode peaks with dual sinusoidal + RBF embedding."""
         x_sin = self.sin_encoder(spectra)
         x_rbf = self.rbf_encoder(spectra)
@@ -287,7 +291,7 @@ class DualPeakEmbedding(nn.Module):
 # ───────────────────────────────────────────────────────────────────
 
 # Import the new clean MetaTokenEmbed from meta_token module
-from instanovo_fm.model.meta_token import MetaTokenEmbed
+from instanovo_fm.model.meta_token import MetaTokenEmbed  # noqa: E402
 
 __all__ = [
     "MultiScalePeakEmbedding",

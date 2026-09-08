@@ -15,12 +15,12 @@ from jaxtyping import Float
 from torch import Tensor, nn
 
 from instanovo.__init__ import console
-from instanovo.common import DataProcessor
+from instanovo_fm.common import DataProcessor
 from instanovo.constants import ANNOTATED_COLUMN, PROTON_MASS_AMU, MSColumns
 from instanovo_fm.data.masking import get_mask_function
 from instanovo_fm.data.search_data_manager import SearchDataManager
-from instanovo.utils.residues import ResidueSet
 from instanovo.utils.colorlogging import ColorLog
+from instanovo.utils.residues import ResidueSet
 
 logger = ColorLog(console, __name__).logger
 
@@ -81,6 +81,8 @@ class FoundationalDataProcessor(DataProcessor):
             Never exceed this percentage, even with isotope co-masking.
         search_data_manager: Optional SearchDataManager for additional metadata (default: None).
     """
+
+    _keep_non_tensor_metadata: bool
 
     def __init__(
         self,
@@ -183,16 +185,11 @@ class FoundationalDataProcessor(DataProcessor):
 
         # Validate: tokenization requires residue_set
         if self.annotated and self.residue_set is None and not self.return_str:
-            raise ValueError(
-                "residue_set required for sequence tokenization. "
-                "Set return_str=True to keep sequences as strings."
-            )
+            raise ValueError("residue_set required for sequence tokenization. Set return_str=True to keep sequences as strings.")
 
         # Log initialization
         mode = "eval" if self.annotated else "train"
-        logger.debug(
-            f"DataProcessor: n_peaks={n_peaks}, mode={mode}, masking={masking_strategy}"
-        )
+        logger.debug(f"DataProcessor: n_peaks={n_peaks}, mode={mode}, masking={masking_strategy}")
 
     def _process_spectrum(
         self,
@@ -325,7 +322,7 @@ class FoundationalDataProcessor(DataProcessor):
             return torch.tensor([[dummy_mz, dummy_intensity]], dtype=torch.float32)
 
     @staticmethod
-    def _pad_and_mask(x: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+    def _pad_and_mask(x: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
         """Pad variable-length tensors and create attention masks.
 
         Used for peptide sequences which have dynamic lengths.
@@ -364,7 +361,7 @@ class FoundationalDataProcessor(DataProcessor):
         Returns:
             Reordered spectra [batch_size, n_peaks, 2].
         """
-        B, L, C = spectra.shape
+        B, L, C = spectra.shape  # noqa: N806
 
         # Extract m/z channel for sorting
         mz = spectra[:, :, 0]  # (B, L)
@@ -611,9 +608,7 @@ class FoundationalDataProcessor(DataProcessor):
                 if self.residue_set is None:
                     raise RuntimeError("residue_set is None but return_str=False")
                 tokens = self.residue_set.tokenize(peptide)
-                processed["peptide"] = self.residue_set.encode(
-                    tokens, add_eos=False, return_tensor="pt"
-                )
+                processed["peptide"] = self.residue_set.encode(tokens, add_eos=False, return_tensor="pt")
 
         # Add metadata from original row
         # Only copy columns that are actually used (performance optimization)
@@ -625,10 +620,7 @@ class FoundationalDataProcessor(DataProcessor):
                     processed[col] = row[col]
                 elif col not in self._warned_missing_columns:
                     self._warned_missing_columns.add(col)
-                    logger.warning(
-                        f"Metadata column '{col}' listed in config but absent from data. "
-                        f"Will be silently skipped for all rows."
-                    )
+                    logger.warning(f"Metadata column '{col}' listed in config but absent from data. Will be silently skipped for all rows.")
         return processed
 
     def _get_expected_columns(self) -> list[str]:
@@ -643,11 +635,7 @@ class FoundationalDataProcessor(DataProcessor):
             columns.append("peptide")
         return columns
 
-    def _collate_batch(
-        self,
-        batch: list[dict[str, Any]],
-        apply_masking: bool = True
-    ) -> dict[str, torch.Tensor | Any]:
+    def _collate_batch(self, batch: list[dict[str, Any]], apply_masking: bool = True) -> dict[str, torch.Tensor | Any]:
         """Collate batch with fixed-length padding and optional masking.
 
         Key Design: Uses FIXED-LENGTH padding to n_peaks (not dynamic).
@@ -687,15 +675,12 @@ class FoundationalDataProcessor(DataProcessor):
                 Plus any metadata columns as lists.
         """
         # Extract spectra and precursor info
-        data_batch = [
-            (row["spectra"], row["precursor_mz"], row["precursor_charge"])
-            for row in batch
-        ]
+        data_batch = [(row["spectra"], row["precursor_mz"], row["precursor_charge"]) for row in batch]
         spectra, precursor_mzs, precursor_charges = zip(*data_batch, strict=True)
 
         # Fixed-length padding to n_peaks (consistent shapes)
-        B = len(spectra)
-        L_static = self.n_peaks
+        B = len(spectra)  # noqa: N806
+        L_static = self.n_peaks  # noqa: N806
 
         # Track true lengths before padding
         true_lengths = torch.tensor([x.shape[0] for x in spectra], dtype=torch.long)
@@ -742,27 +727,24 @@ class FoundationalDataProcessor(DataProcessor):
             # Only request columns needed for metadata token (performance optimization)
             # These columns map to the metadata token features in metadata_builder.py
             required_columns = [
-                "project",         # -> search_project
-                "instrument",      # -> search_instrument
-                "acquisition",     # -> search_acquisition
-                "detector",        # -> search_detector
-                "fragmentation",   # -> search_fragmentation
-                "enzyme",          # -> search_enzyme
-                "quant",           # -> search_quant
-                "organism",        # -> search_organism
-                "modifications",   # -> search_modifications
+                "project",  # -> search_project
+                "instrument",  # -> search_instrument
+                "acquisition",  # -> search_acquisition
+                "detector",  # -> search_detector
+                "fragmentation",  # -> search_fragmentation
+                "enzyme",  # -> search_enzyme
+                "quant",  # -> search_quant
+                "organism",  # -> search_organism
+                "modifications",  # -> search_modifications
             ]
 
             # Batch lookup with column filtering
             spectrum_key = self.search_data_manager.spectrum_filepath_key
             filepaths = [row.get(spectrum_key) or "" for row in batch]  # Convert None to empty string
-            search_metadata_list = self.search_data_manager.get_metadata_batch(
-                filepaths,
-                columns=required_columns
-            )
+            search_metadata_list = self.search_data_manager.get_metadata_batch(filepaths, columns=required_columns)
 
             # Enrich each batch row with search data so build_metadata_dict can see them
-            for row, search_meta in zip(batch, search_metadata_list):
+            for row, search_meta in zip(batch, search_metadata_list, strict=False):
                 for col in required_columns:
                     val = search_meta.get(col)
                     if val is not None:
@@ -783,13 +765,14 @@ class FoundationalDataProcessor(DataProcessor):
         # Must happen AFTER search data enrichment so all metadata fields are available
         if self.build_metadata:
             from instanovo_fm.data.metadata_builder import build_metadata_dict
+
             meta = build_metadata_dict(batch, device=spectra_ordered.device)
             return_batch["meta"] = meta if meta else None
 
         # Extract peptides and frag_types for signal-aware masking (if available and needed)
         peptides_for_masking = None
         frag_types_for_masking = None
-        if self.masking_strategy == "signal_aware_fragment":
+        if self.masking_strategy == "signal_aware_fragment":  # type: ignore[comparison-overlap]
             if self.annotated:
                 # Extract peptides from batch if they exist
                 peptides_batch = [row.get("peptide", None) for row in batch]
@@ -851,7 +834,7 @@ class FoundationalDataProcessor(DataProcessor):
         # before creating a dataloader when string/list metadata must flow
         # through to embedding_io (e.g., standalone evaluation tasks that need
         # frag_type, sequence, search_instrument, collision_energy, etc.).
-        if not getattr(self, '_keep_non_tensor_metadata', False):
+        if not getattr(self, "_keep_non_tensor_metadata", False):
             return_batch = {k: v for k, v in return_batch.items() if isinstance(v, torch.Tensor)}
 
         return return_batch

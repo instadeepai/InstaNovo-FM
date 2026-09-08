@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 import logging
+from typing import Any
+
+import numpy as np
 import torch
 from torch.cuda.amp import autocast
-import numpy as np
 
 # Try to import esm, but handle the case where it's not available
 try:
     import esm
+
     ESM_AVAILABLE = True
 except ImportError:
     ESM_AVAILABLE = False
@@ -15,9 +19,9 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+
 class ESM2Embedder:
-    """
-    A lightweight embedder for generating ESM2 protein sequence embeddings on the fly.
+    """A lightweight embedder for generating ESM2 protein sequence embeddings on the fly.
 
     Example:
         embedder = ESM2Embedder(model_name='esm2_t33_650M_UR50D')
@@ -25,33 +29,30 @@ class ESM2Embedder:
     """
 
     MODEL_DEFAULT_LAYERS: dict[str, int] = {
-        'esm2_t48_15B_UR50D': 48,
-        'esm2_t36_3B_UR50D': 36,
-        'esm2_t33_650M_UR50D': 33,
-        'esm2_t30_150M_UR50D': 30,
-        'esm2_t12_35M_UR50D': 12,
-        'esm2_t6_8M_UR50D': 6,
+        "esm2_t48_15B_UR50D": 48,
+        "esm2_t36_3B_UR50D": 36,
+        "esm2_t33_650M_UR50D": 33,
+        "esm2_t30_150M_UR50D": 30,
+        "esm2_t12_35M_UR50D": 12,
+        "esm2_t6_8M_UR50D": 6,
     }
 
     def __init__(
         self,
-        model_name: str = 'esm2_t33_650M_UR50D',
+        model_name: str = "esm2_t33_650M_UR50D",
         device: str | None = None,
-    ):
-        """
-        Load the specified ESM2 model.
+    ) -> None:
+        """Load the specified ESM2 model.
 
         :param model_name: Identifier for the pre-trained model in esm.pretrained
         :param device: Torch device string (e.g. 'cuda:0' or 'cpu'). Auto-detects CUDA if None.
         """
         if not ESM_AVAILABLE:
-            raise ImportError(
-                "ESM2 is not available. Please install it with: pip install fair-esm"
-            )
+            raise ImportError("ESM2 is not available. Please install it with: pip install fair-esm")
 
         # Auto-detect device
         if device is None:
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
 
@@ -59,12 +60,12 @@ class ESM2Embedder:
         self.model, self.batch_converter = self._load_model()
         self.model.eval()
 
-    def _load_model(self):
+    def _load_model(self) -> Any:
         logging.info(f"Loading ESM2 model '{self.model_name}' on {self.device}")
         try:
             esm_model, alphabet = getattr(esm.pretrained, self.model_name)()
-        except AttributeError as e:
-            raise ValueError(f"Unknown model '{self.model_name}'. Available models: {list(esm.pretrained.__dict__.keys())}")
+        except AttributeError:
+            raise ValueError(f"Unknown model '{self.model_name}'. Available models: {list(esm.pretrained.__dict__.keys())}") from None
 
         esm_model = esm_model.to(self.device)
         batch_converter = alphabet.get_batch_converter()
@@ -75,10 +76,9 @@ class ESM2Embedder:
         sequences: list[str] | str,
         layer: int | None = None,
         batch_size: int = 32,
-        pooling: str = 'mean',
+        pooling: str = "mean",
     ) -> np.ndarray:
-        """
-        Generate embeddings for the provided sequences.
+        """Generate embeddings for the provided sequences.
 
         :param sequences: A single sequence or list of sequences (strings)
         :param layer: Which transformer layer to extract (default is model's final layer)
@@ -99,7 +99,7 @@ class ESM2Embedder:
             if seq is None or not isinstance(seq, str):
                 continue
             # Remove any non-amino acid characters and convert to uppercase
-            cleaned_seq = ''.join(c.upper() for c in seq if c.upper() in 'ACDEFGHIKLMNPQRSTVWY')
+            cleaned_seq = "".join(c.upper() for c in seq if c.upper() in "ACDEFGHIKLMNPQRSTVWY")
             if len(cleaned_seq) > 0:
                 valid_sequences.append(cleaned_seq)
                 valid_indices.append(i)
@@ -112,12 +112,10 @@ class ESM2Embedder:
         if layer is None:
             layer = self.MODEL_DEFAULT_LAYERS.get(self.model_name)
             if layer is None:
-                raise ValueError(
-                    f"No default layer for model '{self.model_name}'. Please specify layer manually."
-                )
+                raise ValueError(f"No default layer for model '{self.model_name}'. Please specify layer manually.")
 
         # Create label sequence pairs
-        labeled = [(f'seq{i}', seq) for i, seq in enumerate(valid_sequences)]
+        labeled = [(f"seq{i}", seq) for i, seq in enumerate(valid_sequences)]
         embeddings: list[np.ndarray] = []
 
         # Process in batches
@@ -150,10 +148,9 @@ class ESM2Embedder:
         self,
         batch: list[tuple[str, str]],
         layer: int,
-        pooling: str = 'mean',
+        pooling: str = "mean",
     ) -> np.ndarray:
-        """
-        Compute embeddings for a single batch with specified pooling strategy.
+        """Compute embeddings for a single batch with specified pooling strategy.
 
         Args:
             batch: List of (label, sequence) tuples
@@ -168,17 +165,17 @@ class ESM2Embedder:
 
         with torch.no_grad(), autocast():
             out = self.model(tokens, repr_layers=[layer], return_contacts=False)
-            reps = out['representations'][layer]
+            reps = out["representations"][layer]
 
         embeddings = []
         for i, seq in enumerate(seqs):
             seq_len = len(seq)
 
-            if pooling == 'cls':
+            if pooling == "cls":
                 # Extract BOS token (index 0) - this is the ESM-2 CLS analogue
                 # BOS is trained to attend to the whole sequence and contains learned summary
                 emb = reps[i, 0].cpu().numpy()  # BOS token at position 0
-            elif pooling == 'attention':
+            elif pooling == "attention":
                 # For now, fall back to mean pooling
                 # TODO: Implement attention-weighted pooling
                 emb = reps[i, 1 : seq_len + 1].mean(dim=0).cpu().numpy()

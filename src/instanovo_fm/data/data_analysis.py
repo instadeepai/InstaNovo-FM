@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Comprehensive Data Analysis for Foundation Model Training.
+"""Comprehensive Data Analysis for Foundation Model Training.
 
 This script orchestrates multiple analysis modules:
 1. Metadata analysis (dataset columns and search data)
@@ -21,16 +20,16 @@ from omegaconf import DictConfig, OmegaConf
 
 from instanovo.__init__ import console
 from instanovo_fm.data import FoundationalDataProcessor
-from instanovo_fm.data.search_data_manager import create_search_data_manager
 from instanovo_fm.data.metadata_analyser import MetadataAnalyser
+from instanovo_fm.data.search_data_manager import create_search_data_manager
 from instanovo_fm.data.spectrum_analyser import SpectrumAnalyser
-from instanovo.utils.residues import ResidueSet
-from instanovo.utils.data_handler import SpectrumDataFrame
 from instanovo.utils.colorlogging import ColorLog
+from instanovo_fm.utils.spectrum_dataframe import SpectrumDataFrame
+from instanovo.utils.residues import ResidueSet
 
 logger = ColorLog(console, __name__).logger
 
-CONFIG_PATH = Path(__file__).parent.parent.parent / "configs"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs"
 
 # ============================================================================
 # Task dependency graph (fixed, known)
@@ -113,8 +112,7 @@ _LEGACY_ENABLE_MAP: Dict[str, tuple] = {
 
 
 class DataAnalyzer:
-    """
-    Orchestrator for comprehensive data analysis.
+    """Orchestrator for comprehensive data analysis.
 
     Coordinates:
     - Metadata analysis (MetadataAnalyser)
@@ -123,9 +121,8 @@ class DataAnalyzer:
     - S3/AIChor upload
     """
 
-    def __init__(self, config: DictConfig, output_dir: Optional[str] = None):
-        """
-        Initialize the data analyzer.
+    def __init__(self, config: DictConfig, output_dir: Optional[str] = None) -> None:
+        """Initialize the data analyzer.
 
         Args:
             config: Hydra configuration
@@ -135,7 +132,7 @@ class DataAnalyzer:
 
         # Set output directory - default to foundational module directory
         if output_dir is None:
-            foundational_dir = Path(__file__).parent.parent  # instanovo/foundational/
+            foundational_dir = Path(__file__).parent.parent  # instanovo_fm/
             self.output_dir = foundational_dir / "data" / "data_analysis_results"
         else:
             self.output_dir = Path(output_dir)
@@ -149,12 +146,14 @@ class DataAnalyzer:
         )
 
         # Setup search data manager
-        self.search_data_manager = create_search_data_manager({
-            "use_search_data": config.dataset.get("use_search_data", False),
-            "search_data_path": config.dataset.get("search_data_path", None),
-            "search_data_filepath_column": config.dataset.get("search_data_filepath_column", "file path"),
-            "search_data_spectrum_key": config.dataset.get("search_data_spectrum_key", "filepath"),
-        })
+        self.search_data_manager = create_search_data_manager(
+            {
+                "use_search_data": config.dataset.get("use_search_data", False),
+                "search_data_path": config.dataset.get("search_data_path", None),
+                "search_data_filepath_column": config.dataset.get("search_data_filepath_column", "file path"),
+                "search_data_spectrum_key": config.dataset.get("search_data_spectrum_key", "filepath"),
+            }
+        )
 
         # Merge legacy config if needed, then resolve tasks
         self._analysis_config = self._build_analysis_config()
@@ -234,9 +233,7 @@ class DataAnalyzer:
             for task in list(resolved):
                 for dep in TASK_DEPENDENCIES.get(task, set()):
                     if dep not in resolved:
-                        logger.warning(
-                            f"Task '{task}' depends on '{dep}' -- auto-including '{dep}'"
-                        )
+                        logger.warning(f"Task '{task}' depends on '{dep}' -- auto-including '{dep}'")
                         resolved.add(dep)
                         changed = True
 
@@ -253,11 +250,12 @@ class DataAnalyzer:
     # ------------------------------------------------------------------
 
     @property
-    def s3(self):
+    def s3(self) -> Any:
         """Lazy S3 handler — only instantiated when actually needed."""
         if self._s3 is None:
             from instanovo.utils.s3 import S3FileHandler
-            self._s3 = S3FileHandler()
+
+            self._s3 = S3FileHandler()  # type: ignore[assignment]
         return self._s3
 
     def _upload_results_to_s3(self) -> None:
@@ -299,7 +297,7 @@ class DataAnalyzer:
                 except Exception as e:
                     last_err = e
                     if attempt < max_retries:
-                        time.sleep(2 ** attempt)  # exponential backoff
+                        time.sleep(2**attempt)  # exponential backoff
             entry["error"] = str(last_err)
             return entry
 
@@ -326,16 +324,11 @@ class DataAnalyzer:
         except Exception:
             logger.warning("Could not upload upload_manifest.json to S3")
 
-        logger.info(
-            f"Upload complete: {succeeded} succeeded, {failed} failed "
-            f"out of {len(output_files)} files"
-        )
+        logger.info(f"Upload complete: {succeeded} succeeded, {failed} failed out of {len(output_files)} files")
         if failed:
             for entry in manifest:
                 if entry["status"] == "failed":
-                    logger.warning(
-                        f"  FAILED: {Path(entry['local_path']).name} — {entry.get('error', 'unknown')}"
-                    )
+                    logger.warning(f"  FAILED: {Path(entry['local_path']).name} — {entry.get('error', 'unknown')}")
 
     # ------------------------------------------------------------------
     # Dataset loading
@@ -370,7 +363,7 @@ class DataAnalyzer:
     # Orchestration
     # ------------------------------------------------------------------
 
-    def run_analysis(self):
+    def run_analysis(self) -> None:
         """Run comprehensive data analysis."""
         logger.info("=" * 80)
         logger.info("STARTING COMPREHENSIVE DATA ANALYSIS")
@@ -398,7 +391,7 @@ class DataAnalyzer:
         # 1. Metadata (independent batch task)
         # =================================================================
         if "metadata" in tasks:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 1: METADATA ANALYSIS")
             logger.info("=" * 80)
             self._run_metadata_analysis(sdf, n_samples, processor)
@@ -411,7 +404,7 @@ class DataAnalyzer:
         # =================================================================
         spectrum_tasks = [t for t in tasks if t != "metadata"]
         if spectrum_tasks:
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("PHASE 2: SPECTRUM & BINNING ANALYSIS")
             logger.info(f"  Active tasks: {', '.join(spectrum_tasks)}")
             logger.info("=" * 80)
@@ -423,7 +416,7 @@ class DataAnalyzer:
         self._upload_results_to_s3()
 
         # Final summary
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("COMPREHENSIVE DATA ANALYSIS COMPLETE")
         logger.info("=" * 80)
         logger.info(f"\nAll results saved to: {self.output_dir}")
@@ -438,14 +431,12 @@ class DataAnalyzer:
         sdf: SpectrumDataFrame,
         n_samples: int,
         processor: FoundationalDataProcessor,
-    ):
+    ) -> None:
         """Run metadata analysis phase."""
         # Collect all metadata (dataset + search data) in single dict
         metadata_columns = processor.metadata_columns
         search_columns = (
-            processor.search_data_manager.get_available_columns()
-            if processor.search_data_manager and processor.search_data_manager.is_loaded
-            else []
+            processor.search_data_manager.get_available_columns() if processor.search_data_manager and processor.search_data_manager.is_loaded else []
         )
 
         all_columns = list(metadata_columns) + [f"search_{col}" for col in search_columns]
@@ -477,9 +468,7 @@ class DataAnalyzer:
                     metadata_accumulator[col].extend([None] * len(processed_batch))
 
             if (batch_idx + 1) % log_interval == 0:
-                logger.info(
-                    f"  Metadata collection: {batch_end:,d}/{n_samples:,d} spectra"
-                )
+                logger.info(f"  Metadata collection: {batch_end:,d}/{n_samples:,d} spectra")
 
             # Free temporaries each batch
             del batch_data, processed_batch, collated
@@ -506,7 +495,7 @@ class DataAnalyzer:
         self,
         sdf: SpectrumDataFrame,
         active_tasks: List[str],
-    ):
+    ) -> None:
         """Run per-spectrum analysis phase via SpectrumAnalyser."""
         spectrum_analyzer = SpectrumAnalyser(
             self.config,
@@ -563,7 +552,7 @@ class DataAnalyzer:
 
 
 @hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational")
-def main(cfg: DictConfig):
+def main(cfg: DictConfig) -> None:
     """Main data analysis entry point.
 
     Usage:

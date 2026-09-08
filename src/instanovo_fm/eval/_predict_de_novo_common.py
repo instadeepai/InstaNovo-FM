@@ -49,9 +49,9 @@ CASANOVO_TO_UNIMOD: dict[str, str] = {
 # XuanjiNovo writes modifications as bracketed mass offsets (e.g. "C[+57.021]",
 # "M[+15.995]", "[+42.011]"), both in the upstream model's denovo.tsv that
 # score_xuanjinovo reads and in the residue vocabulary convert_parquet_to_mgf
-# filters against. There used to be a second table for the same masses in
-# unbracketed notation, for an in-repo greedy baseline that no longer exists;
-# both notations produced an identical canonical vocabulary, so one is enough.
+# filters against, so one table serves both. Keep XUANJINOVO_RESIDUES in the
+# same notation: build_model_vocab canonicalises through this mapping, and a
+# residue it cannot look up silently drops out of the vocabulary.
 XUANJINOVO_BRACKETED_TO_UNIMOD: dict[str, str] = {
     "C[+57.021]": "C[UNIMOD:4]",
     "M[+15.995]": "M[UNIMOD:35]",

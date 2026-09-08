@@ -1,12 +1,11 @@
 # Third-party notices
 
 The source code in this repository is licensed under the Apache License 2.0 (see
-[`LICENSE`](LICENSE)). **That licence does not extend to the third-party binary
-packages that installing this project fetches**, some of which are proprietary.
+[`LICENSE.md`](LICENSE.md)). **The licence applies to this project alone. It does not
+cover the third-party binary packages fetched at install time, some of which are
+proprietary.**
 
-This file records the ones whose terms are more restrictive than Apache-2.0, so
-that anyone redistributing a built environment or container image knows what they
-are redistributing.
+This file lists those with terms more restrictive than Apache-2.0.
 
 ## NVIDIA CUDA runtime and kernel libraries — proprietary
 

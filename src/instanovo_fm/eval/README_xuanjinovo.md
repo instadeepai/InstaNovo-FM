@@ -6,14 +6,14 @@ Precise-Mass-Control — on our validation parquets and scores it with the *same
 InstaNovo / Casanovo, so the numbers are directly comparable.
 
 The upstream model needs its own Docker image (torch 2.1 / cu12.1, `ctcdecode`, `imputer-pytorch`),
-which cannot be merged into `Dockerfile.aichor`. So the benchmark is **three steps across two
+which cannot be merged into `docker/Dockerfile.xuanjinovo`. So the benchmark is **three steps across two
 images**, not a single job:
 
 | # | Step | Image | Where |
 |---|------|-------|-------|
-| 1 | parquet → MGF + targets sidecar | `Dockerfile.aichor` (InstaNovo) | any host with the InstaNovo env + access to the validation parquets |
+| 1 | parquet → MGF + targets sidecar | the InstaNovo-FM environment | any host with the InstaNovo env + access to the validation parquets |
 | 2 | XuanjiNovo inference → `denovo.tsv` | `Dockerfile.xuanjinovo` | a single CUDA GPU (we used one 80GB H100) |
-| 3 | join + score → prediction CSV, `summary.json`, results row | `Dockerfile.aichor` (InstaNovo) | anywhere with the InstaNovo env |
+| 3 | join + score → prediction CSV, `summary.json`, results row | the InstaNovo-FM environment | anywhere with the InstaNovo env |
 
 **Paths.** Examples below use local paths for readability. Every path argument also accepts an
 `s3://` URI, with two exceptions noted in [Gotchas](#gotchas). S3 access goes through
@@ -62,10 +62,10 @@ Three directories are used, and only one is ever deleted:
 | checkpoint downloads | `checkpoints/` | written into, never deleted |
 | upstream's output | `/tmp/xuanjinovo` | **wiped at the start of every run** |
 
-The two download directories are relative, so they resolve under the image `WORKDIR` (`/app`) on
-AIchor and under the invocation directory locally — both are already in `.gitignore`. Neither
-persists between AIchor runs, so downloads simply repeat there; locally they persist and the
-checkpoint is reused. The input MGF is always re-downloaded even when present, because step 1
+The two download directories are relative, so they resolve under the image `WORKDIR`
+(`/app`) in a container and under the invocation directory locally — both are already in
+`.gitignore`. A container's filesystem does not persist between runs, so downloads simply
+repeat there; locally they persist and the checkpoint is reused. The input MGF is always re-downloaded even when present, because step 1
 regenerates it under the same filename whenever the dataset changes — reusing it by name is how you
 silently benchmark stale data. A downloaded checkpoint is named after its source URL, so switching
 `XUANJINOVO_CKPT_URL` cannot reuse the previous one.
@@ -151,24 +151,14 @@ uv run pytest tests/unit_test/foundational/test_xuanjinovo.py
 
 ---
 
-## Appendix: running on AIchor (internal)
+## Running it
 
-Steps 1 and 3 run under the normal `instanovo` image; only step 2 needs the image swap. Edit
-`manifest.yaml` — both image references *and* the command:
+The three steps run in different environments; see `docker/README.md`. Steps 1
+and 3 need only the InstaNovo-FM environment. Step 2 needs
+`docker/Dockerfile.xuanjinovo`, which builds the upstream MassNet-DDA source at a
+pinned commit.
 
-```yaml
-builder:
-  image: xuanjinovo
-  dockerfile: ./Dockerfile.xuanjinovo
-spec:
-  image: xuanjinovo
-  command: >
-    python -m instanovo_fm.eval.run_xuanjinovo
-    s3://<your-bucket>/biological_validation_mgf/biological.mgf
-    s3://<your-bucket>/xuanjinovo/biological
-```
-
-Remember to revert `builder`/`spec` to `instanovo` + `./Dockerfile.aichor` afterwards.
-
-`AWS_ENDPOINT_URL` and the AWS keys are already set in the AIchor environment, so `S3FileHandler`
-picks up the Ceph endpoint with no extra configuration.
+Object-storage arguments accept `s3://` URIs and read their endpoint and
+credentials from the standard `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` variables, so any S3-compatible store works. Local paths
+work throughout except where noted in [Gotchas](#gotchas).

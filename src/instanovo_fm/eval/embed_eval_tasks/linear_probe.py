@@ -1425,8 +1425,6 @@ class LinearProbeTask(BaseTask):
         the run log.
         """
         return {
-            "backend": "cuML (GPU)" if _CUML_AVAILABLE else "sklearn (CPU)",
-            "max_iter": getattr(self, "max_iter", None),
             "targets": list(self.targets) if self.targets else [],
             "use_project_split": self.use_project_split,
             "project_key": self.project_key,

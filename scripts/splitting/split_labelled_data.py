@@ -43,6 +43,7 @@ import polars as pl
 import typer
 from huggingface_hub import HfApi, hf_hub_download
 
+from instanovo_fm.utils.hf_token import TOKEN_ENV_VARS
 from scripts.logging_setup import configure_script_logging
 
 app = typer.Typer(
@@ -85,7 +86,22 @@ QUALITY_FILTERS = QualityFilterConfig()
 SEED = 42
 HF_REPO_ID = "InstaDeepAI/InstaNovo"
 REGISTRY_FILENAME = "peptide_registry.parquet"
-REGISTRY_ENV_TOKEN = "INSTANOVO_HF_TOKEN"
+
+
+def _hf_token() -> str | None:
+    """Token for HuggingFace, or None to fall back to any cached login.
+
+    ``INSTANOVO_FM_HF_TOKEN`` is preferred, with ``INSTANOVO_HF_TOKEN`` still read so
+    existing deployments keep working; see ``instanovo_fm.utils.hf_token``. Unlike the
+    release scripts this does not raise when neither is set: the download path works
+    without a token once the dataset is public, and only the upload path needs one.
+    """
+    for name in TOKEN_ENV_VARS:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
 UNIMOD_PATTERN = re.compile(r"\[UNIMOD:\d+\]")
 _SPLITS = ("train", "test", "valid")
 DESIRED_SPLIT_PROPORTIONS: Dict[str, float] = {
@@ -555,7 +571,7 @@ def load_peptide_registry(
                 repo_id=HF_REPO_ID,
                 filename=REGISTRY_FILENAME,
                 repo_type="dataset",
-                token=os.getenv(REGISTRY_ENV_TOKEN),
+                token=_hf_token(),
             )
         )
 
@@ -624,7 +640,7 @@ def save_registry(
                 path_in_repo=REGISTRY_FILENAME,
                 repo_id=HF_REPO_ID,
                 repo_type="dataset",
-                token=os.getenv(REGISTRY_ENV_TOKEN),
+                token=_hf_token(),
             )
             logger.info("Upload successful")
         except Exception as e:

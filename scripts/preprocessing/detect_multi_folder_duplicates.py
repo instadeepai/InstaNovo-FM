@@ -1,57 +1,69 @@
+"""Separate cross-folder duplicates that require manual ownership decisions.
+
+Run this on output from ``detect_all_duplicates.py`` so ambiguous copies in
+different project folders can be reviewed before any deletion.
+
+CLI::
+
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --help
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file preprocessing/outputs/duplicate_files_acfm.txt --output-file multi_folder_duplicates.txt
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file report_a.txt --input-file report_b.txt --output-file multi_folder_duplicates.txt
+
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
+"""
+
+from __future__ import annotations
+
+import logging
 from collections import defaultdict
 from pathlib import Path
+from typing import Annotated, List
+
 import typer
 
-app = typer.Typer(help="Detect multi-folder duplicate files")
+from scripts.logging_setup import configure_script_logging
 
-# Module-level constants to avoid B008 errors
-INPUT_FILE_ARG = typer.Argument(..., help="Input file containing duplicate information")
-OUTPUT_FILE_OPTION = typer.Option(
-    "multi_folder_duplicates.txt",
-    "--output",
-    "-o",
-    help="Output file for multi-folder duplicates",
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-INPUT_FILES_ARG = typer.Argument(
-    ..., help="Input files containing duplicate information"
-)
-OUTPUT_DIR_OPTION = typer.Option(
-    "outputs", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "multi_folder_duplicates", "--prefix", "-p", help="Prefix for output files"
+logger = logging.getLogger(__name__)
+
+app = typer.Typer(
+    help="Detect multi-folder duplicate files",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
 def find_duplicate_files(
     input_file: str, output_file: str = "multi_folder_duplicates.txt"
-) -> None:
-    """Finds and records files that occur in two different folders, as opposed to duplicates within the same folder.
+) -> dict:
+    """Separate ambiguous cross-folder copies for manual resolution.
 
-    This function is designed to run on the output of `detect_all_duplicates`. These multi-folder duplicates must be carefully considered and manually dealt with, since only one folder entry can be the true entry.
+    This consumes ``detect_all_duplicates.py`` output because only one folder
+    entry can represent the intended dataset record.
 
-    Parameters:
-        input_file (str): The duplicate search output file to search for multi-folder duplicate files.
-        output_file (str): The file where multi-folder duplicates will be saved.
+    Args:
+        input_file: Duplicate report to classify by parent folder.
+        output_file: Destination for cross-folder duplicate groups.
+
+    Returns:
+        Mapping of basename to folders for cross-folder duplicates.
+
+    Raises:
+        typer.Exit: If the input report does not exist.
     """
     if not Path(input_file).exists():
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
         raise typer.Exit(1)
 
-    # Dictionary to store file names and their corresponding folders
     file_map = defaultdict(list)
 
-    # Read the input file and organize data
     with open(input_file, "r") as infile:
         for line in infile:
             line = line.strip()
-            if line:  # Skip empty lines
+            if line:
                 folder, file_name = line.rsplit("/", 1)
-                base_name = file_name.split(".", 1)[0]  # Extract name before first dot
+                base_name = file_name.split(".", 1)[0]
                 file_map[base_name].append(folder)
 
-    # Find duplicates
     duplicates = {
         file_name: folders
         for file_name, folders in file_map.items()
@@ -59,11 +71,9 @@ def find_duplicate_files(
     }
 
     if duplicates:
-        # Ensure output directory exists
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write duplicates to the output file
         with open(output_file, "w") as outfile:
             for file_name, folders in duplicates.items():
                 outfile.write(f"File: {file_name}\n")
@@ -71,59 +81,85 @@ def find_duplicate_files(
                 for folder in folders:
                     outfile.write(f"  - {folder}\n")
                 outfile.write("\n")
-        typer.echo(f"Duplicate detection report written to {output_file}")
-        typer.echo(f"Found {len(duplicates)} files with multi-folder duplicates")
+        logger.info(f"Duplicate detection report written to {output_file}")
+        logger.info(f"Found {len(duplicates)} files with multi-folder duplicates")
     else:
-        typer.echo(f"No multi-folder duplicates found in {input_file}.")
+        logger.info(f"No multi-folder duplicates found in {input_file}.")
+
+    return duplicates
 
 
 @app.command()
-def detect_duplicates(
-    input_file: str = INPUT_FILE_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_file: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-file",
+            help="Duplicate report from detect_all_duplicates (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Output file for multi-folder duplicate groups",
+        ),
+    ] = Path("multi_folder_duplicates.txt"),
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Detect multi-folder duplicate files."""
-    if verbose:
-        typer.echo(f"Input file: {input_file}")
-        typer.echo(f"Output file: {output_file}")
+    """Produce a review list of duplicates that cross folder boundaries."""
+    configure_script_logging(verbose=verbose)
 
-    find_duplicate_files(input_file, output_file)
+    logger.debug(f"Input files: {input_file}")
+    logger.debug(f"Output file: {output_file}")
 
+    valid_files = [f for f in input_file if f.exists()]
+    for missing in set(input_file) - set(valid_files):
+        logger.warning(f"Input file '{missing}' does not exist, skipping...")
 
-@app.command()
-def batch_detect(
-    input_files: list[str] = INPUT_FILES_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Detect multi-folder duplicates from multiple input files."""
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    if not valid_files:
+        typer.echo("Error: no valid input files", err=True)
+        raise typer.Exit(1)
 
-    for input_file in input_files:
-        if not Path(input_file).exists():
-            typer.echo(
-                f"Warning: Input file '{input_file}' does not exist, skipping...",
-                err=True,
-            )
+    # Merge classifications from all reports into one output.
+    merged: dict = {}
+    for path in valid_files:
+        logger.debug(f"Processing: {path}")
+        # Write through a temp merge: collect then write once.
+        if not path.exists():
             continue
+        file_map = defaultdict(list)
+        with open(path, "r") as infile:
+            for line in infile:
+                line = line.strip()
+                if line:
+                    folder, file_name = line.rsplit("/", 1)
+                    base_name = file_name.split(".", 1)[0]
+                    file_map[base_name].append(folder)
+        for base_name, folders in file_map.items():
+            if len(folders) > 1:
+                existing = merged.setdefault(base_name, [])
+                for folder in folders:
+                    if folder not in existing:
+                        existing.append(folder)
 
-        output_file = output_path / f"{prefix}_{Path(input_file).stem}.txt"
-        typer.echo(f"Processing: {input_file}")
-        find_duplicate_files(input_file, str(output_file))
-
-
-def main() -> None:
-    """Entry point for the script to detect multi-folder duplicates from a list of all detected duplicates."""
-    # Legacy behavior for backward compatibility
-    input_file = "preprocessing/outputs/duplicate_files_acfm.txt"
-    output_file = "preprocessing/outputs/multi_folder_duplicates_acfm.txt"
-
-    if Path(input_file).exists():
-        find_duplicate_files(input_file, output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    if merged:
+        with open(output_file, "w") as outfile:
+            for file_name, folders in merged.items():
+                outfile.write(f"File: {file_name}\n")
+                outfile.write("Folders:\n")
+                for folder in folders:
+                    outfile.write(f"  - {folder}\n")
+                outfile.write("\n")
+        logger.info(f"Duplicate detection report written to {output_file}")
+        logger.info(f"Found {len(merged)} files with multi-folder duplicates")
     else:
-        typer.echo(f"Warning: Input file '{input_file}' does not exist", err=True)
+        logger.info("No multi-folder duplicates found.")
 
 
 if __name__ == "__main__":

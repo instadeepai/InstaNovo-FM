@@ -28,7 +28,7 @@ Example Usage:
         annotate_dataframe,
         detect_custom_ions
     )
-    
+
     # Generate theoretical spectrum
     mz, annotations = generate_theoretical_spectrum(
         peptide="PEPTIDE",
@@ -37,7 +37,7 @@ Example Usage:
         add_isotopes=True,
         isotope_model="fine"
     )
-    
+
     # Annotate experimental data
     annotated_df = annotate_dataframe(
         df,

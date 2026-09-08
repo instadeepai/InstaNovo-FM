@@ -1,42 +1,49 @@
+"""Delete IPC and Parquet variants listed by a preprocessing validation report.
+
+Run this after reviewing a file list such as the output from
+``find_empty_files.py``; dry-run is available to verify the expanded paths
+before deletion.
+
+CLI::
+
+    uv run python -m scripts.preprocessing.delete_files --help
+    uv run python -m scripts.preprocessing.delete_files --input-file output_files/small_files_hcfm.txt --dry-run
+    uv run python -m scripts.preprocessing.delete_files --input-file report_a.txt --input-file report_b.txt --error-log errors.txt
+
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
+"""
+
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+from typing import Annotated, List
+
 import typer
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="Delete files from a list")
-
-# Module-level constants to avoid B008 errors
-FILE_LIST_ARG = typer.Argument(..., help="File containing list of files to delete")
-ERROR_LOG_OPTION = typer.Option(
-    "error_log.txt", "--error-log", "-e", help="Error log file"
-)
-DRY_RUN_OPTION = typer.Option(
-    False,
-    "--dry-run",
-    "-d",
-    help="Show what would be deleted without actually deleting",
-)
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-FILE_LISTS_ARG = typer.Argument(..., help="Files containing lists of files to delete")
-BATCH_ERROR_LOG_OPTION = typer.Option(
-    "batch_error_log.txt", "--error-log", "-e", help="Error log file"
+app = typer.Typer(
+    help="Delete files from a list",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
 def delete_files_from_list(
     file_list_path: str, error_log_path: str, dry_run: bool = False
 ) -> None:
-    """Deletes files listed in a given text file from the local filesystem and logs errors to a file.
+    """Remove both stored variants of reviewed bad inputs while retaining an audit log.
 
     Args:
-        file_list_path (str): Path to the text file containing file paths to delete.
-        error_log_path (str): Path to the error log file.
-        dry_run (bool): If True, only show what would be deleted without actually deleting.
+        file_list_path: Text file containing paths selected for cleanup.
+        error_log_path: Destination for missing paths and deletion failures.
+        dry_run: Whether to preview without deleting files.
+
+    Raises:
+        typer.Exit: If the input list does not exist.
     """
     if not Path(file_list_path).exists():
         typer.echo(f"Error: File list '{file_list_path}' does not exist", err=True)
@@ -46,19 +53,18 @@ def delete_files_from_list(
         files_to_delete = [line.strip() for line in f.readlines()]
 
     if dry_run:
-        typer.echo("DRY RUN - The following files would be deleted:")
+        logger.info("DRY RUN - The following files would be deleted:")
         for file_path in files_to_delete:
-            typer.echo(f"  {file_path}")
-        typer.echo(f"Total: {len(files_to_delete)} files")
+            logger.info(f"  {file_path}")
+        logger.info(f"Total: {len(files_to_delete)} files")
         return
 
-    # Ensure error log directory exists
-    error_log_path = Path(error_log_path)
-    error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    error_log = Path(error_log_path)
+    error_log.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(error_log_path, "w") as error_log:
+    with open(error_log, "a") as error_log_file:
         for file_path in files_to_delete:
-            base_path = file_path.rsplit(".", 1)[0]  # Remove file extension
+            base_path = file_path.rsplit(".", 1)[0]
             ipc_file = base_path + ".ipc"
             parquet_file = base_path + ".parquet"
 
@@ -71,63 +77,53 @@ def delete_files_from_list(
                     except Exception as e:
                         error_message = f"Error deleting file {file}: {e}\n"
                         logger.error(error_message.strip())
-                        error_log.write(error_message)
+                        error_log_file.write(error_message)
                 else:
                     warning_message = f"File not found, skipping: {file}\n"
                     logger.warning(warning_message.strip())
-                    error_log.write(warning_message)
+                    error_log_file.write(warning_message)
 
 
 @app.command()
-def delete(
-    file_list: str = FILE_LIST_ARG,
-    error_log: str = ERROR_LOG_OPTION,
-    dry_run: bool = DRY_RUN_OPTION,
-    verbose: bool = VERBOSE_OPTION,
+def main(
+    input_file: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-file",
+            help="Text file listing paths to delete (repeatable)",
+        ),
+    ],
+    error_log: Annotated[
+        Path,
+        typer.Option("--error-log", help="Error log file"),
+    ] = Path("error_log.txt"),
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Preview without deleting"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
 ) -> None:
-    """Delete files from a list."""
-    if verbose:
-        typer.echo(f"File list: {file_list}")
-        typer.echo(f"Error log: {error_log}")
-        typer.echo(f"Dry run: {dry_run}")
+    """Apply reviewed cleanup lists to IPC and Parquet variants."""
+    configure_script_logging(verbose=verbose)
 
-    delete_files_from_list(file_list, error_log, dry_run=dry_run)
+    logger.debug(f"Input files: {input_file}")
+    logger.debug(f"Error log: {error_log}")
+    logger.debug(f"Dry run: {dry_run}")
 
+    # Truncate shared error log once at the start of a real run.
+    if not dry_run:
+        error_log.parent.mkdir(parents=True, exist_ok=True)
+        error_log.write_text("")
 
-@app.command()
-def batch_delete(
-    file_lists: list[str] = FILE_LISTS_ARG,
-    error_log: str = BATCH_ERROR_LOG_OPTION,
-    dry_run: bool = DRY_RUN_OPTION,
-) -> None:
-    """Delete files from multiple lists."""
-    for file_list in file_lists:
-        if not Path(file_list).exists():
-            typer.echo(
-                f"Warning: File list '{file_list}' does not exist, skipping...",
-                err=True,
-            )
+    for path in input_file:
+        if not path.exists():
+            logger.warning(f"File list '{path}' does not exist, skipping...")
             continue
-
-        typer.echo(f"Processing file list: {file_list}")
-        delete_files_from_list(file_list, error_log, dry_run=dry_run)
-
-
-def main() -> None:
-    """Entry point for deleting empty files."""
-    # Legacy behavior for backward compatibility
-    empty_files_lists = [
-        "output_files/small_files_hcfm.txt",
-        "output_files/small_files_mcfm.txt",
-    ]
-    error_log_path = "output_files/error_log.txt"
-
-    for file_list in empty_files_lists:
-        if Path(file_list).exists():
-            typer.echo(f"Processing: {file_list}")
-            delete_files_from_list(file_list, error_log_path)
-        else:
-            typer.echo(f"Warning: File list '{file_list}' does not exist", err=True)
+        logger.info(f"Processing file list: {path}")
+        delete_files_from_list(str(path), str(error_log), dry_run=dry_run)
 
 
 if __name__ == "__main__":

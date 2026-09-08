@@ -1,165 +1,169 @@
-import polars as pl
-from tqdm import tqdm
-import logging
-from typing import List
-from pathlib import Path
-import glob
-import typer
-import os
+"""Find empty IPC files before they cause failures in later preprocessing.
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+Run this validation after collecting IPC data and before conversion.
+
+CLI::
+
+    uv run python -m scripts.preprocessing.find_empty_files --help
+    uv run python -m scripts.preprocessing.find_empty_files --input-dir <data-root>/acfm --output-file empty_files.txt
+    uv run python -m scripts.preprocessing.find_empty_files --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file empty_files.txt
+
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
+"""
+
+from __future__ import annotations
+
+import glob
+import logging
+import os
+from pathlib import Path
+from typing import Annotated, List
+
+import polars as pl
+import typer
+from tqdm import tqdm
+
+from scripts.logging_setup import configure_script_logging
+
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="Find empty or small files in local directories")
-
-# Module-level constants to avoid B008 errors
-SOURCE_DIR_ARG = typer.Argument(..., help="Source directory to search")
-OUTPUT_FILE_OPTION = typer.Option(
-    "empty_files.txt", "--output", "-o", help="Output file for empty files"
-)
-FILE_PATTERN_OPTION = typer.Option(
-    "**/*.ipc", "--pattern", "-p", help="File pattern to match"
-)
-MIN_SIZE_OPTION = typer.Option(0, "--min-size", "-s", help="Minimum file size in bytes")
-VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-DIRECTORIES_ARG = typer.Argument(..., help="Directories to check for empty files")
-OUTPUT_DIR_OPTION = typer.Option(
-    "output_files", "--output-dir", "-o", help="Output directory for results"
-)
-PREFIX_OPTION = typer.Option(
-    "small_files", "--prefix", "-p", help="Prefix for output files"
+app = typer.Typer(
+    help="Find empty or small files in local directories",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
 
 def find_files(input_dir: str, file_pattern: str) -> list[str]:
-    """Find files in a local directory that match a specified pattern."""
+    """Provide the candidate files that an emptiness check should inspect.
+
+    Args:
+        input_dir: Root directory for the search.
+        file_pattern: Recursive glob selecting candidate files.
+
+    Returns:
+        Paths matching the requested pattern.
+    """
     search_pattern = Path(input_dir) / file_pattern
     matched_files = glob.glob(str(search_pattern), recursive=True)
     return matched_files
 
 
 def check_if_empty(file_path: str, flagged_files: list[str]) -> list[str]:
-    """Check if the file is empty."""
+    """Accumulate empty IPC paths for a report without interrupting the scan.
+
+    Args:
+        file_path: IPC file to inspect.
+        flagged_files: Existing collection of empty file paths.
+
+    Returns:
+        The collection, including the input path when its IPC table is empty.
+    """
     lf = pl.scan_ipc(file_path)
-    if lf.first().collect().is_empty():  # an empty file
+    if lf.first().collect().is_empty():
         flagged_files.append(file_path)
     return flagged_files
 
 
 def flag_small_files_in_dir(
     source_dir: str,
-    output_file: str,
     file_pattern: str = "**/*.ipc",
     min_size_bytes: int = 0,
     verbose: bool = False,
-) -> None:
-    """Flags IPC files smaller than a specified size threshold in a directory recursively.
+) -> list[str]:
+    """Scan one directory and return paths of empty IPC files.
 
     Args:
-        source_dir (str): Path to the source directory to search for files.
-        output_file (str): Path to the output file to save flagged file details.
-        file_pattern (str): Glob pattern for file matching
-        min_size_bytes (int): Minimum file size in bytes
-        verbose (bool): Enable verbose output
+        source_dir: Directory tree containing IPC files.
+        file_pattern: Glob selecting files to inspect.
+        min_size_bytes: Requested size threshold retained for CLI compatibility.
+        verbose: Whether to print scan details.
+
+    Returns:
+        Paths of empty IPC files under ``source_dir``.
     """
-    # Check if directory exists
     if not os.path.exists(source_dir):
         typer.echo(f"Error: Directory '{source_dir}' does not exist", err=True)
         raise typer.Exit(1)
 
-    if verbose:
-        typer.echo(f"Searching for files in: {source_dir}")
-        typer.echo(f"File pattern: {file_pattern}")
-        typer.echo(f"Minimum size: {min_size_bytes} bytes")
-        typer.echo(f"Output file: {output_file}")
+    logger.debug(f"Searching for files in: {source_dir}")
+    logger.debug(f"File pattern: {file_pattern}")
+    logger.debug(f"Minimum size: {min_size_bytes} bytes")
 
-    matched_files = find_files(
-        input_dir=source_dir,
-        file_pattern=file_pattern,
-    )
+    matched_files = find_files(input_dir=source_dir, file_pattern=file_pattern)
 
-    if verbose:
-        typer.echo(f"Found {len(matched_files)} files to check")
+    logger.debug(f"Found {len(matched_files)} files to check")
 
     flagged_files: list[str] = []
-
     for file in tqdm(matched_files, unit="file"):
         if verbose:
-            logger.info(f"Processing file: {file}")
+            logger.debug(f"Processing file: {file}")
         try:
             flagged_files = check_if_empty(file, flagged_files)
         except Exception as e:
-            typer.echo(f"Error checking file {file}: {e}", err=True)
+            logger.error(f"Error checking file {file}: {e}")
 
-    # Report flagged files
-    if flagged_files:
-        # Ensure output directory exists
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    return flagged_files
 
+
+@app.command()
+def main(
+    input_dir: Annotated[
+        List[Path],
+        typer.Option(
+            "--input-dir",
+            "-i",
+            help="Dataset tree to search (repeatable)",
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Option(
+            "--output-file",
+            "-o",
+            help="Output file for empty file paths",
+        ),
+    ] = Path("empty_files.txt"),
+    pattern: Annotated[
+        str,
+        typer.Option("--pattern", help="File pattern to match"),
+    ] = "**/*.ipc",
+    min_size: Annotated[
+        int,
+        typer.Option("--min-size", help="Minimum file size in bytes (CLI compatibility)"),
+    ] = 0,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
+) -> None:
+    """Report unusable IPC files before conversion."""
+    configure_script_logging(verbose=verbose)
+
+    logger.debug(f"Output file: {output_file}")
+
+    all_flagged: list[str] = []
+    for directory in input_dir:
+        if not directory.exists():
+            logger.warning(f"Directory '{directory}' does not exist, skipping...")
+            continue
+        logger.info(f"Checking empty files in: {directory}")
+        all_flagged.extend(
+            flag_small_files_in_dir(
+                source_dir=str(directory),
+                file_pattern=pattern,
+                min_size_bytes=min_size,
+                verbose=verbose,
+            )
+        )
+
+    if all_flagged:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "w") as f:
-            f.writelines(file_path + "\n" for file_path in flagged_files)
-        typer.echo(
-            f"Flagged {len(flagged_files)} files have been saved to {output_file}"
-        )
+            f.writelines(path + "\n" for path in all_flagged)
+        logger.info(f"Flagged {len(all_flagged)} files have been saved to {output_file}")
     else:
-        typer.echo("No empty files found.")
-
-
-@app.command()
-def find_empty(
-    source_dir: str = SOURCE_DIR_ARG,
-    output_file: str = OUTPUT_FILE_OPTION,
-    file_pattern: str = FILE_PATTERN_OPTION,
-    min_size: int = MIN_SIZE_OPTION,
-    verbose: bool = VERBOSE_OPTION,
-) -> None:
-    """Find empty or small files in local directories."""
-    flag_small_files_in_dir(
-        source_dir=source_dir,
-        output_file=output_file,
-        file_pattern=file_pattern,
-        min_size_bytes=min_size,
-        verbose=verbose,
-    )
-
-
-@app.command()
-def batch_find_empty(
-    directories: List[str] = DIRECTORIES_ARG,
-    output_dir: str = OUTPUT_DIR_OPTION,
-    file_pattern: str = FILE_PATTERN_OPTION,
-    prefix: str = PREFIX_OPTION,
-) -> None:
-    """Find empty files in multiple directories."""
-    from pathlib import Path
-
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for directory in directories:
-        output_file = output_path / f"{prefix}_{Path(directory).name}.txt"
-        typer.echo(f"Checking empty files in: {directory}")
-        flag_small_files_in_dir(
-            source_dir=directory,
-            output_file=str(output_file),
-            file_pattern=file_pattern,
-        )
-
-
-def main() -> None:
-    """Entry point for the script to find empty ipc files."""
-    # Legacy behavior for backward compatibility
-    directories = ["hcfm", "mcfm", "lcfm", "acfm"]
-    output_dir = "output_files"
-
-    for directory in directories:
-        output_file = f"{output_dir}/small_files_{directory}.txt"
-        typer.echo(f"Checking empty files in: {directory}")
-        flag_small_files_in_dir(directory, output_file)
+        logger.info("No empty files found.")
 
 
 if __name__ == "__main__":

@@ -33,13 +33,12 @@ dependencies = [
   "pyarrow==22.0.0",
   "pandas>=2.2.3",
   "numpy==2.2.6",
-  "typer==0.15.1",     # raised from the internal 0.12.5: instanovo 1.2.2 requires >=0.15.1
-  # Capped below 8.2: click 8.2 made `Parameter.make_metavar()` take a required
-  # `ctx` argument, which typer 0.15.1 does not pass. Uncapped, this resolves to
-  # click 8.5 and every `--help` that renders an options panel raises TypeError --
-  # including `instanovo-fm evaluate --help` and instanovo's own CLI. Lifting the
-  # cap needs typer >= 0.16, which instanovo 1.2.2 was not built against.
-  "click>=8.1.7,<8.2",
+  # instanovo 1.2.2 requires >=0.15.1, and click 8.2 made
+  # `Parameter.make_metavar()` take a required `ctx` argument that typer 0.15.1
+  # does not pass -- every `--help` rendering an options panel raised TypeError.
+  # 0.27 passes it, so click needs no upper cap.
+  "typer==0.27.2",
+  "click>=8.1.7",
   "tqdm>=4.67.0",
   "pyyaml>=6.0.2",
   "numba>=0.60.0",          # instanovo_fm.utils.lsh; 0.60 added numpy-2.0 support
@@ -111,8 +110,10 @@ dev = [
   "openpyxl>=3.1.5",
   # Pinned to the versions .pre-commit-config.yaml uses, so a local
   # pre-commit run and CI cannot disagree about what passes.
+  "pre-commit>=4.0.0",
   "ruff==0.6.9",
   "mypy==1.11.2",
+  "types-PyYAML",
 ]
 
 [tool.uv]
@@ -137,10 +138,10 @@ src = ["src", "scripts"]
 [tool.ruff.format]
 # Formatting would rewrite the ported files wholesale; they are kept diffable
 # against their originals in the internal repo.
-exclude = ["scripts/**", "tests/scripts_test/**", "tests/unit_test/**", "src/instanovo_fm/**", "docker/**"]
+exclude = ["scripts/**", "tests/scripts/**", "tests/unit_test/**", "src/instanovo_fm/**", "docker/**"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "T20"]
 
 # scripts/ is a faithful port of the dataset pipeline from the internal repo and
 # src/instanovo_fm/utils/lsh.py is vendored verbatim. Both are kept diffable
@@ -152,12 +153,12 @@ select = ["E", "F", "W", "I", "UP", "B", "C4"]
 # trade worth making. New code under src/ and tests/ is held to the full set.
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["UP", "I001", "E501", "B904", "B905"]
-# tests/scripts_test/ is the ported suite; same reasoning as scripts/.
-# E402: test_splitting.py's module-level skip guard has to run before the
-# imports it protects, so those imports cannot sit at the top of the file.
+# tests/scripts/ and tests/unit_test/foundational/ are the ported suites; same
+# reasoning as scripts/. E402: some tests keep skip guards before the imports
+# they protect, so those imports cannot sit at the top of the file.
 "tests/unit_test/foundational/**" = ["UP", "I001", "E501", "E402", "E7", "W2", "W3",
                                     "F401", "F541", "F722", "F841", "B", "C4", "E4"]
-"tests/scripts_test/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
+"tests/scripts/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
 # tests/unit_test/downstream_denovo_test/ is the ported de novo suite; same
 # reasoning as the two above. Only E501 fires, so only E501 is ignored.
 "tests/unit_test/downstream_denovo_test/**" = ["E501"]
@@ -173,8 +174,12 @@ select = ["E", "F", "W", "I", "UP", "B", "C4"]
 # (Float[Tensor, "B"] in model/heads.py), which carries a noqa. Ignoring it
 # package-wide would hide genuine undefined names across 65k lines.
 # W29x/E702/F401 are formatting and unused-import noise across 65k ported lines.
+# T20 asks for logging instead of print, which fires 66 times across the ported
+# analysers and their CLI entry points. Rewriting their output plumbing is the
+# same trade the rest of this list declines; scripts/ satisfies the rule with
+# per-line noqa, which would mean 66 edits to files kept diffable.
 "src/instanovo_fm/**" = ["UP", "I001", "I002", "E501", "E402", "E7", "W2", "W3",
-                         "F401", "F541", "F722", "F841", "B", "C4", "E4"]
+                         "F401", "F541", "F722", "F841", "B", "C4", "E4", "T20"]
 
 [tool.mypy]
 python_version = "3.10"

@@ -2,18 +2,20 @@ r"""Add a Universal Spectrum Identifier (USI) column to labelled parquet files.
 
 Each row gets a string compatible with the PSI USI specification
 (https://www.psidev.info/usi), built with :class:`pyteomics.usi.USI`.
+Run after labelled parquets exist so downstream tools can cite spectra by
+dataset, file, and scan.
 
 Sequences that contain internal tokens such as ``[IN:…]`` are not strict ProForma;
 they are copied into the interpretation segment as-is and may not resolve in
 public PROXI services until converted to UNIMOD-style ProForma.
 
-USAGE:
-======
-python scripts/verification/add_usi_column.py \\
-    --input-dir <data-root>/lcfm/
+CLI::
 
-python scripts/verification/add_usi_column.py \\
-    -i <data-root>/lcfm/ --project PXD009449 --dry-run
+    uv run python -m scripts.verification.add_usi_column --help
+    uv run python -m scripts.verification.add_usi_column \
+        --input-dir <data-root>/lcfm/
+    uv run python -m scripts.verification.add_usi_column \
+        -i <data-root>/lcfm/ --project PXD009449 --dry-run
 """
 
 from __future__ import annotations
@@ -36,11 +38,14 @@ from scripts.verification.verify_calc_mz import (
 )
 from scripts.preprocessing.parquet_io import search_data_lookup_key
 
-app = typer.Typer(help="Add USI column to labelled parquet datasets")
+from scripts.logging_setup import configure_script_logging
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+app = typer.Typer(
+    help="Add USI column to labelled parquet datasets",
+    no_args_is_help=True,
+    add_completion=False,
 )
+
 logger = logging.getLogger(__name__)
 
 INPUT_DIR_OPTION = typer.Option(
@@ -61,7 +66,7 @@ DRY_RUN_OPTION = typer.Option(
     "-n",
     help="Log actions without modifying files",
 )
-VERBOSE_OPTION = typer.Option(False, "--verbose", help="Debug logging")
+VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Debug logging")
 OVERWRITE_OPTION = typer.Option(
     True,
     "--overwrite/--no-overwrite",
@@ -79,7 +84,14 @@ _SCAN_NUM_RE = re.compile(r"scan=(\d+)", re.IGNORECASE)
 
 
 def extract_pxd_or_msv_accession(filepath: str | None) -> Optional[str]:
-    """Return first ProteomeXchange- or MassIVE-style accession in the path string."""
+    """Fill the USI collection field from a ProteomeXchange or MassIVE accession in the path.
+
+    Args:
+        filepath: Path that should contain a ``PXD######`` or ``MSV######`` token.
+
+    Returns:
+        The first matching accession, or None when the locator cannot be formed.
+    """
     if filepath is None:
         return None
     m = _PXD_RE.search(str(filepath))
@@ -92,10 +104,16 @@ def extract_pxd_or_msv_accession(filepath: str | None) -> Optional[str]:
 
 
 def normalize_scan_identifier(scan: Any) -> Optional[str]:
-    """Parse the ``scan`` column to a numeric string for the USI.
+    """Turn vendor scan text into the numeric scan id required by a USI.
 
     Accepts plain integers/strings of digits, or vendor text such as
     ``controllerType=0 controllerNumber=1 scan=1321`` (Thermo-style).
+
+    Args:
+        scan: Value from the parquet ``scan`` column.
+
+    Returns:
+        A numeric scan string, or None when the row cannot be located.
     """
     if scan is None:
         return None
@@ -113,12 +131,7 @@ def normalize_scan_identifier(scan: Any) -> Optional[str]:
 def _interpretation_from_sequence_and_charge(
     sequence: str | None, precursor_charge: Any
 ) -> Optional[str]:
-    """Build the interpretation string for the USI.
-
-    If the sequence is None (unlabelled data), return None.
-    If the precursor charge is None or 0 (DIA data), return the sequence only.
-    If the sequence is not None and the precursor charge is not None or 0 (DDA data), return the sequence and charge as a string.
-    """
+    """Omit charge on DIA (null/0) so the USI interpretation is not ``/0``."""
     if sequence is None:
         return None
     if precursor_charge is None or precursor_charge == 0:
@@ -137,10 +150,20 @@ def build_usi_string(
     precursor_charge: Any,
     scan_identifier_type: str = "scan",
 ) -> Optional[str]:
-    """Build USI string for one row, or None if required locator fields are missing.
+    """Assemble one PSI USI, or skip the row when locator fields are incomplete.
 
     The USI ``datafile`` field uses the same canonical experiment basename as the
     parquet ``experiment_name`` column (shard and ``.mzml`` suffixes stripped).
+
+    Args:
+        filepath: Path used for collection accession and experiment stem.
+        scan: Scan locator from the parquet row.
+        sequence: Peptide string for the interpretation segment, if labelled.
+        precursor_charge: Charge for DDA interpretation; omitted when null or 0 (DIA).
+        scan_identifier_type: USI scan type (``scan``, ``index``, ``nativeId``, or ``trace``).
+
+    Returns:
+        A USI string, or None so the parquet can still be written with a null ``usi``.
     """
     if filepath is None:
         return None
@@ -181,7 +204,7 @@ def build_usi_string(
 
 @dataclass
 class AddUsiStats:
-    """Counters for add-usi-column run."""
+    """Summarise how many files and rows received a USI so a run can be audited."""
 
     files_processed: int = 0
     files_skipped_missing_cols: int = 0
@@ -191,6 +214,7 @@ class AddUsiStats:
 
 
 def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
+    """Replace the parquet only after a full write so a crash cannot leave a truncated file."""
     temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=file_path.parent)
     os.close(temp_fd)
     temp_path = Path(temp_path_str)
@@ -206,7 +230,7 @@ def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
 def _add_usi_series(
     df: pl.DataFrame, default_filepath: str, scan_identifier_type: str
 ) -> pl.Series:
-    """Add the USI column to the dataframe."""
+    """Prefer per-row ``filepath`` when present so USIs follow the original mzML, not the parquet path."""
     if "scan" not in df.columns:
         raise ValueError("Cannot add USI column: missing scan column")
 
@@ -235,7 +259,15 @@ def process_parquet_file(
     dry_run: bool,
     stats: AddUsiStats,
 ) -> None:
-    """Process one parquet file, adding a ``usi`` column."""
+    """Write a ``usi`` column into one parquet, skipping files that cannot support it.
+
+    Args:
+        file_path: Parquet to update.
+        scan_identifier_type: USI scan identifier type passed through to each row.
+        overwrite: Replace an existing ``usi`` column when True.
+        dry_run: Log the intended write without modifying the file.
+        stats: Run counters updated in place for the final summary.
+    """
     schema = pl.scan_parquet(str(file_path)).collect_schema()
     if "scan" not in schema:
         logger.info("Skipping %s: missing scan", file_path)
@@ -268,7 +300,18 @@ def run_add_usi(
     overwrite: bool,
     dry_run: bool,
 ) -> AddUsiStats:
-    """Process all parquet files in the input directory, adding a ``usi`` column."""
+    """Walk project folders so every labelled parquet can receive a USI.
+
+    Args:
+        input_dir: Root whose project subfolders contain parquet files.
+        projects: Restrict processing to these folder names; all projects when None.
+        scan_identifier_type: USI scan identifier type for every row.
+        overwrite: Replace existing ``usi`` columns when True.
+        dry_run: Preview writes without changing files.
+
+    Returns:
+        Counters for processed files, skips, and rows written.
+    """
     stats = AddUsiStats()
     input_str = str(input_dir)
 
@@ -314,14 +357,22 @@ def main(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Add a ``usi`` column to every parquet under each project."""
+    """Add a PSI USI column to labelled parquets so spectra can be cited by dataset, file, and scan.
+
+    Args:
+        input_dir: Root directory containing parquet files under project subfolders.
+        projects: Optional project folder names to restrict the run.
+        scan_type: USI scan identifier type: scan, index, nativeId, or trace.
+        overwrite: Replace an existing ``usi`` column (default: overwrite).
+        dry_run: Log actions without modifying files.
+        verbose: Enable debug logging.
+    """
     if scan_type not in ("scan", "index", "nativeId", "trace"):
         raise typer.BadParameter(
             "scan_type must be one of: scan, index, nativeId, trace"
         )
 
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     run_add_usi(
         input_dir=input_dir,

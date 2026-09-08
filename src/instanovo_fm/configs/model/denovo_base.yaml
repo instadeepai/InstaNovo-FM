@@ -21,10 +21,10 @@ use_meta_token: False
 meta_token:
   enabled: False  # Use meta token for precursor/metadata encoding
   n_freq: 16     # Number of Fourier frequencies for continuous features
-  
+
   # Continuous feature bounds
   precursor_mass_max: 6500.0  # Maximum precursor mass in Da (observed max in data)
-  
+
   # Feature inclusion flags
   include_frag_type: True           # Fragmentation type (HCD, CID, ETD, HCID)
   include_instrument: True          # Instrument model (20 categories)

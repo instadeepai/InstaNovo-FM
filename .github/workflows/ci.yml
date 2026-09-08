@@ -14,8 +14,14 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --group dev --python 3.11
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      # Same suite as a local `pre-commit run --all-files`: ruff, ruff-format,
+      # mypy, and the pre-commit-hooks file checks. Versions stay pinned in
+      # pyproject.toml / .pre-commit-config.yaml so CI and local cannot drift.
+      - run: uv run pre-commit run --all-files
 
   test:
     runs-on: ubuntu-latest

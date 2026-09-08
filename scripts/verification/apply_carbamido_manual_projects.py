@@ -1,5 +1,8 @@
 r"""Manually carbamidomethylate bare cysteines in parquet sequences for named projects.
 
+Use this when you already know which project folders need C[UNIMOD:4] and do
+not want to wait on a verify_calc_mz CSV.
+
 Rewrites the ``sequence`` column the same way as
 ``apply_carbamido_from_calc_mz_report.py`` (bare ``C`` -> ``C[UNIMOD:4]``), but
 you choose which project subfolders under ``--input-dir`` to process — no
@@ -7,14 +10,14 @@ verify_calc_mz CSV. All parquet files under each project are processed, includin
 DIA parquets where ``precursor_charge`` is zero or null (every row is rewritten
 when the sequence contains bare cysteines).
 
-USAGE:
-======
-python scripts/verification/apply_carbamido_manual_projects.py \\
-    --input-dir <data-root>/lcfm/ \\
-    --project my_dataset_a --project my_dataset_b
+CLI::
 
-python scripts/verification/apply_carbamido_manual_projects.py \\
-    -i <data-root>/lcfm/ -p proj1 -p proj2 --dry-run
+    uv run python -m scripts.verification.apply_carbamido_manual_projects --help
+    uv run python -m scripts.verification.apply_carbamido_manual_projects \
+        --input-dir <data-root>/lcfm/ \
+        --project my_dataset_a --project my_dataset_b
+    uv run python -m scripts.verification.apply_carbamido_manual_projects \
+        -i <data-root>/lcfm/ -p proj1 -p proj2 --dry-run
 """
 
 from __future__ import annotations
@@ -30,13 +33,14 @@ from scripts.verification.apply_carbamido_from_calc_mz_report import (
 )
 from scripts.verification.verify_calc_mz import find_parquet_files_in_project
 
+from scripts.logging_setup import configure_script_logging
+
 app = typer.Typer(
-    help="Carbamidomethylate sequences for explicitly listed project folders"
+    help="Carbamidomethylate sequences for explicitly listed project folders",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 INPUT_DIR_OPTION = typer.Option(
@@ -57,7 +61,7 @@ DRY_RUN_OPTION = typer.Option(
     "-n",
     help="Log actions without writing files",
 )
-VERBOSE_OPTION = typer.Option(False, "--verbose", help="Debug logging")
+VERBOSE_OPTION = typer.Option(False, "--verbose", "-v", help="Debug logging")
 
 
 def run_manual(
@@ -65,7 +69,16 @@ def run_manual(
     projects: list[str],
     dry_run: bool,
 ) -> ApplyCarbStats:
-    """Select projects from report and apply carbamidomethylation to their parquets."""
+    """Carbamidomethylate unmodified cysteines in caller-chosen project folders, including DIA parquets.
+
+    Args:
+        input_dir: Root with per-project parquet subfolders.
+        projects: Project folder names to rewrite (no CSV gate).
+        dry_run: Preview writes without modifying files.
+
+    Returns:
+        Counters shared with the report-driven CAM script.
+    """
     stats = ApplyCarbStats()
     stats.projects_selected = len(projects)
 
@@ -104,12 +117,18 @@ def main(
     dry_run: bool = DRY_RUN_OPTION,
     verbose: bool = VERBOSE_OPTION,
 ) -> None:
-    """Apply C[UNIMOD:4] to sequences for the given project names."""
+    """Apply C[UNIMOD:4] to sequences for listed projects without requiring a calc-mz report.
+
+    Args:
+        input_dir: Root directory containing parquet files under project subfolders.
+        projects: Project folder names under input-dir (repeat for multiple).
+        dry_run: Log actions without writing files.
+        verbose: Enable debug logging.
+    """
     if not projects:
         raise typer.BadParameter("Pass at least one --project / -p.")
 
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    configure_script_logging(verbose=verbose)
 
     run_manual(input_dir=input_dir, projects=projects, dry_run=dry_run)
 

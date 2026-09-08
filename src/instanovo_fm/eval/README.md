@@ -96,14 +96,14 @@ evaluation:
   output_dir: "./evaluation_results"
   data_subset: 1.0  # 1.0 = 100%, 0.1 = 10%
   force_regenerate_embeddings: False
-  
+
   # Tasks to run (null = all tasks)
   tasks_to_run:
     - embeddinganalysistask
     - duplicateretrievaltask
     - chargelinearprobetask
     - rtlinearprobetask
-  
+
   # Task-specific configurations
   task_configs:
     embeddinganalysistask:
@@ -138,7 +138,7 @@ python -m instanovo_fm.eval.embed_evaluation \
     evaluation.tasks_to_run=[duplicateretrievaltask,embeddinganalysistask]
 ```
 
-**Expected time:** ~2-5 minutes  
+**Expected time:** ~2-5 minutes
 **Purpose:** Verify embeddings are meaningful (not collapsed)
 
 ### Pattern 2: Comprehensive Evaluation
@@ -151,7 +151,7 @@ python -m instanovo_fm.eval.embed_evaluation \
     resume_checkpoint_path=model_best.ckpt
 ```
 
-**Expected time:** ~30-60 minutes (depending on dataset size)  
+**Expected time:** ~30-60 minutes (depending on dataset size)
 **Purpose:** Full evaluation for paper/report
 
 ### Pattern 3: Specific Task with Custom Config
@@ -406,18 +406,18 @@ for ckpt_path in checkpoints:
     print(f"\n{'='*80}")
     print(f"Evaluating: {ckpt_path}")
     print('='*80)
-    
+
     # Update checkpoint path
     config.resume_checkpoint_path = ckpt_path
-    
+
     # Update output directory
     run_name = Path(ckpt_path).parent.name
     config.evaluation.output_dir = f"./evaluation_results/{run_name}"
-    
+
     # Run evaluation
     evaluator = EmbeddingEvaluator(config)
     results = evaluator.evaluate(split="valid")
-    
+
     print(f"✓ {ckpt_path} complete")
 ```
 
@@ -569,6 +569,3 @@ If you use this evaluation framework, please cite:
   url={https://github.com/...}
 }
 ```
-
-
-

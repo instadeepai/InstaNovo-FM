@@ -417,7 +417,7 @@ def load_aquisitions_from_search_data(
         .unique()
     )
 
-    logger.info(f"Found {len(dda_projects)} DIA files in search data")
+    logger.info(f"Found {len(dda_projects)} DDA files in search data")
 
     check_conflicting_acquistions(dia_df=dia_projects, dda_df=dda_projects)
 
@@ -433,6 +433,40 @@ class FilePrecursorChargeErrors:
     error_type: str
     num_error_rows: int
     total_rows: int
+
+
+FILE_PRECURSOR_CHARGE_ERROR_SCHEMA: dict[str, pl.DataType] = {
+    "filename": pl.String,
+    "project": pl.String,
+    "error_type": pl.String,
+    "num_error_rows": pl.Int64,
+    "total_rows": pl.Int64,
+}
+
+
+def errors_to_dataframe(
+    errors: List[FilePrecursorChargeErrors],
+) -> pl.DataFrame:
+    """Keep empty DIA/DDA sides schema-compatible for concat and CSV writes.
+
+    ``pl.DataFrame([])`` has no columns, so concatenating with a non-empty
+    sibling fails when only one acquisition type has issues.
+    """
+    if not errors:
+        return pl.DataFrame(schema=FILE_PRECURSOR_CHARGE_ERROR_SCHEMA)
+    return pl.DataFrame(
+        [
+            {
+                "filename": e.filename,
+                "project": e.project,
+                "error_type": e.error_type,
+                "num_error_rows": e.num_error_rows,
+                "total_rows": e.total_rows,
+            }
+            for e in errors
+        ],
+        schema=FILE_PRECURSOR_CHARGE_ERROR_SCHEMA,
+    )
 
 
 def _check_dda_file_precursor_charges(
@@ -720,8 +754,8 @@ def analyze_precursor_charges(
                 )
             )
 
-    incorrect_dia_df = pl.DataFrame(incorrect_dia_files)
-    incorrect_dda_df = pl.DataFrame(incorrect_dda_files)
+    incorrect_dia_df = errors_to_dataframe(incorrect_dia_files)
+    incorrect_dda_df = errors_to_dataframe(incorrect_dda_files)
 
     project_level_summary = check_if_all_files_in_project_have_errors(
         data_files, incorrect_dia_df, incorrect_dda_df, search_data_files

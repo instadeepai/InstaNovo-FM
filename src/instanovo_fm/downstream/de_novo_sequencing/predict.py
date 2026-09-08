@@ -8,7 +8,7 @@ from instanovo.__init__ import console
 from instanovo_fm.common import DataProcessor
 from instanovo_fm.downstream.de_novo_sequencing.data import DownstreamDeNovoDataProcessor
 from instanovo_fm.downstream.de_novo_sequencing.model import DownstreamDeNovo
-from instanovo.transformer.predict import TransformerPredictor
+from instanovo_fm.baselines.transformer_predict import TransformerPredictor
 from instanovo.utils.colorlogging import ColorLog
 
 logger = ColorLog(console, __name__).logger

@@ -1,6 +1,6 @@
 [project]
 name = "instanovo-fm"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "InstaNovo-FM: a self-supervised foundation model for tandem mass spectra"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -126,9 +126,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/instanovo_fm"]
 
-[tool.hatch.build.targets.wheel.force-include]
-# Hydra configs ship with the package so a pip install is usable.
-"src/instanovo_fm/configs" = "instanovo_fm/configs"
+# No force-include table here. `packages` above already takes everything inside
+# the package directory, data files included, so naming configs/ or models.json
+# again would add them twice and hatchling fails the wheel build on that:
+#   ValueError: A second file is being added to the wheel archive at the same
+#   path: `instanovo_fm/configs/denovo.yaml`
+# tests/test_wheel_contents.py checks they reach the wheel.
 
 [tool.ruff]
 line-length = 100
@@ -190,3 +193,7 @@ ignore_missing_imports = true
 # import through `scripts.preprocessing...` exactly as they did internally.
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+  # Builds a wheel, so it costs a few seconds. Deselect with `-m "not slow"`.
+  "slow: exercises the packaging pipeline rather than the library",
+]

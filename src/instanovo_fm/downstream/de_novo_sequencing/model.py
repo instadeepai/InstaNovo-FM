@@ -42,7 +42,10 @@ from instanovo.utils.colorlogging import ColorLog
 from instanovo.utils.file_downloader import download_file
 from instanovo.utils.residues import ResidueSet
 
-MODEL_TYPE = "transformer"
+# This model's own checkpoint family in models.json. It must not be the
+# `transformer` family, which holds InstaNovo's checkpoints -- a different
+# architecture from the one load() builds.
+MODEL_TYPE = "downstream_denovo"
 
 
 logger = ColorLog(console, __name__).logger
@@ -214,7 +217,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
     def get_pretrained() -> list[str]:
         """Get a list of pretrained model ids."""
         # Load the models.json file
-        with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+        with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 
         if MODEL_TYPE not in models_config:
@@ -222,11 +225,46 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
 
         return list(models_config[MODEL_TYPE].keys())
 
+    @staticmethod
+    def describe_pretrained(model_id: Optional[str] = None) -> Dict[str, Any]:
+        """Describe the registered pretrained checkpoints.
+
+        ``get_pretrained`` returns ids alone, which is thin when the checkpoints
+        differ only by training corpus, masking strategy and whether the pairwise
+        attention bias is on. This returns what the registry records about each --
+        the download URL and, where the paper states them, the architecture and
+        the training budget -- so a caller can choose without opening models.json.
+
+        Args:
+            model_id: A registered id. Omit it to describe every checkpoint.
+
+        Returns:
+            The entry for ``model_id``, or a mapping of every id to its entry when
+            ``model_id`` is None. Empty if the registry is missing or unreadable.
+
+        Raises:
+            ValueError: If ``model_id`` is given and is not registered.
+        """
+        try:
+            with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
+                models_config = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            models_config = {}
+
+        models: Dict[str, Any] = models_config.get(MODEL_TYPE, {})
+        if model_id is None:
+            return {name: dict(info) for name, info in models.items()}
+
+        if model_id not in models:
+            raise ValueError(f"Model {model_id} not found in models.json. Available {MODEL_TYPE} models: {list(models)}")
+
+        return dict(models[model_id])
+
     @classmethod
     def load(
         cls, path: str, update_residues_to_unimod: bool = True, override_config: DictConfig | dict | None = None
     ) -> tuple["DownstreamDeNovo", "DictConfig"]:
-        """Load InstaNovo model from checkpoint path.
+        """Load a DownstreamDeNovo model from a checkpoint path.
 
         Args:
             path (str): Path to checkpoint file.
@@ -234,7 +272,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
             override_config (DictConfig | dict | None): Optional override config values with a DictConfig or dict, defaults to None.
 
         Returns:
-            tuple[InstaNovo, DictConfig]: Tuple of model and config.
+            tuple[DownstreamDeNovo, DictConfig]: Tuple of model and config.
         """
         # Add to allow list
         _whitelist_torch_omegaconf()
@@ -301,7 +339,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
             override_config (DictConfig | dict | None): Optional override config values with a DictConfig or dict, defaults to None.
 
         Returns:
-            tuple[InstaNovo, DictConfig]: Tuple of model and config.
+            tuple[DownstreamDeNovo, DictConfig]: Tuple of model and config.
         """
         # TODO Refactor to use across methods
         # Check if model_id is a local file path
@@ -312,7 +350,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
                 raise FileNotFoundError(f"No file found at path: {model_id}")
 
         # Load the models.json file
-        with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
+        with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
 
         # Find the model in the config
@@ -323,7 +361,7 @@ class DownstreamDeNovo(nn.Module, Decodable, PadTokenMixin):
         url = model_info["remote"]
 
         # Create cache directory if it doesn't exist
-        cache_dir = Path.home() / ".cache" / "instanovo"
+        cache_dir = Path.home() / ".cache" / "instanovo-fm"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate a filename for the cached model

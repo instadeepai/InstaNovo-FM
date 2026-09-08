@@ -81,6 +81,85 @@ uv sync --extra interpret  # for UMAP visualization
 Everything is driven by module entry points and Hydra configs from
 `src/instanovo_fm/configs/`.
 
+### Load a pretrained checkpoint
+
+```python
+from instanovo_fm.model.encoder import FoundationModel
+
+FoundationModel.get_pretrained()
+# ['instanovo-fm-v0.1.0', 'instanovo-fm-lcfm-ts-pa-v0.1.0', ...]
+
+model, config = FoundationModel.from_pretrained("instanovo-fm-v0.1.0")
+```
+
+The ids differ only by training corpus, masking strategy and whether the pairwise
+attention bias is on, so `describe_pretrained` says which is which:
+
+```python
+FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")
+# {'remote': '...', 'corpus': 'LCFM', 'masking': 'thompson_span with isotope co-masking',
+#  'pairwise_bias': False, 'layers': 12, 'model_dimension': 768, 'parameters': '89.5M', ...}
+
+FoundationModel.describe_pretrained()          # every checkpoint, keyed by id
+```
+
+The `corpus` field names a confidence tier of the pretraining corpus. They nest, from
+everything that was collected down to only the most confidently identified spectra:
+
+| tier | what it is |
+|---|---|
+| **ACFM** | *All Confidence* — every MS/MS scan in the corpus, ~1.63B, the vast majority with no peptide annotation at all. What the self-supervised objective can learn from. |
+| **LCFM** | *Low Confidence* — the labelled subset: 184.6M PSMs at run-specific 1% FDR. "Low" means least-stringently filtered, not unreliable, and it is the broadest labelled tier. |
+| **MCFM** | *Medium Confidence* — a nested subset of LCFM, ranked by a composite confidence score and thresholded. |
+| **HCFM** | *High Confidence* — the strictest subset, nested inside MCFM. |
+
+The released checkpoints are trained on LCFM, with one MCFM model for the corpus-scale
+comparison. HCFM is used for evaluation rather than pretraining, and ACFM is not released.
+
+| id | corpus | masking | PA bias | layers | params |
+|---|---|---|---|---|---|
+| `instanovo-fm-v0.1.0` | LCFM | Thompson-span | no | 12 | 89.5M |
+| `instanovo-fm-lcfm-ts-pa-v0.1.0` | LCFM | Thompson-span | yes | 12 | 89.5M |
+| `instanovo-fm-lcfm-sa-nopa-v0.1.0` | LCFM | signal-aware | no | 12 | 89.5M |
+| `instanovo-fm-lcfm-sa-pa-v0.1.0` | LCFM | signal-aware | yes | 12 | 89.5M |
+| `instanovo-fm-mcfm-90k-v0.1.0` | MCFM | Thompson-span | no | 9 | 40M |
+
+The first row is the published model: every TS-noPA number in the paper comes from it.
+The next three complete the masking/attention-bias factorial, and the last is the
+corpus-scale comparison baseline.
+
+The de novo sequencers — the foundation encoder plus an InstaNovo decoder — load the same
+way, from `DownstreamDeNovo`:
+
+```python
+from instanovo_fm.downstream.de_novo_sequencing.model import DownstreamDeNovo
+
+DownstreamDeNovo.describe_pretrained()
+model, config = DownstreamDeNovo.from_pretrained("instanovo-fm-denovo-v0.1.0")
+```
+
+| id | encoder | notes |
+|---|---|---|
+| `instanovo-fm-denovo-v0.1.0` | fine-tuned | the published sequencer, benchmarked against IN v1.2, Casanovo and XuanjiNovo |
+| `instanovo-fm-denovo-frozen-v0.1.0` | frozen | retains ~85% of the fine-tuned peptide recall |
+| `instanovo-fm-denovo-scratch-v0.1.0` | from scratch | the no-pretraining control |
+
+All three run 2.5M steps at batch size 128, warming up over the first 100K steps to a
+learning rate of 5e-5; the fine-tuned variant unfreezes the encoder at step 100K.
+
+By id, the checkpoint is downloaded from this repository's
+[Releases](https://github.com/instadeepai/InstaNovo-FM/releases) and cached under
+`~/.cache/instanovo-fm/`. A path or a `.ckpt` filename loads from disk instead:
+
+```python
+model, config = FoundationModel.from_pretrained("checkpoints/model_best.ckpt")
+```
+
+The registry is [`src/instanovo_fm/models.json`](src/instanovo_fm/models.json). It covers
+the published model, the four cells of the masking/attention-bias factorial, the MCFM
+scaling baseline, and the three de novo sequencers — see
+[Pretrained weights & data](#pretrained-weights--data) for the licence they carry.
+
 ### Extract embeddings and run the evaluation tasks
 
 ```bash
@@ -122,16 +201,20 @@ the paper:
   on HuggingFace, under [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use/).
   Assembled from 92 public PRIDE submissions, with accessions in
   [`assets/table_s1_accessions.txt`](assets/table_s1_accessions.txt), and uniformly reprocessed
-  with FragPipe (v22.0) / MSFragger (v4.1). Confidence tiers: **ACFM** (~1.63B spectra,
-  unlabelled), **LCFM** (184.6M PSMs at 1% FDR), **MCFM** and **HCFM** (progressively stricter
-  subsets). Each of the three *labelled* tiers ships in two forms: `splits/` holds the
+  with FragPipe (v22.0) / MSFragger (v4.1). The confidence tiers are described under
+  [Load a pretrained checkpoint](#load-a-pretrained-checkpoint). Each of the three *labelled*
+  tiers — LCFM, MCFM and HCFM — ships in two forms: `splits/` holds the
   quality-filtered, peptide-disjoint 80/10/10 partitions the model was trained and evaluated on,
   and `by_project/` holds the tier before filtering and splitting, one directory per accession,
   so alternative partitions can be derived. The central peptide registry of split assignments
   ships alongside, so the partitions can be reproduced and extended. ACFM itself is not released.
-- **Model checkpoints:** *Not yet available.* Will be published from this repository's
-  [Releases](https://github.com/instadeepai/InstaNovo-FM/releases) under CC BY-NC-SA 4.0
-  (see [License](#license))._
+- **Model checkpoints:** attached to the
+  [`v0.1.0` release](https://github.com/instadeepai/InstaNovo-FM/releases/tag/v0.1.0) under
+  CC BY-NC-SA 4.0 (see [License](#license)). Eight in all — five foundation models and
+  three de novo sequencers — registered in
+  [`models.json`](src/instanovo_fm/models.json) and loaded by id with `from_pretrained`,
+  which caches under `~/.cache/instanovo-fm/`. See
+  [Load a pretrained checkpoint](#load-a-pretrained-checkpoint).
 - **Embeddings:** *Not yet available.* An interactive explorer for the frozen embedding space
   is hosted at [instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM)
   (goes live with the repository).

@@ -126,12 +126,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/instanovo_fm"]
 
-[tool.hatch.build.targets.wheel.force-include]
-# Hydra configs ship with the package so a pip install is usable.
-"src/instanovo_fm/configs" = "instanovo_fm/configs"
-# The pretrained-checkpoint registry, which from_pretrained reads through
-# importlib.resources, so it has to be inside the installed package.
-"src/instanovo_fm/models.json" = "instanovo_fm/models.json"
+# No force-include table. `packages` already takes everything inside the package
+# directory, data files included, so listing configs/ or models.json again made
+# hatchling add them twice and fail the wheel build outright:
+#   ValueError: A second file is being added to the wheel archive at the same
+#   path: `instanovo_fm/configs/denovo.yaml`
+# tests/test_wheel_contents.py checks they are in the wheel, which is what the
+# table was trying to guarantee.
 
 [tool.ruff]
 line-length = 100
@@ -193,3 +194,7 @@ ignore_missing_imports = true
 # import through `scripts.preprocessing...` exactly as they did internally.
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+  # Builds a wheel, so it costs a few seconds. Deselect with `-m "not slow"`.
+  "slow: exercises the packaging pipeline rather than the library",
+]

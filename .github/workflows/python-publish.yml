@@ -1,0 +1,71 @@
+# Publish the package to PyPI when a release is published.
+#
+# Modelled on the same workflow in instadeepai/InstaNovo, with two differences:
+# the build goes through uv and hatchling rather than `python -m build`, matching
+# how the rest of this repository's CI works; and the release tag is checked
+# against the version in pyproject.toml before anything is uploaded, because
+# PyPI uploads cannot be undone and the working version here carries a `.dev0`
+# suffix that must not be published under a release tag.
+#
+# The checkpoints are *not* published here. They are release assets attached by
+# hand, since they come from the training cluster's object store and total
+# about 1.6 GB.
+
+name: Publish Python 🐍 distributions 📦 to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and check, but do not upload"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ${{ github.event.repository.private == true && 'instadeep-ci' || 'ubuntu-latest' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Build the sdist and the wheel
+        run: uv build
+
+      # The wheel has failed to build here before, from a force-include table
+      # that added every Hydra config twice. tests/test_wheel_contents.py covers
+      # it, but a publish is the one place where noticing late is expensive.
+      - name: Check the distributions are well formed
+        run: uvx twine check dist/*
+
+      # A release tagged 0.1.0 must not publish 0.1.0.dev0. PyPI will not let
+      # the filename be reused, so getting this wrong burns the version.
+      - name: Check the version matches the release tag
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(uvx --from hatch hatch version)"
+          echo "release tag: $tag"
+          echo "package version: $version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Release tag '$tag' does not match the package version '$version' in pyproject.toml. Bump the version, or retag."
+            exit 1
+          fi
+
+      - name: List what would be uploaded
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        if: github.event_name == 'release' || inputs.dry_run == false
+        uses: pypa/gh-action-pypi-publish@v1.13.0
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}

@@ -99,7 +99,7 @@ src = ["src", "scripts"]
 exclude = ["scripts/**", "tests/scripts_test/**", "src/instanovo_fm/utils/lsh.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "T20"]
 
 # scripts/ is a faithful port of the dataset pipeline from the internal repo and
 # src/instanovo_fm/utils/lsh.py is vendored verbatim. Both are kept diffable

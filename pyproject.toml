@@ -96,7 +96,7 @@ src = ["src", "scripts"]
 [tool.ruff.format]
 # Formatting would rewrite the ported files wholesale; they are kept diffable
 # against their originals in the internal repo.
-exclude = ["scripts/**", "tests/scripts_test/**", "src/instanovo_fm/utils/lsh.py"]
+exclude = ["scripts/**", "tests/scripts/**", "src/instanovo_fm/utils/lsh.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "T20"]
@@ -111,10 +111,9 @@ select = ["E", "F", "W", "I", "UP", "B", "C4", "T20"]
 # trade worth making. New code under src/ and tests/ is held to the full set.
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["UP", "I001", "E501", "B904", "B905"]
-# tests/scripts_test/ is the ported suite; same reasoning as scripts/.
-# E402: test_splitting.py's module-level skip guard has to run before the
-# imports it protects, so those imports cannot sit at the top of the file.
-"tests/scripts_test/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
+# tests/scripts/ is the ported suite; same reasoning as scripts/.
+# E402: some tests keep skip guards before imports they protect.
+"tests/scripts/**" = ["UP", "I001", "E501", "B904", "B905", "E741", "F841", "E402"]
 # B904/B905 are inherited from the internal repo and are *potential* defects,
 # not confirmed ones. B905 in particular asks whether a zip() is meant to
 # truncate: silencing it with strict=False would assert an intent nobody has

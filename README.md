@@ -9,7 +9,8 @@ scripts that generate everything here — see `tools/projectpage/` on `main`.
 index.html              the UMAP explorer -- what the site serves at its root
 data/                   column-sharded point set + manifest.json
 selftest.html           the explorer's own diagnostic page
-landing.html            the project landing page, kept but not served at the root
+landing.html            the project landing page: still served, but nothing links to
+                        it -- kept so the root can be swapped back
 umap/index.html         stub redirecting to ../ , so old /umap/ links still work
 static/css|js|images    stylesheets, vendored Plotly, viewer, favicon, social card
 .nojekyll               serve the tree as-is
@@ -69,7 +70,7 @@ git mv data umap/data
 git mv landing.html index.html
 
 sed -i 's|"static/|"../static/|g' umap/index.html umap/selftest.html
-sed -i 's|href="landing.html"|href="../"|' umap/index.html
+sed -i 's|href="https://github.com/instadeepai/InstaNovo-FM"|href="../"|' umap/index.html
 sed -i 's|href="./"|href="umap/"|g' index.html
 ```
 

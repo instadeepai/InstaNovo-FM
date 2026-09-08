@@ -209,6 +209,9 @@ Default column mapping, which can be customised:
 {
   "rt": "retention_time",
   "mz": "mz_array",
-  "intensity": "intensity_array"
+  "intensity": "intensity_array",
+  "peptide": "unmodified_peptide"
 }
 ```
+
+`--column-mapping` JSON is merged onto these defaults (overrides win; other defaults remain).

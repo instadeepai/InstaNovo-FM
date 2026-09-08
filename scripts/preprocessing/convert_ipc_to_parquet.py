@@ -71,6 +71,23 @@ app = typer.Typer(
     add_completion=False,
 )
 
+DEFAULT_COLUMN_MAPPING: dict[str, str] = {
+    "rt": "retention_time",
+    "mz": "mz_array",
+    "intensity": "intensity_array",
+    "peptide": "unmodified_peptide",
+}
+
+
+def resolve_column_mapping(
+    overrides: Optional[dict[str, str]] = None,
+) -> dict[str, str]:
+    """Merge user overrides onto the shared default mapping without dropping keys."""
+    mapping = dict(DEFAULT_COLUMN_MAPPING)
+    if overrides:
+        mapping.update(overrides)
+    return mapping
+
 
 def parquet_path_for_ipc_shard(
     ipc_path: str | Path, shard_counter: int, num_shards: int
@@ -245,12 +262,7 @@ def convert_ipc_to_parquet(
         typer.BadParameter: If the requested search-data workbook does not exist.
     """
     if column_mapping is None:
-        column_mapping = {
-            "rt": "retention_time",
-            "mz": "mz_array",
-            "intensity": "intensity_array",
-            "peptide": "unmodified_peptide",
-        }
+        column_mapping = resolve_column_mapping()
 
     logger.debug(f"Source directory: {source_dir}")
     logger.debug(f"Input file: {input_file}")
@@ -478,20 +490,15 @@ def main(
     """Convert IPC files to Parquet from a directory and/or path lists."""
     configure_script_logging(verbose=verbose)
 
-    parsed_column_mapping = None
+    parsed_overrides = None
     if column_mapping:
         try:
-            parsed_column_mapping = json.loads(column_mapping)
+            parsed_overrides = json.loads(column_mapping)
         except json.JSONDecodeError:
             typer.echo("Error: Invalid JSON format for column mapping", err=True)
             raise typer.Exit(1)
 
-    if not parsed_column_mapping:
-        parsed_column_mapping = {
-            "rt": "retention_time",
-            "mz": "mz_array",
-            "intensity": "intensity_array",
-        }
+    parsed_column_mapping = resolve_column_mapping(parsed_overrides)
 
     input_files = input_file or []
     if input_dir is None and not input_files:

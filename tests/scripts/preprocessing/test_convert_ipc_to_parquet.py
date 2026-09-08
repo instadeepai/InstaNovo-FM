@@ -9,7 +9,11 @@ import polars as pl
 import pytest
 
 from scripts.preprocessing.check_conversion import is_shard_incomplete
-from scripts.preprocessing.convert_ipc_to_parquet import convert_ipc_with_metadata
+from scripts.preprocessing.convert_ipc_to_parquet import (
+    DEFAULT_COLUMN_MAPPING,
+    convert_ipc_with_metadata,
+    resolve_column_mapping,
+)
 
 _SHARD_PATTERN = re.compile(r".+_\d{4}-\d{4}.parquet$")
 
@@ -99,3 +103,18 @@ def test_empty_ipc_raises_and_writes_no_parquet(tmp_path: Path) -> None:
         )
 
     assert _parquet_names(ipc_path) == []
+
+
+def test_resolve_column_mapping_defaults_include_peptide() -> None:
+    """Default mapping remaps peptide so labelled IPC conversion stays consistent."""
+    assert resolve_column_mapping() == DEFAULT_COLUMN_MAPPING
+    assert resolve_column_mapping()["peptide"] == "unmodified_peptide"
+
+
+def test_resolve_column_mapping_merges_overrides() -> None:
+    """Partial JSON overrides must not drop other default remaps."""
+    merged = resolve_column_mapping({"rt": "rt_min"})
+    assert merged["rt"] == "rt_min"
+    assert merged["mz"] == "mz_array"
+    assert merged["intensity"] == "intensity_array"
+    assert merged["peptide"] == "unmodified_peptide"

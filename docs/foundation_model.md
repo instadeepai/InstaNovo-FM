@@ -140,4 +140,3 @@ recovered from frozen embeddings:
 The two behave differently and the difference is informative rather than a defect: LCFM produces
 stronger *linear decodability* on nearly every probe, while MCFM produces stronger *retrieval*.
 Scale buys decodability; curation buys a cleaner neighbourhood structure.
-

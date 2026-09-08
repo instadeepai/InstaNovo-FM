@@ -334,7 +334,7 @@ class SpectrumAnalyser:
         else:
             logger.info("Theoretical analysis disabled by configuration.")
             self.rustyms_available = False
-        
+
         # Theoretical spectrum cache for optimized batch processing.
         # Key layout (seq, charge, ion_types) is defined in TheoreticalAnalyser.
         self.theoretical_cache: Dict[
@@ -391,7 +391,7 @@ class SpectrumAnalyser:
     def setup_data_processor(self) -> FoundationalDataProcessor:
         """Set up the data processor for consistent preprocessing."""
         masking_config = self.config.model.get('masking', {})
-        
+
         proc_cfg = {
             'n_peaks': self.config.model.get('n_peaks', 200),
             'min_mz': self.config.model.get('min_mz', 50.0),
@@ -409,7 +409,7 @@ class SpectrumAnalyser:
             'metadata_columns': self.config.dataset.get('metadata_columns', []),
             'search_data_manager': self.search_data_manager,
         }
-        
+
         strategy_mapping = {
             'thompson_span_mask': 'thompson_span',
             'thompson': 'thompson',
@@ -421,7 +421,7 @@ class SpectrumAnalyser:
         proc_cfg['masking_strategy'] = strategy_mapping.get(
             masking_config.get('strategy', 'thompson_span'), 'thompson_span'
         )
-        
+
         proc_cfg.update({
             'thompson_alpha': masking_config.get('alpha', 0.5),
             'thompson_beta': masking_config.get('beta', 0.5),
@@ -444,15 +444,15 @@ class SpectrumAnalyser:
             'signal_ion_types': tuple(masking_config.get('signal_ion_types', ['b', 'y'])),
             'signal_num_workers': masking_config.get('signal_num_workers', 4),
         })
-        
+
         logger.info(f"Data processor config: mask_portion={proc_cfg['mask_portion']}, "
                    f"include_isotopes={proc_cfg['include_isotopes']}, "
                    f"strategy={proc_cfg['masking_strategy']}, "
                    f"metadata_columns={len(proc_cfg['metadata_columns'])}, "
                    f"search_data={'enabled' if self.search_data_manager and self.search_data_manager.is_loaded else 'disabled'}")
-        
+
         return FoundationalDataProcessor(**proc_cfg)
-    
+
 
     def analyze_single_spectrum(
         self,
@@ -678,14 +678,14 @@ class SpectrumAnalyser:
                 "masking_analysis": {},
                 "metadata": metadata,
             }
-    
+
     def run_analysis(self, sdf: SpectrumDataFrame) -> Dict[str, Any]:
         """
         Run comprehensive spectrum analysis.
-        
+
         Args:
             sdf: SpectrumDataFrame with spectra to analyze
-            
+
         Returns:
             Dictionary with analysis results
         """
@@ -1061,9 +1061,9 @@ class SpectrumAnalyser:
 
         # Save per-spectrum CSV from accumulated rows
         self._save_results(acc_csv_rows)
-        
+
         logger.info(f"Spectrum analysis complete. Processed {n_samples:,d} spectra with {errors} errors.")
-        
+
         # Log match distribution summary
         match_dist = self.analysis_results.get("match_distribution", {})
         if match_dist:
@@ -1072,7 +1072,7 @@ class SpectrumAnalyser:
                 f"median={match_dist.get('median_matches', 0):.1f} "
                 f"(quality gate details in theoretical_analysis/ output)"
             )
-        
+
         return self.analysis_results
 
     def _generate_binning_recommendation_report(self):
@@ -1191,7 +1191,7 @@ class SpectrumAnalyser:
         if not spectrum_stats:
             logger.warning("No valid results to summarize")
             return
-        
+
         # Get all theoretical results (with sequence)
         theo_results = [t for t in theoretical_analyses if t.get("sequence_available", False)]
 
@@ -1409,7 +1409,7 @@ class SpectrumAnalyser:
                     summary["OTHER"] = _aggregate_group_metrics(other_group)
 
             return summary
-        
+
         # Masking analysis now handled by MaskingAnalyser in Phase 5
 
         # Stratified analysis (all spectra with sequence)
@@ -1558,7 +1558,7 @@ class SpectrumAnalyser:
             csv_path = theo_dir / "per_spectrum_results.csv"
             df.to_csv(csv_path, index=False)
             logger.info(f"Per-spectrum results saved to: {csv_path} ({len(csv_rows):,d} spectra)")
-    
+
     def _create_individual_spectrum_plot(self, result: Dict[str, Any]) -> Figure:
         """
         Create a detailed plot for a single spectrum with theoretical annotation.
@@ -1581,38 +1581,38 @@ class SpectrumAnalyser:
         """
         fig = plt.figure(figsize=(20, 18))
         gs = fig.add_gridspec(3, 2, height_ratios=[2, 5, 5], width_ratios=[3, 2], hspace=0.28, wspace=0.4, top=0.97)
-        
+
         # Build informative title with key metadata
         metadata = result.get("metadata", {})
         spec_stats = result.get("spectrum_stats", {})
         theo_analysis = result.get("theoretical_analysis", {})
-        
+
         # Core identification
         clean_sequence = metadata.get("clean_sequence", result.get('spectrum_id', 'unknown'))
-        
+
         # Key proteomics metadata
         precursor_charge = theo_analysis.get("precursor_charge") or spec_stats.get("precursor_charge")
         frag_type = metadata.get("frag_type", "unknown")
-        
+
         # Build title components
         title_parts = [f"{clean_sequence}"]
-        
+
         # Add charge state (critical for interpretation)
         if precursor_charge:
             title_parts.append(f"z={precursor_charge}")
-        
+
         # Add fragmentation type (affects ion types)
         if frag_type and frag_type != "unknown":
             title_parts.append(f"{frag_type}")
-        
+
         # Combine into header (removed - no longer displayed as suptitle)
         title = " | ".join(title_parts)
         # fig.suptitle(f"Spectrum Analysis: {title}", fontsize=16, fontweight='bold', y=0.995)
-        
+
         spec_stats = result["spectrum_stats"]
         theo_analysis = result["theoretical_analysis"]
         viz_data = result.get("visualization_data", {})
-        
+
         # 1. Statistics Box (row 0, col 0)
         ax_stats = fig.add_subplot(gs[0, 0])
         ax_stats.axis('off')
@@ -1764,18 +1764,18 @@ class SpectrumAnalyser:
 
         # 2. Spectrum with Theoretical Matching (row 1, spans full width)
         ax_theo = fig.add_subplot(gs[1, :])
-        
+
         if viz_data and theo_analysis.get('sequence_available', False):
             mz_values = viz_data['mz_values']
             intensity_values = viz_data['intensity_values']
             valid_peaks = viz_data['valid_peaks']
-            
+
             # Get annotated mask from theoretical analysis
             annotated_mask_full = np.zeros(len(mz_values), dtype=bool)
             if 'annotated_mask' in theo_analysis:
                 annotated_mask = np.array(theo_analysis['annotated_mask'])
                 annotated_mask_full[valid_peaks] = annotated_mask
-            
+
             # Get annotations and categorize peaks
             all_annotations = list(theo_analysis.get('theo_annotations', []))
 
@@ -1888,15 +1888,15 @@ class SpectrumAnalyser:
                         rotation=90,  # Vertical text
                         alpha=0.9, fontweight='bold'
                     )
-            
+
             ax_theo.set_xlabel('m/z', fontsize=11, fontweight='bold')
             ax_theo.set_ylabel('Normalized Intensity', fontsize=11, fontweight='bold')
-            
+
             # Add annotation mode to title
             annotation_mode = "Conditional" if self.use_conditional_annotation else "Traditional"
-            ax_theo.set_title(f'Spectrum with Theoretical Matching (by Ion Type) - {annotation_mode} Mode', 
+            ax_theo.set_title(f'Spectrum with Theoretical Matching (by Ion Type) - {annotation_mode} Mode',
                              fontsize=12, fontweight='bold')
-            
+
             # Create legend with note about conditional annotation
             legend = ax_theo.legend(loc='upper right', fontsize=9, ncol=2,
                                     markerscale=0.7, borderpad=0.4, labelspacing=0.3,
@@ -1911,10 +1911,10 @@ class SpectrumAnalyser:
                     f"{theo_analysis.get('n_isotopes', 0)} isotopes"
                 ])
                 note_text = f"Conditional: {' + '.join(note_parts)}"
-                ax_theo.text(0.98, 0.02, note_text, transform=ax_theo.transAxes, 
+                ax_theo.text(0.98, 0.02, note_text, transform=ax_theo.transAxes,
                            fontsize=8, ha='right', va='bottom',
                            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8, edgecolor='gray'))
-            
+
             ax_theo.grid(True, alpha=0.3)
             ax_theo.set_xlim((self.min_mz, self.max_mz))
 
@@ -2064,7 +2064,7 @@ class SpectrumAnalyser:
             ax_idx.set_title('Index-Based Spectrum')
 
         return fig
-    
+
     def print_summary(self):
         """Print spectrum-level summary to console.
 
@@ -2103,5 +2103,3 @@ class SpectrumAnalyser:
         print(f"(Masking analysis: see masking_analysis/ directory)")
         print(f"\nResults saved to: {self.output_dir}")
         print("=" * 80)
-
-

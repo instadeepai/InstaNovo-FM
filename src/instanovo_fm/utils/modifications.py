@@ -18,47 +18,47 @@ import numpy as np
 
 def clean_peptide_sequence(peptide: str) -> str:
     """Clean peptide sequence by removing modifications and keeping only standard amino acids.
-    
+
     Args:
         peptide: Modified peptide sequence
-        
+
     Returns:
         Cleaned sequence with only standard amino acids
     """
     if not peptide:
         return ""
-    
+
     # Remove common modifications
     peptide = re.sub(r'\[UNIMOD:\d+\]', '', peptide)
-    
+
     # Remove other common modifications
     modifications = [
         r'\(ox\)', r'\(ph\)', r'\(ac\)', r'\(me\)', r'\(gly\)', r'\(glc\)',
         r'\(\+[0-9.]+\)', r'\(\-[0-9.]+\)'
     ]
-    
+
     for mod in modifications:
         peptide = re.sub(mod, '', peptide, flags=re.IGNORECASE)
-    
+
     # Keep only standard amino acid letters
     clean_pep = ''.join(c for c in peptide if c.isalpha() and c.upper() in 'ACDEFGHIKLMNPQRSTVWY')
-    
+
     return clean_pep
 
 
 def extract_modification_types_regex(sequence: str) -> List[str]:
     """Extract modification types from sequence using regex patterns as a fallback.
-    
+
     This function uses pattern matching to identify modifications in peptide sequences.
     It supports:
     - UniMod IDs ([UNIMOD:X])
     - Common modification abbreviations (ox, ph, ac, etc.)
     - Textual modification names (Oxidation, Phosphorylation, etc.)
     - Mass shift patterns ((+15.99), (-18.01), etc.)
-    
+
     Args:
         sequence: Modified peptide sequence
-        
+
     Returns:
         List of modification types found (deduplicated)
     """
@@ -167,20 +167,20 @@ def extract_modification_types_regex(sequence: str) -> List[str]:
 
 def extract_modification_types_pyteomics(sequence: str) -> List[str]:
     """Extract modification types from sequence using pyteomics.
-    
+
     This function uses the pyteomics library for more robust parsing of
     modified peptide sequences. Falls back to regex parsing if pyteomics
     is unavailable or parsing fails.
-    
+
     Args:
         sequence: Modified peptide sequence
-        
+
     Returns:
         List of modification types found
     """
     try:
         from pyteomics import parser
-        
+
         # Try different parsing approaches for pyteomics
         try:
             # First try standard parsing
@@ -194,7 +194,7 @@ def extract_modification_types_pyteomics(sequence: str) -> List[str]:
             except Exception:
                 # If both approaches fail, fall back to regex
                 return extract_modification_types_regex(sequence)
-        
+
         # Extract modification types from the parsed sequence
         mod_types = []
         for item in parsed:
@@ -212,9 +212,9 @@ def extract_modification_types_pyteomics(sequence: str) -> List[str]:
                         # If UniMod ID not found or pyteomics.unimod not available, use a generic name
                         mod_types.append(f"UniMod:{mod['unimod']}")
             # else: ignore tokens that don't carry modification info
-        
+
         return mod_types
-        
+
     except ImportError:
         # Fallback to regex method
         return extract_modification_types_regex(sequence)
@@ -225,26 +225,26 @@ def extract_modification_types_pyteomics(sequence: str) -> List[str]:
 
 def extract_modification_types(sequence: str) -> List[str]:
     """Extract modification types from a peptide sequence.
-    
+
     This is the main entry point for modification extraction. It tries
     pyteomics first for robust parsing, then falls back to regex patterns.
-    
+
     Args:
         sequence: Modified peptide sequence
-        
+
     Returns:
         List of unique modification types found (sorted alphabetically)
     """
     if not sequence or not isinstance(sequence, str) or len(sequence.strip()) == 0:
         return []
-    
+
     # Try pyteomics-assisted extraction first
     mod_types = extract_modification_types_pyteomics(sequence)
-    
+
     # If none found via pyteomics, fall back to regex heuristics
     if not mod_types:
         mod_types = extract_modification_types_regex(sequence)
-    
+
     # Return unique, sorted modification types
     return sorted(set(mod_types)) if mod_types else []
 
@@ -254,15 +254,15 @@ def compute_modification_types(
     use_modified_peptide: bool = True
 ) -> np.ndarray:
     """Compute modification types for an array of peptide sequences.
-    
+
     This function processes multiple peptide sequences and extracts their
     modification types. It returns a human-readable string for each peptide
     combining all modifications found.
-    
+
     Args:
         peptides: Array of peptide sequences (can be modified or unmodified)
         use_modified_peptide: Whether the input contains modification annotations
-        
+
     Returns:
         Array of modification type strings. Each entry is either:
         - 'Unmodified' if no modifications found
@@ -271,23 +271,23 @@ def compute_modification_types(
     """
     if peptides is None or len(peptides) == 0:
         return np.array([])
-    
+
     modification_types = []
-    
+
     for peptide in peptides:
         # Handle invalid peptides (None, empty string, or the string 'None')
-        if (peptide is None or 
-            not isinstance(peptide, str) or 
-            len(peptide.strip()) == 0 or 
+        if (peptide is None or
+            not isinstance(peptide, str) or
+            len(peptide.strip()) == 0 or
             peptide.strip().lower() == 'none'):
             modification_types.append('Unmodified')
             continue
-        
+
         # Only extract modifications if we're using modified peptide format
         if use_modified_peptide:
             try:
                 mod_types = extract_modification_types(peptide)
-                
+
                 if mod_types:
                     # Join multiple modifications with ' + '
                     modification_types.append(' + '.join(mod_types))
@@ -299,7 +299,7 @@ def compute_modification_types(
         else:
             # If not using modified peptide format, all are unmodified
             modification_types.append('Unmodified')
-    
+
     return np.array(modification_types, dtype=object)
 
 
@@ -528,9 +528,3 @@ def compute_glyco_deam_targets(peptides: np.ndarray) -> dict:
     )
     gclass = np.array([glyco_class(p) for p in peptides], dtype=object)
     return {"mod_deam_n": deam_n, "glyco_class": gclass}
-
-
-
-
-
-

@@ -904,4 +904,3 @@ class StreamingMetrics:
         self.bin_only_token_count = 0
         self.bin_only_median_ppm_accumulator = []
         self._bin_only_median_ppm_total_seen = 0
-

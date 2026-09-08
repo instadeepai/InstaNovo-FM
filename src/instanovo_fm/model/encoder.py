@@ -47,11 +47,11 @@ logger = ColorLog(console, __name__).logger
 
 class FoundationModel(nn.Module, PadTokenMixin):
     """Foundation model for self-supervised learning on MS/MS spectra.
-    
+
     Encoder-only transformer architecture that learns spectral representations
-    through masked m/z reconstruction. Unlike supervised models (InstaNovo, 
+    through masked m/z reconstruction. Unlike supervised models (InstaNovo,
     InstaNovo+), this model doesn't require peptide annotations during training.
-    
+
     Key features:
         - Encoder-only architecture (no decoder)
         - Masked peak reconstruction task
@@ -59,7 +59,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
         - Supports both regression and classification for m/z prediction
         - Flash Attention and Pairwise Attention (PA) bias support
         - Meta token for precursor/metadata encoding
-    
+
     Args:
         dim_model: Model dimension (default: 512)
         n_heads: Number of attention heads (default: 8)
@@ -94,7 +94,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
     ) -> None:
         """Initialize the foundation model."""
         super().__init__()
-        
+
         # Store configuration
         self.cfg = cfg or {}
         self.dim_model = dim_model
@@ -109,11 +109,11 @@ class FoundationModel(nn.Module, PadTokenMixin):
         self.peak_encoder_type = peak_encoder_type
         self.mz_task = mz_task
         self.use_meta_token = use_meta_token
-        
+
         # Setup pad token and determine attention backend from config
         # Sets self.use_flash_attention based on architecture.attention.backend
         self.setup_pad_token(self.cfg, self.dim_model)
-        
+
         # ===== Peak Encoder =====
         if self.peak_encoder_type == "fourier":
             fourier_config = self.cfg.get("peak_encoder", {}).get("config", {})
@@ -206,14 +206,14 @@ class FoundationModel(nn.Module, PadTokenMixin):
         # ===== Special Tokens =====
         self.latent_token = nn.Parameter(torch.randn(1, 1, dim_model))
         self.mask_token = nn.Parameter(torch.randn(1, 1, dim_model) * 0.02)
-        
+
         # ===== Meta Token (optional) =====
         if self.use_meta_token:
             self.meta_embed = self._setup_meta_token()
-        
+
         # ===== Encoder Stack =====
         self.encoder, self.pairwise_bias = self._setup_encoder()
-        
+
         # ===== Prediction Heads =====
         self.prediction_heads = self._setup_prediction_heads()
 
@@ -260,7 +260,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
 
         # Get attention backend for logging
         attn_backend = self.cfg.get('architecture', {}).get('attention', {}).get('backend', 'math')
-        
+
         logger.info(
             f"FoundationModel initialized: dim_model={dim_model}, n_layers={n_layers}, "
             f"mz_task={mz_task}, attention_backend={attn_backend}"
@@ -269,11 +269,11 @@ class FoundationModel(nn.Module, PadTokenMixin):
     def _setup_meta_token(self) -> MetaTokenEmbed:
         """Setup meta token embedding for precursor/metadata encoding."""
         meta_cfg = self.cfg.get("meta_token", {})
-        
+
         # Get vocabulary sizes from metadata builder
         from instanovo_fm.data.metadata_builder import get_vocabulary_sizes
         vocab_sizes = get_vocabulary_sizes()
-        
+
         # Extract field inclusion flags from config
         include_frag_type = meta_cfg.get("include_frag_type", True)
         include_instrument = meta_cfg.get("include_instrument", True)
@@ -284,7 +284,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
         include_precursor_charge = meta_cfg.get("include_precursor_charge", True)
         include_precursor_mass = meta_cfg.get("include_precursor_mass", True)
         include_collision_energy = meta_cfg.get("include_collision_energy", True)
-        
+
         return MetaTokenEmbed(
             proj_dim=self.dim_model,
             n_freq=meta_cfg.get("n_freq", 16),
@@ -325,7 +325,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
         """Setup all prediction heads."""
         # M/Z task configuration
         mz_head_cfg = self.cfg.get("mz_head", {})
-        
+
         if self.mz_task == "classification":
             # Create binning strategy using factory
             from instanovo_fm.trainer.binning import create_binning_strategy
@@ -353,24 +353,24 @@ class FoundationModel(nn.Module, PadTokenMixin):
         else:
             n_bin_groups = None
             bin_group_size = None
-        
+
         # Auxiliary task configuration
         aux_config = self.cfg.get("auxiliary", {})
         aux_enabled = aux_config.get("enabled", False)
-        
+
         # Per-task enable flags from lambdas
         lambda_charge = aux_config.get("lambda_charge", 0.0)
         lambda_rt = aux_config.get("lambda_rt", 0.0)
         lambda_dmz = aux_config.get("lambda_dmz", 0.0)
         lambda_ptm = aux_config.get("lambda_ptm", 0.0)
         lambda_intensity = aux_config.get("lambda_intensity", 0.0)
-        
+
         charge_enabled = aux_enabled and (lambda_charge > 0.0)
         rt_enabled = aux_enabled and (lambda_rt > 0.0)
         dmz_enabled = aux_enabled and (lambda_dmz > 0.0)
         ptm_enabled = aux_enabled and (lambda_ptm > 0.0)
         intensity_enabled = aux_enabled and (lambda_intensity > 0.0)
-        
+
         # Intensity head configuration
         intensity_head_cfg = self.cfg.get("intensity_head", {})
         max_intensity = intensity_head_cfg.get("max_intensity", 1.0)
@@ -459,12 +459,12 @@ class FoundationModel(nn.Module, PadTokenMixin):
         self, x: torch.Tensor, spectra_mask: Optional[torch.Tensor], spectra: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Apply padding replacement for Flash Attention compatibility.
-        
+
         Args:
             x: Peak embeddings (B, L, D)
             spectra_mask: Optional padding mask (B, L)
             spectra: Original spectra for fallback padding detection (B, L, 2)
-        
+
         Returns:
             Tuple of (padded_embeddings, padding_mask)
         """
@@ -474,10 +474,10 @@ class FoundationModel(nn.Module, PadTokenMixin):
         else:
             # Fallback: detect padding from zero spectra
             pad_mask = (spectra.sum(dim=-1) == 0)
-        
+
         # Apply pad token replacement (no-op unless Flash Attention is enabled)
         x = self.apply_pad_token_replacement(x, pad_mask)
-        
+
         return x, pad_mask
 
     def _apply_mlm_mask(
@@ -550,44 +550,44 @@ class FoundationModel(nn.Module, PadTokenMixin):
 
     def _inject_noise(self, spectra: torch.Tensor, mlm_mask: torch.Tensor) -> torch.Tensor:
         """Inject PPM-based m/z noise and proportional intensity noise on masked peaks.
-        
+
         This follows DreaMS-style noise injection for better robustness.
         Noise is only applied to masked peaks, preserving m/z ordering.
-        
+
         Args:
             spectra: Input spectra (B, L, 2) [m/z, intensity]
             mlm_mask: Boolean mask indicating masked positions (B, L)
-        
+
         Returns:
             Noised spectra (B, L, 2)
         """
         if mlm_mask is None or not mlm_mask.any():
             return spectra
-        
+
         B, L, _ = spectra.shape
         device = spectra.device
-        
+
         # Unpack channels
         mz_norm = spectra[..., 0:1]  # normalized [0,1]
         intensity = spectra[..., 1:2]  # normalized [0,1]
         eff_mask = mlm_mask.unsqueeze(-1)  # (B, L, 1) for broadcasting
-        
+
         # ===== M/Z Noise (PPM-based) =====
         if self.mz_noise_ppm > 0.0:
             # Convert to Da, apply noise, convert back
             mz_da = mz_norm * self.max_mz
             std_da = mz_da * (self.mz_noise_ppm / 1e6)  # PPM to Da
             std_norm = std_da / self.max_mz  # Back to [0,1]
-            
+
             # Sample noise only at masked positions
             mz_eps = torch.zeros_like(mz_norm)
             masked_std = std_norm[eff_mask].view(-1)
             if masked_std.numel() > 0:
                 mz_eps_masked = torch.normal(mean=0.0, std=masked_std).to(device)
                 mz_eps[eff_mask] = mz_eps_masked
-            
+
             mz_perturbed = (mz_norm + mz_eps).clamp_(0.0, 1.0)
-            
+
             # Preserve m/z ordering by clamping to neighbor midpoints
             left = torch.roll(mz_norm, shifts=1, dims=1)
             right = torch.roll(mz_norm, shifts=-1, dims=1)
@@ -595,7 +595,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
             right[:, -1, :] = 1.0
             low_bound = 0.5 * (left + mz_norm)
             high_bound = 0.5 * (mz_norm + right)
-            
+
             # Only enforce ordering where masked
             mz_perturbed = torch.where(
                 eff_mask,
@@ -604,7 +604,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
             )
         else:
             mz_perturbed = mz_norm
-        
+
         # ===== Intensity Noise (Proportional) =====
         if self.intensity_noise_pct > 0.0:
             intensity_std = (intensity + self.intensity_noise_floor) * self.intensity_noise_pct
@@ -613,16 +613,16 @@ class FoundationModel(nn.Module, PadTokenMixin):
             if masked_std.numel() > 0:
                 intensity_eps_masked = torch.normal(mean=0.0, std=masked_std).to(device)
                 intensity_eps[eff_mask] = intensity_eps_masked
-            
+
             intensity_perturbed = (intensity + intensity_eps).clamp_(0.0, 1.0)
         else:
             intensity_perturbed = intensity
-        
+
         # Reconstruct spectra
         noised = spectra.clone()
         noised[..., 0:1] = mz_perturbed
         noised[..., 1:2] = intensity_perturbed
-        
+
         return noised
 
     def _add_special_tokens(
@@ -633,23 +633,23 @@ class FoundationModel(nn.Module, PadTokenMixin):
         mlm_mask: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, int, Optional[torch.Tensor], Optional[torch.Tensor]]:
         """Add latent token and optional meta tokens to sequence.
-        
+
         Args:
             x: Peak embeddings (B, L, D)
             meta: Optional metadata dictionary
             spectra_mask: Optional spectra padding mask (B, L)
             mlm_mask: Optional MLM mask (B, L)
-        
+
         Returns:
             Tuple of (updated_x, num_prepended, updated_spectra_mask, updated_mlm_mask)
             where num_prepended includes latent token + all metadata tokens
         """
         B = x.shape[0]
-        
+
         # Add latent token
         x = torch.cat([self.latent_token.expand(B, -1, -1), x], dim=1)
         num_prepended = 1
-        
+
         # Add meta tokens if enabled and metadata provided
         if self.use_meta_token and meta is not None:
             # Ensure metadata tensors are on correct device
@@ -657,27 +657,27 @@ class FoundationModel(nn.Module, PadTokenMixin):
                 k: v.to(x.device) if isinstance(v, torch.Tensor) else v
                 for k, v in meta.items()
             }
-            
+
             # Get meta token embeddings (B, n_meta_tokens, D)
             meta_tokens = self.meta_embed(tensor_meta)  # (B, n_tokens, D)
-            
+
             # Insert meta tokens after latent token
             x = torch.cat([x[:, :1], meta_tokens, x[:, 1:]], dim=1)
             num_prepended += meta_tokens.shape[1]  # Add number of meta tokens
-            
+
             # Pad masks if provided
             if spectra_mask is not None:
                 n_meta_tokens = meta_tokens.shape[1]
                 spectra_mask = torch.cat(
                     [spectra_mask.new_zeros(spectra_mask.size(0), n_meta_tokens), spectra_mask], dim=1
                 )
-            
+
             if mlm_mask is not None:
                 n_meta_tokens = meta_tokens.shape[1]
                 mlm_mask = torch.cat(
                     [mlm_mask.new_zeros(mlm_mask.size(0), n_meta_tokens), mlm_mask], dim=1
                 )
-        
+
         return x, num_prepended, spectra_mask, mlm_mask
 
     def _compute_attn_bias(
@@ -766,20 +766,20 @@ class FoundationModel(nn.Module, PadTokenMixin):
         num_prepended: int,
     ) -> Optional[torch.Tensor]:
         """Pad attention bias to account for prepended tokens.
-        
+
         Args:
             attn_bias: Attention bias (B, H, L, L)
             num_prepended: Number of prepended tokens (latent + meta)
-        
+
         Returns:
             Padded attention bias (B, H, L+num_prepended, L+num_prepended) or None
         """
         if attn_bias is None:
             return None
-        
+
         B, H, L, _ = attn_bias.shape
         total_len = L + num_prepended
-        
+
         # Create padded bias with zeros for prepended tokens
         padded = torch.zeros(
             B, H, total_len, total_len,
@@ -825,17 +825,17 @@ class FoundationModel(nn.Module, PadTokenMixin):
         num_prepended: int,
     ) -> Optional[torch.Tensor]:
         """Create padding mask for encoder, accounting for prepended tokens.
-        
+
         Args:
             pad_mask: Original padding mask (B, L)
             num_prepended: Number of prepended tokens
-        
+
         Returns:
             Padded mask (B, L+num_prepended) or None
         """
         if pad_mask is None:
             return None
-        
+
         # Prepend zeros for special tokens (not padded)
         prepended_zeros = torch.zeros(
             pad_mask.size(0), num_prepended,
@@ -957,18 +957,18 @@ class FoundationModel(nn.Module, PadTokenMixin):
         return_peak_embeddings: bool = False,
     ) -> Dict[str, Any]:
         """Forward pass with attention weight capture for visualization.
-        
+
         This method is used for attention visualization and analysis. It captures
         attention weights from each layer and returns them along with the latent
         embeddings and special token mask.
-        
+
         Args:
             spectra: Input spectra (B, L, 2 or 3) [m/z, intensity, (charge)]
             meta: Optional metadata dictionary
             allow_grad: Allow gradient computation (default: False)
             disable_relative_bias: Disable relative position bias (default: False)
             return_peak_embeddings: Return peak-level embeddings (default: False)
-        
+
         Returns:
             Dictionary containing:
                 - embeddings: L2-normalized latent embeddings (B, D)
@@ -980,14 +980,14 @@ class FoundationModel(nn.Module, PadTokenMixin):
         """
         was_training = self.training
         self.eval()
-        
+
         try:
             # Context manager for gradient control
             ctx = nullcontext() if allow_grad else torch.no_grad()
-            
+
             with ctx:
                 B, L, _ = spectra.shape
-                
+
                 # 1. Embed peaks
                 x = self._embed_peaks(spectra)
 
@@ -1002,7 +1002,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
 
                 # 3. Apply padding replacement
                 x = self.apply_pad_token_replacement(x, pad_mask)
-                
+
                 # 4. Compute attention bias and pairwise features (unless disabled)
                 # Pass pad_mask to zero out features for padded positions
                 if disable_relative_bias:
@@ -1010,28 +1010,28 @@ class FoundationModel(nn.Module, PadTokenMixin):
                     pairwise_feats = None
                 else:
                     attn_bias, pairwise_feats = self._compute_attn_bias(spectra, spectra_mask=pad_mask)
-                
+
                 # 5. Add special tokens
                 x = torch.cat([self.latent_token.expand(B, -1, -1), x], dim=1)
                 num_prepended = 1
-                
+
                 # Add meta tokens if available
                 if self.use_meta_token and meta is not None:
                     tensor_meta = {
                         k: v.to(x.device) if isinstance(v, torch.Tensor) else v
                         for k, v in meta.items()
                     }
-                    
+
                     meta_tokens = self.meta_embed(tensor_meta)  # (B, n_tokens, D)
                     x = torch.cat([x[:, :1], meta_tokens, x[:, 1:]], dim=1)
                     num_prepended += meta_tokens.shape[1]
-                
+
                 # 6. Create special token mask
                 # True for: latent, meta, and padding positions
                 special_mask = torch.zeros(B, x.size(1), dtype=torch.bool, device=x.device)
                 special_mask[:, :num_prepended] = True  # Latent + meta
                 special_mask[:, num_prepended:] = pad_mask  # Padding
-                
+
                 # 7. Pad attention bias and pairwise features
                 attn_bias = self._pad_attn_bias(attn_bias, num_prepended)
                 pairwise_feats = self._pad_pairwise_feats(pairwise_feats, num_prepended)
@@ -1053,7 +1053,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
                 # 10. Capture attention weights with forward hooks
                 attn_weights = []
                 hooks = []
-                
+
                 if hasattr(self.encoder, "layers"):
                     layers_list = list(self.encoder.layers)  # Convert to list for enumerate
                     for layer_idx, layer in enumerate(layers_list):
@@ -1066,20 +1066,20 @@ class FoundationModel(nn.Module, PadTokenMixin):
                                         _, aw = output
                                     else:
                                         aw = None
-                                    
+
                                     # Clone to break inference tensor provenance
                                     if allow_grad and aw is not None:
                                         aw = aw.clone()
-                                    
+
                                     # Ensure we have the right number of layers
                                     while len(attn_weights) <= layer_index:
                                         attn_weights.append(None)
                                     attn_weights[layer_index] = aw
-                                
+
                                 return _hook
-                            
+
                             hooks.append(layer.self_attn.register_forward_hook(_make_hook(layer_idx)))
-                
+
                 # 11. Forward through encoder
                 if isinstance(self.encoder, nn.TransformerEncoder):
                     x = self.encoder(
@@ -1098,21 +1098,21 @@ class FoundationModel(nn.Module, PadTokenMixin):
                         is_causal=False,
                         return_attn_weights=True,  # Force attention weight computation for visualization
                     )
-                
+
                 # 12. Remove hooks
                 for hook in hooks:
                     hook.remove()
-                
+
                 # 13. Extract and normalize latent embedding
                 latent = x[:, 0]
                 latent_normalized = F.normalize(latent, p=2, dim=-1)
-                
+
                 result = {
                     "embeddings": latent_normalized,
                     "attn_weights": attn_weights if attn_weights else [None] * self.n_layers,
                     "special_mask": special_mask,
                 }
-                
+
                 # 14. Optionally extract peak embeddings
                 if return_peak_embeddings:
                     # Extract peak embeddings (exclude latent/meta tokens, keep padding for masking)
@@ -1120,9 +1120,9 @@ class FoundationModel(nn.Module, PadTokenMixin):
                     result["peak_embeddings"] = peak_emb
                     result["peak_embeddings_pretransformer"] = pre_transformer_emb
                     result["num_prepended"] = num_prepended
-                
+
                 return result
-        
+
         finally:
             if was_training:
                 self.train()
@@ -1133,25 +1133,25 @@ class FoundationModel(nn.Module, PadTokenMixin):
         meta: Optional[Dict[str, torch.Tensor]] = None,
     ) -> torch.Tensor:
         """Extract L2-normalized latent embeddings for inference.
-        
+
         This method is used for extracting spectral embeddings without computing
         predictions. Useful for downstream tasks like similarity search, clustering,
         or transfer learning.
-        
+
         Args:
             spectra: Input spectra (B, L, 2 or 3) [m/z, intensity, (charge)]
             meta: Optional metadata dictionary
-        
+
         Returns:
             L2-normalized latent embeddings (B, D)
         """
         was_training = self.training
         self.eval()
-        
+
         try:
             with torch.no_grad():
                 B, L, _ = spectra.shape
-                
+
                 # 1. Embed peaks
                 x = self._embed_peaks(spectra)
 
@@ -1339,7 +1339,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
         torch.no_grad() or torch.inference_mode(). The RoPE cache stores
         cos/sin tensors that become "inference tensors" under these contexts,
         which cannot be saved for backward passes.
-        
+
         After clearing, the next forward pass will regenerate the cache with
         properly detached tensors that work with autograd.
         """
@@ -1355,17 +1355,17 @@ class FoundationModel(nn.Module, PadTokenMixin):
     @staticmethod
     def get_pretrained() -> list[str]:
         """Get a list of pretrained foundation model IDs.
-        
+
         Returns:
             List of available pretrained model IDs
         """
         try:
             with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
                 models_config = json.load(f)
-            
+
             if MODEL_TYPE not in models_config:
                 return []
-            
+
             return list(models_config[MODEL_TYPE].keys())
         except (FileNotFoundError, json.JSONDecodeError):
             return []
@@ -1545,10 +1545,10 @@ class FoundationModel(nn.Module, PadTokenMixin):
         model_id: str,
     ) -> Tuple["FoundationModel", DictConfig]:
         """Download and load pretrained model by ID or path.
-        
+
         Args:
             model_id: Model ID from models.json or local file path
-        
+
         Returns:
             Tuple of (model, config)
         """
@@ -1558,11 +1558,11 @@ class FoundationModel(nn.Module, PadTokenMixin):
                 return cls.load(model_id)
             else:
                 raise FileNotFoundError(f"No file found at path: {model_id}")
-        
+
         # Load models.json
         with resources.files("instanovo").joinpath("models.json").open("r", encoding="utf-8") as f:
             models_config = json.load(f)
-        
+
         # Find model in config
         if MODEL_TYPE not in models_config or model_id not in models_config[MODEL_TYPE]:
             available = list(models_config.get(MODEL_TYPE, {}).keys())
@@ -1570,24 +1570,24 @@ class FoundationModel(nn.Module, PadTokenMixin):
                 f"Model {model_id} not found in models.json. "
                 f"Available {MODEL_TYPE} models: {available}"
             )
-        
+
         model_info = models_config[MODEL_TYPE][model_id]
         url = model_info["remote"]
-        
+
         # Create cache directory
         cache_dir = Path.home() / ".cache" / "instanovo"
         cache_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Generate filename
         file_name = urlsplit(url).path.split("/")[-1]
         cached_file = cache_dir / file_name
-        
+
         # Download if not cached
         if not cached_file.exists():
             download_file(url, cached_file, model_id, file_name)
         else:
             logger.info(f"Model {model_id} already cached at {cached_file}")
-        
+
         try:
             # Load and return
             logger.info(f"Loading model {model_id} (remote)")
@@ -1599,8 +1599,7 @@ class FoundationModel(nn.Module, PadTokenMixin):
             )
             if cached_file.exists():
                 cached_file.unlink()
-            
+
             download_file(url, cached_file, model_id, file_name)
             logger.info(f"Loading newly downloaded model {model_id}")
             return cls.load(str(cached_file))
-

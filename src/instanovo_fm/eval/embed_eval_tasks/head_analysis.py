@@ -1764,5 +1764,3 @@ class HeadAnalysisTask(BaseTask):
                     ha="center", fontsize=6, color="#555555",
                     rotation=90, alpha=0.7, fontstyle="italic",
                 )
-
-

@@ -80,20 +80,20 @@ def _collect_numeric_stats(dicts: list) -> dict:
 
 class EmbeddingEvaluator:
     """Evaluator for foundation model embeddings.
-    
+
     This class handles the complete evaluation workflow:
     1. Load model from checkpoint
     2. Setup data loaders
     3. Generate and export embeddings
     4. Run evaluation tasks
     5. Aggregate and save results
-    
+
     Similar to FoundationalTrainer, but focused on evaluation rather than training.
     """
 
     def __init__(self, config: DictConfig) -> None:
         """Initialize the embedding evaluator.
-        
+
         Args:
             config: Hydra configuration with evaluation settings.
         """
@@ -108,7 +108,7 @@ class EmbeddingEvaluator:
 
         # Setup base output directory
         base_output_dir = Path(self.eval_config.get("output_dir", "./evaluation_results"))
-        
+
         # Use provided output_dir directly if it's already specific (e.g., step_XXXXXX
         # from training, or eval_YYYYMMDD_HHMMSS/ckpt_id from multi-checkpoint mode).
         # Otherwise create timestamped folder for standalone evaluation.
@@ -120,18 +120,18 @@ class EmbeddingEvaluator:
             # Standalone evaluation - create unique timestamped folder
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.output_dir = base_output_dir / f"eval_{timestamp}"
-        
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Device setup
         device_str = self.eval_config.get("device", "auto")
         if device_str == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device_str)
-        
+
         logger.info(f"Evaluator: device={self.device}")
-        
+
         # Lazy initialization (done in evaluate() or set externally during training)
         self.model: Optional[FoundationModel] = None
         self.model_config: Optional[DictConfig] = None
@@ -147,10 +147,10 @@ class EmbeddingEvaluator:
 
     def load_model(self) -> Tuple[FoundationModel, DictConfig]:
         """Load model from checkpoint.
-        
+
         Returns:
             Tuple of (model, config)
-            
+
         Raises:
             ValueError: If no checkpoint path is available
         """
@@ -160,7 +160,7 @@ class EmbeddingEvaluator:
                 "1. Set 'evaluation.checkpoint_path' in config for standalone evaluation, or\n"
                 "2. Set evaluator.model directly when using during training"
             )
-        
+
         logger.info(f"Loading model from {self.checkpoint_path}")
 
         # Download checkpoint from S3 if needed (Aichor support)
@@ -172,24 +172,24 @@ class EmbeddingEvaluator:
 
         # Use the model's load method (same as in encoder.py)
         model, model_config = FoundationModel.load(checkpoint_path)
-        
+
         # Move to device and set to eval mode
         model = model.to(self.device)
         model.eval()
-        
+
         num_params = sum(p.numel() for p in model.parameters())
         logger.info(f"Model loaded successfully ({num_params:,} parameters)")
-        
+
         return model, model_config
-    
+
     def setup_data_processor(self) -> FoundationalDataProcessor:
         """Setup data processor for the validation/test split.
-        
+
         Returns:
             Data processor configured for evaluation.
         """
         assert self.model_config is not None, "Model must be loaded first"
-        
+
         # Setup residue set (same as trainer)
         from instanovo.utils.residues import ResidueSet
         residue_set = ResidueSet(
@@ -202,7 +202,7 @@ class EmbeddingEvaluator:
 
         # Extract metadata columns from dataset config (same as trainer)
         metadata_columns = self.config.dataset.get("metadata_columns", None)
-        
+
         # Setup search data manager if enabled (same as trainer)
         from instanovo_fm.data.search_data_manager import create_search_data_manager
         search_data_config = {
@@ -212,11 +212,11 @@ class EmbeddingEvaluator:
             "search_data_spectrum_key": self.config.dataset.get("search_data_spectrum_key", "filepath"),
         }
         search_data_manager = create_search_data_manager(search_data_config)
-        
-        
+
+
         # Get masking config (same as trainer)
         masking_cfg = self.model_config.get("masking", {})
-        
+
         # Create processor (same as trainer validation processor)
         processor = FoundationalDataProcessor(
             n_peaks=self.model_config.get("n_peaks", 200),
@@ -236,9 +236,9 @@ class EmbeddingEvaluator:
             search_data_manager=search_data_manager,
             build_metadata=meta_token_enabled
         )
-        
+
         return processor
-    
+
     def setup_dataloader(
         self,
         split: str = "valid",
@@ -257,10 +257,10 @@ class EmbeddingEvaluator:
             DataLoader for the specified split.
         """
         assert self.data_processor is not None, "Data processor must be setup first"
-        
+
         # Get dataset configuration
         dataset_config = self.config.get("dataset", {})
-        
+
         # Determine which split to use
         split_key = f"{split}_path"
         if split_key not in dataset_config:
@@ -268,12 +268,12 @@ class EmbeddingEvaluator:
                 f"Dataset split '{split}' not found in config. "
                 f"Available keys: {list(dataset_config.keys())}"
             )
-        
+
         # Create dataset using SpectrumDataFrame
         from instanovo.utils.data_handler import SpectrumDataFrame
-        
+
         dataset_path = dataset_config[split_key]
-        
+
         # Load dataset using SpectrumDataFrame.load (same as trainer)
         dataset = SpectrumDataFrame.load(
             source=dataset_path,
@@ -318,12 +318,12 @@ class EmbeddingEvaluator:
         dataset = HFDataset.from_pandas(df.to_pandas())
 
         logger.info(f"Loaded {len(dataset)} samples from dataset")
-        
+
         # Add prediction_id column to dataset (same as trainer)
         import numpy as np
         from datasets import Value
         dataset = dataset.add_column("prediction_id", np.arange(len(dataset)), feature=Value("int32"))
-        
+
         # Add prediction_id column to processor (same as trainer)
         self.data_processor.add_metadata_columns(["prediction_id"])
 
@@ -338,11 +338,11 @@ class EmbeddingEvaluator:
         # Process dataset using process_dataset which handles format conversion
         # This is the same as trainer validation data processing
         dataset = self.data_processor.process_dataset(dataset, return_format="torch")
-        
+
         # Create dataloader
         batch_size = self.eval_config.get("batch_size", 256)
         num_workers = self.config.get("num_workers", 4)
-        
+
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
@@ -351,9 +351,9 @@ class EmbeddingEvaluator:
             pin_memory=False,
             collate_fn=self.data_processor.collate_fn,
         )
-        
+
         return dataloader
-    
+
     def generate_embeddings(
         self,
         force_regenerate: bool = False,
@@ -391,12 +391,12 @@ class EmbeddingEvaluator:
         # subdirectory otherwise. Without the split in the path, train embeddings
         # would be written first and then loaded back as valid and test.
         cache_dir = self.output_dir if split is None else self.output_dir / f"embeddings_{split}"
-        
+
         # Check if cached embeddings exist (only relevant when saving is enabled)
         if save_embeddings and not force_regenerate:
             embeddings_path = cache_dir / "embeddings.h5"
             index_path = cache_dir / "index.faiss"
-            
+
             if embeddings_path.exists() and index_path.exists():
                 # Validate cached embeddings match requested pooling strategy
                 requested_pooling = self.eval_config.get("embedding_pooling", "cls")
@@ -415,18 +415,18 @@ class EmbeddingEvaluator:
                 except Exception:
                     logger.info("Found cached embeddings, loading from disk")
                     return embedding_io.load(cache_dir)
-        
+
         # Get max_samples limit — per-split override takes precedence over global config
         max_samples = override_max_samples if override_max_samples is not None else self.eval_config.get("max_samples", None)
-        
+
         # Generate embeddings (with optional saving)
         save_str = ", saving to disk" if save_embeddings else ""
         limit_str = f", max_samples={max_samples}" if max_samples else ""
         logger.info(f"Generating embeddings{save_str}{limit_str}")
-        
+
         # Check if we should compute confidence scores
         compute_confidence = self.eval_config.get("compute_spectrum_confidence", False)
-        
+
         # Check if any task requires per-peak confidence, spectra storage, or peak embeddings
         store_per_peak_confidence = False
         store_peak_embeddings = False
@@ -454,8 +454,8 @@ class EmbeddingEvaluator:
         # Check if we should generate theoretical spectra
         theoretical_config = self.eval_config.get("theoretical_spectrum", {})
         generate_theoretical = theoretical_config.get("enabled", False)
-        
-        
+
+
         embedding_pooling = self.eval_config.get("embedding_pooling", "cls")
 
         embeddings, metadata, faiss_index = embedding_io.generate(
@@ -475,44 +475,44 @@ class EmbeddingEvaluator:
             embedding_pooling=embedding_pooling,
             confidence_temperature=self.eval_config.get("confidence_temperature", 1.0),
         )
-        
+
         return embeddings, metadata, faiss_index
-    
+
     def compute_sequence_similarity_clustering(
         self,
         metadata: Dict[str, np.ndarray],
     ) -> Dict[str, np.ndarray]:
         """Compute sequence similarity clustering using MMseqs2 and inject into metadata.
-        
+
         This method extracts peptide sequences from metadata, performs sequence similarity
         clustering using MMseqs2, and adds the cluster IDs back into metadata as 'seq_cluster_id'.
-        
+
         The clustering is configurable via evaluation config:
         - enable_sequence_clustering: Whether to run clustering (default: False)
         - sequence_identity_threshold: Identity threshold for MMseqs2 (default: 0.7)
         - sequence_key: Metadata key containing sequences (default: 'sequence' or 'peptides')
-        
+
         Args:
             metadata: Metadata dictionary to enrich with clustering information
-            
+
         Returns:
             Updated metadata dictionary with 'seq_cluster_id' field added
         """
         from instanovo_fm.utils.mmseq2 import MMseqs2
-        
+
         # Check if clustering is enabled
         clustering_config = self.eval_config.get("sequence_clustering", {})
         enable_clustering = clustering_config.get("enable", False)
-        
+
         if not enable_clustering:
             return metadata
-        
+
         logger.info("Computing sequence similarity clustering with MMseqs2...")
-        
+
         # Get configuration parameters
         identity_threshold = clustering_config.get("identity_threshold", 0.7)
         sequence_key = clustering_config.get("sequence_key", None)
-        
+
         # Try to find sequence data in metadata
         if sequence_key is None:
             # Auto-detect sequence key
@@ -522,7 +522,7 @@ class EmbeddingEvaluator:
                 if key in metadata:
                     sequence_key = key
                     break
-            
+
             if sequence_key is None:
                 logger.warning(
                     "No sequence data found in metadata. "
@@ -530,17 +530,17 @@ class EmbeddingEvaluator:
                     "Skipping sequence clustering."
                 )
                 return metadata
-        
+
         if sequence_key not in metadata:
             logger.warning(
                 f"Sequence key '{sequence_key}' not found in metadata. "
                 "Skipping sequence clustering."
             )
             return metadata
-        
+
         # Extract sequences
         sequences = metadata[sequence_key]
-        
+
         # Convert to list if numpy array (and decode if bytes)
         if isinstance(sequences, np.ndarray):
             if sequences.dtype.kind == 'S' or sequences.dtype.kind == 'O':
@@ -556,7 +556,7 @@ class EmbeddingEvaluator:
                 sequences = sequences_list
             else:
                 sequences = sequences.tolist()
-        
+
         # Filter out None, empty, or invalid sequences
         valid_sequences = []
         valid_indices = []
@@ -566,13 +566,13 @@ class EmbeddingEvaluator:
                 if all(c.isalpha() or c == '(' or c == ')' or c == '[' or c == ']' for c in seq):
                     valid_sequences.append(seq)
                     valid_indices.append(idx)
-        
+
         if len(valid_sequences) == 0:
             logger.warning("No valid sequences found for clustering. Skipping sequence clustering.")
             return metadata
-        
+
         logger.info(f"Running MMseqs2 clustering on {len(valid_sequences)} sequences (identity_threshold={identity_threshold})")
-        
+
         try:
             # Run MMseqs2 clustering
             mmseqs = MMseqs2(
@@ -581,22 +581,22 @@ class EmbeddingEvaluator:
                 remove_tmp=True,
                 remove_output=True,
             )
-            
+
             cluster_ids = mmseqs.run()
-            
+
             if cluster_ids is None or len(cluster_ids) == 0:
                 logger.warning("MMseqs2 clustering returned no results")
                 return metadata
-            
+
             # Create full cluster ID array (with -1 for invalid sequences)
             full_cluster_ids = np.full(len(sequences), -1, dtype=np.int32)
             for valid_idx, cluster_id in zip(valid_indices, cluster_ids):
                 if cluster_id is not None:
                     full_cluster_ids[valid_idx] = cluster_id
-            
+
             # Add to metadata
             metadata['seq_cluster_id'] = full_cluster_ids
-            
+
             # Log statistics
             num_clusters = len(set(cluster_ids) - {None})
             num_clustered = np.sum(full_cluster_ids >= 0)
@@ -604,32 +604,32 @@ class EmbeddingEvaluator:
             logger.info(f"  - {num_clusters} unique clusters identified")
             logger.info(f"  - {num_clustered}/{len(sequences)} sequences successfully clustered")
             logger.info(f"  - Cluster IDs stored in metadata['seq_cluster_id']")
-            
+
         except Exception as e:
             logger.error(f"MMseqs2 clustering failed: {e}")
             logger.warning("Continuing without sequence clustering")
-        
+
         return metadata
-    
+
     def get_metrics_for_logging(
         self,
         results: Dict[str, Any],
         embeddings_info: Dict[str, Any]
     ) -> Dict[str, float]:
         """Extract metrics from evaluation results for logging to TensorBoard/Neptune.
-        
+
         This method processes task results and extracts loggable metrics by calling
         each task's get_loggable_metrics() method. It returns a flat dictionary
         with prefixed metric names ready for logging.
-        
+
         Args:
             results: Dictionary of task results from run_evaluation_tasks()
             embeddings_info: Dictionary of embedding statistics
-            
+
         Returns:
             Flat dictionary mapping metric names to scalar values.
             Keys are prefixed with "embed/{task_name}/" for organization.
-            
+
         Example output:
             {
                 "embed/num_embeddings": 2500,
@@ -682,7 +682,7 @@ class EmbeddingEvaluator:
                 continue
 
         return loggable_metrics
-    
+
     def _all_tasks_require_multi_split(self, tasks_to_run: list) -> bool:
         """Return True only if every task in the list has requires_multi_split=True."""
         if not tasks_to_run:
@@ -1462,7 +1462,7 @@ class EmbeddingEvaluator:
             raise RuntimeError(f"All evaluation tasks failed: {failed_summaries}")
 
         return results
-    
+
     def _save_task_results(
         self,
         task_name: str,
@@ -1470,7 +1470,7 @@ class EmbeddingEvaluator:
         task_output_dir: Path,
     ) -> None:
         """Save individual task results to its own directory.
-        
+
         Args:
             task_name: Name of the task
             task_results: Results from the task
@@ -1483,7 +1483,7 @@ class EmbeddingEvaluator:
             "execution_time": task_results.get("execution_time", 0),
             "success": task_results.get("error") is None,
         }
-        
+
         # Add key metrics via each task's get_loggable_metrics()
         if "error" not in task_results:
             try:
@@ -1499,7 +1499,7 @@ class EmbeddingEvaluator:
         summary_path = task_output_dir / "task_summary.json"
         with open(summary_path, "w") as f:
             json.dump(self._make_json_serializable(task_summary), f, indent=2)
-        
+
         # Save full task results (if not an error)
         if "error" not in task_results:
             full_results_path = task_output_dir / "task_results.json"
@@ -1507,14 +1507,14 @@ class EmbeddingEvaluator:
                 # Convert numpy arrays to lists for JSON serialization
                 serializable_results = self._make_json_serializable(task_results)
                 json.dump(serializable_results, f, indent=2)
-    
+
     def save_results(
         self,
         results: Dict[str, Any],
         embeddings_info: Dict[str, Any],
     ) -> None:
         """Print evaluation summary to console.
-        
+
         Args:
             results: Dictionary of task results
             embeddings_info: Information about embeddings (num, dim, etc.)
@@ -1527,7 +1527,7 @@ class EmbeddingEvaluator:
             "embeddings": embeddings_info,
             "tasks": {},
         }
-        
+
         # Add task results (compact summary)
         for task_name, task_results in results.items():
             # Create compact summary for each task
@@ -1535,7 +1535,7 @@ class EmbeddingEvaluator:
                 "success": task_results.get("error") is None,
                 "execution_time": task_results.get("execution_time", 0),
             }
-            
+
             # Add key metrics via each task's get_loggable_metrics()
             if "error" not in task_results:
                 try:
@@ -1546,9 +1546,9 @@ class EmbeddingEvaluator:
                     pass  # Task not found or no loggable metrics
             else:
                 task_summary["error"] = task_results["error"]
-            
+
             summary["tasks"][task_name] = task_summary
-        
+
         # Print summary to console
         self._print_summary(summary)
 
@@ -1594,10 +1594,10 @@ class EmbeddingEvaluator:
 
     def _make_json_serializable(self, obj: Any) -> Any:
         """Recursively convert numpy arrays and other non-serializable objects to JSON-compatible types.
-        
+
         Args:
             obj: Object to convert
-            
+
         Returns:
             JSON-serializable version of the object
         """
@@ -1608,7 +1608,7 @@ class EmbeddingEvaluator:
                 obj = OmegaConf.to_container(obj, resolve=True)
         except ImportError:
             pass
-        
+
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, np.integer):
@@ -1623,19 +1623,19 @@ class EmbeddingEvaluator:
             return [self._make_json_serializable(item) for item in obj]
         else:
             return obj
-    
+
     def _save_config_files(self) -> None:
         """Save evaluation and model configuration to output directory.
-        
+
         This creates two files:
         1. eval_config.yaml - The evaluation configuration used
         2. model_config.yaml - The model configuration from the checkpoint
         """
         from omegaconf import OmegaConf
-        
+
         assert self.model is not None, "Model must be loaded before saving config files"
         assert self.model_config is not None, "Model config must be loaded before saving config files"
-        
+
         # Save evaluation configuration
         eval_config_path = self.output_dir / "eval_config.yaml"
         eval_config_dict = {
@@ -1645,19 +1645,19 @@ class EmbeddingEvaluator:
             "num_workers": self.config.get("num_workers", 4),
             "device": str(self.device),
         }
-        
+
         with open(eval_config_path, "w") as f:
             OmegaConf.save(eval_config_dict, f)
-        
-        
+
+
         # Save model configuration
         if self.model_config is not None:
             model_config_path = self.output_dir / "model_config.yaml"
-            
+
             # Convert to container and add model metadata
             # Note: resolve=False to avoid interpolation errors when config has unresolved references
             model_config_dict = OmegaConf.to_container(self.model_config, resolve=False)
-            
+
             # Add model summary information
             model_summary = {
                 "model_info": {
@@ -1685,11 +1685,11 @@ class EmbeddingEvaluator:
                 },
                 "full_config": model_config_dict,
             }
-            
+
             with open(model_config_path, "w") as f:
                 OmegaConf.save(model_summary, f)
-            
-    
+
+
     def _print_summary(self, summary: Dict[str, Any]) -> None:
         """Print evaluation summary to console.
 
@@ -1726,7 +1726,7 @@ class EmbeddingEvaluator:
                     logger.info(f"  [FAILED] {task_name}: {task_summary.get('error', 'Unknown error')}")
 
         logger.info(f"Output: {summary['output_dir']}")
-    
+
     def evaluate(
         self,
         split: str = "valid",
@@ -1927,5 +1927,3 @@ class EmbeddingEvaluator:
         logger.info("Evaluation complete!")
 
         return all_results
-
-

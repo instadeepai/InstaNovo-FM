@@ -67,10 +67,10 @@ logger = ColorLog(console, __name__).logger
 
 def _ion_types_for_fragmentation(frag_type: Optional[str]) -> tuple[str, ...]:
     """Determine ion types based on fragmentation method.
-    
+
     Args:
         frag_type: Fragmentation type string (e.g., "CID", "HCD", "ETD", "UVPD")
-        
+
     Returns:
         Tuple of ion types to use for theoretical spectrum generation
     """
@@ -148,25 +148,25 @@ def _generate_theoretical_spectra_batch(
     config: Dict[str, Any],
 ) -> Optional[Dict[str, np.ndarray]]:
     """Generate theoretical spectra for all samples in metadata using conditional annotation.
-    
+
     This function processes all spectra in the metadata and generates theoretical
     fragment ions for each peptide sequence. It uses a two-pass conditional annotation
     strategy to reduce false positives:
-    
+
     Pass 1: Match base fragment ions (b, y, etc.) without losses or isotopes
     Pass 2: For each matched base ion, conditionally check for:
         - Neutral losses (if parent ion matched)
         - Isotopes (if monoisotopic peak matched and intense enough)
-    
+
     This approach dramatically reduces false positives because:
     - Neutral loss peaks cannot exist without their parent ion
     - Isotope peaks are only checked for intense monoisotopic peaks
     - Far fewer theoretical peaks need to be generated and matched
-    
+
     Args:
         metadata: Metadata dictionary containing sequences, spectra, charges, etc.
         config: Theoretical spectrum configuration from evaluation config
-        
+
     Returns:
         Dictionary with theoretical spectrum data to add to metadata:
             - theoretical_mz: List of theoretical m/z arrays (base ions only, object array)
@@ -186,19 +186,19 @@ def _generate_theoretical_spectra_batch(
     keep_modifications = config.get('keep_modifications', True)
     max_mz = config.get('max_mz', 2500.0)
     min_peaks_per_spectrum = config.get('min_peaks_per_spectrum', 5)
-    
+
     # Conditional annotation parameters
     use_conditional_annotation = config.get('use_conditional_annotation', True)
     loss_types = tuple(config.get('loss_types', ['H2O', 'NH3']))
     isotope_intensity_threshold = config.get('isotope_intensity_threshold', 0.02)
-    
+
     cid_da_tol = config.get('cid_da_tol', DEFAULT_CID_DA_TOL)
     # None disables auto-selection (use ppm for everything)
 
     # Custom ion detection parameters (NEW)
     add_custom_ions = config.get('add_custom_ions', False)
     custom_ions = config.get('custom_ions', None)  # None = use DEFAULT_CUSTOM_IONS
-    
+
     # Find sequence field
     sequence_keys = ['sequence', 'peptides', 'peptide', 'seq']
     sequences = None
@@ -206,18 +206,18 @@ def _generate_theoretical_spectra_batch(
         if key in metadata:
             sequences = metadata[key]
             break
-    
+
     if sequences is None:
         logger.warning("No sequence data found for theoretical spectrum generation")
         return None
-    
+
     # Get spectra
     if 'spectra' not in metadata:
         logger.warning("No spectra found in metadata for theoretical spectrum generation")
         return None
-    
+
     spectra = metadata['spectra']
-    
+
     # Get precursor charges
     charge_keys = ['precursor_charge', 'charge', 'precursor_charge_id']
     precursor_charges = None
@@ -225,11 +225,11 @@ def _generate_theoretical_spectra_batch(
         if key in metadata:
             precursor_charges = metadata[key]
             break
-    
+
     if precursor_charges is None:
         logger.warning("No precursor charge data found. Using default charge=2")
         precursor_charges = np.full(len(sequences), 2, dtype=np.int32)
-    
+
     # Get fragmentation types (optional)
     frag_type_keys = ['frag_type', 'fragmentation_type', 'fragmentation_method']
     frag_types = None
@@ -237,7 +237,7 @@ def _generate_theoretical_spectra_batch(
         if key in metadata:
             frag_types = metadata[key]
             break
-    
+
     # Initialize result arrays
     n_spectra = len(sequences)
     theoretical_mz_list = []
@@ -257,12 +257,12 @@ def _generate_theoretical_spectra_batch(
     n_failed = 0
     n_skipped_invalid_seq = 0
     n_skipped_few_peaks = 0
-    
+
     # Process each spectrum
     logger.info(f"Generating theoretical spectra for {n_spectra} samples...")
     for idx in tqdm(range(n_spectra), desc="Generating theoretical spectra", disable=not sys.stderr.isatty()):
         seq = sequences[idx]
-        
+
         # Skip invalid sequences
         if seq is None or not isinstance(seq, str) or len(seq.strip()) == 0:
             theoretical_mz_list.append(None)
@@ -279,7 +279,7 @@ def _generate_theoretical_spectra_batch(
             spectrum_quality_list.append(None)
             n_skipped_invalid_seq += 1
             continue
-        
+
         # Get spectrum data
         if spectra.ndim == 3:  # (N, L, 2) format
             spectrum = spectra[idx]  # (L, 2)
@@ -301,15 +301,15 @@ def _generate_theoretical_spectra_batch(
             spectrum_quality_list.append(None)
             n_failed += 1
             continue
-        
+
         # Denormalize m/z values (spectra are normalized 0-1 in model)
         mz = mz * max_mz
-        
+
         # Filter out zero/padding peaks
         valid_mask = (mz > 0) & (intensity > 0)
         mz = mz[valid_mask]
         intensity = intensity[valid_mask]
-        
+
         # Skip if too few peaks
         if len(mz) < min_peaks_per_spectrum:
             theoretical_mz_list.append(None)
@@ -326,19 +326,19 @@ def _generate_theoretical_spectra_batch(
             spectrum_quality_list.append(None)
             n_skipped_few_peaks += 1
             continue
-        
+
         # Get precursor charge
         charge = int(precursor_charges[idx])
         if charge <= 0:
             charge = 2  # Default
-        
+
         # Get fragmentation type and determine ion types
         frag_type = None
         if frag_types is not None and idx < len(frag_types):
             frag_type = frag_types[idx]
             if isinstance(frag_type, (bytes, np.bytes_)):
                 frag_type = frag_type.decode('utf-8')
-        
+
         # Determine ion types (use config if set, otherwise auto-detect)
         if ion_types is not None:
             ion_types_used = tuple(ion_types) if isinstance(ion_types, list) else ion_types
@@ -347,14 +347,14 @@ def _generate_theoretical_spectra_batch(
 
         # Auto-select Da tolerance for low-res CID; None = use ppm_tol
         da_tol = _da_tol_for_fragmentation(frag_type, cid_da_tol) if cid_da_tol is not None else None
-        
+
         # Clean sequence
         seq_str = str(seq).strip()
         clean_sequence = DataProcessor.clean_peptide_for_pyopenms(
             seq_str,
             keep_modifications=keep_modifications
         )
-        
+
         if clean_sequence is None:
             theoretical_mz_list.append(None)
             theoretical_annotations_list.append(None)
@@ -370,7 +370,7 @@ def _generate_theoretical_spectra_batch(
             spectrum_quality_list.append(None)
             n_failed += 1
             continue
-        
+
         # Generate theoretical spectrum and match using conditional annotation
         try:
             if use_conditional_annotation:
@@ -392,7 +392,7 @@ def _generate_theoretical_spectra_batch(
                     add_precursor=add_precursor,
                     use_closest=False,
                 )
-                
+
                 # Extract theoretical spectrum from match results
                 # Note: Conditional annotation doesn't return full theoretical spectrum,
                 # only matched peaks. For consistency, we'll generate base spectrum separately.
@@ -417,7 +417,7 @@ def _generate_theoretical_spectra_batch(
                     max_isotope=max_isotope if add_isotopes else 0,
                     add_precursor=add_precursor,
                 )
-                
+
                 # Match experimental peaks to theoretical
                 match_result = match_theoretical_to_experimental(
                     exp_mz=mz,
@@ -428,7 +428,7 @@ def _generate_theoretical_spectra_batch(
                     use_closest=False,
                     theo_annotations=theo_annotations,
                 )
-                
+
         except Exception as e:
             # If modified sequence fails, try without modifications
             if keep_modifications:
@@ -436,7 +436,7 @@ def _generate_theoretical_spectra_batch(
                     seq_str,
                     keep_modifications=False
                 )
-                
+
                 if clean_sequence_unmod is not None:
                     try:
                         if use_conditional_annotation:
@@ -457,7 +457,7 @@ def _generate_theoretical_spectra_batch(
                                 add_precursor=add_precursor,
                                 use_closest=False,
                             )
-                            
+
                             theo_mz, theo_annotations = generate_theoretical_spectrum(
                                 peptide=clean_sequence_unmod,
                                 precursor_charge=charge,
@@ -478,7 +478,7 @@ def _generate_theoretical_spectra_batch(
                                 max_isotope=max_isotope if add_isotopes else 0,
                                 add_precursor=add_precursor,
                             )
-                            
+
                             match_result = match_theoretical_to_experimental(
                                 exp_mz=mz,
                                 exp_intensity=intensity,
@@ -488,7 +488,7 @@ def _generate_theoretical_spectra_batch(
                                 use_closest=False,
                                 theo_annotations=theo_annotations,
                             )
-                        
+
                         clean_sequence = clean_sequence_unmod
                     except Exception as e2:
                         theoretical_mz_list.append(None)
@@ -520,7 +520,7 @@ def _generate_theoretical_spectra_batch(
                 parent_annotation_list.append(None)
                 n_failed += 1
                 continue
-        
+
         # Detect custom ions if enabled (NEW)
         signal_mask = match_result["mask"].copy()  # Start with theoretical fragment matches
         matched_annotation = match_result.get("matched_annotation", None)
@@ -643,7 +643,7 @@ def _generate_theoretical_spectra_batch(
         fragment_group_key_list.append(frag_keys)
         spectrum_quality_list.append(sq)
         n_success += 1
-    
+
     # Log statistics (only non-zero issues as warnings)
     if n_failed > 0:
         logger.warning(f"Theoretical generation: {n_failed} failed")
@@ -701,7 +701,7 @@ def generate(
     confidence_temperature: float = 1.0,
 ) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
     """Generate embeddings and build FAISS index from model and dataloader.
-    
+
     This is the core function for embedding generation. It:
     1. Runs inference on all batches in the dataloader
     2. Collects embeddings and metadata
@@ -710,7 +710,7 @@ def generate(
     5. Optionally generates theoretical spectra and matches them to experimental peaks
     6. Optionally extracts and stores peak-level embeddings
     7. Optionally saves results to disk
-    
+
     Args:
         model: The foundation model to use for encoding
         dataloader: DataLoader providing batches of spectra
@@ -735,31 +735,31 @@ def generate(
     """
     if not FAISS_AVAILABLE:
         raise ImportError("faiss-cpu is required for embedding generation. Install with: pip install faiss-cpu")
-    
+
     if device is None:
         device = next(model.parameters()).device
-    
+
     model = model.to(device)
     model.eval()
-    
+
     # Lists to collect embeddings and metadata
     all_embeddings = []
     all_metadata = []
-    
+
     # Track number of samples processed
     total_samples_processed = 0
-    
+
     # Check if we should compute confidence (enable if store_per_peak_confidence is requested)
     if store_per_peak_confidence:
         compute_confidence = True
-    
+
     # Check if model supports confidence computation
     is_classification = hasattr(model, 'mz_task') and model.mz_task == 'classification'
     if compute_confidence and not is_classification:
         logger.warning("Confidence computation requested but model is not a classification model. Skipping.")
         compute_confidence = False
         store_per_peak_confidence = False
-    
+
 
     # Process batches
     try:
@@ -768,7 +768,7 @@ def generate(
     except TypeError:
         logger.info("Generating embeddings...")
     iterator = tqdm(dataloader, desc="Generating embeddings", disable=not sys.stderr.isatty()) if show_progress else dataloader
-    
+
     with torch.inference_mode():
         for batch_idx, batch in enumerate(iterator):
             # Check if we've reached max_samples limit
@@ -779,7 +779,7 @@ def generate(
             # Move batch to device
             spectra = batch["spectra"].to(device)
             meta = batch.get("meta", {})
-            
+
             # Get embeddings (and optionally peak embeddings)
             if store_peak_embeddings:
                 # Use forward_with_attn to get peak embeddings + CLS token
@@ -807,7 +807,7 @@ def generate(
             else:
                 embeddings = model.encode(spectra, meta=meta)
                 peak_embeddings_batch = None
-            
+
             # Optionally compute per-spectrum and per-peak confidence scores
             spectrum_confidence = None
             per_peak_confidence = None
@@ -817,21 +817,21 @@ def generate(
             if compute_confidence:
                 try:
                     from instanovo_fm.trainer.losses import compute_classifier_confidence
-                    
+
                     # Forward pass to get logits
                     spectra_mask = batch.get("spectra_mask")
                     if spectra_mask is not None:
                         spectra_mask = spectra_mask.to(device)
-                    
+
                     preds, aux_out = model(spectra, spectra_mask=spectra_mask, meta=meta)
-                    
+
                     if isinstance(preds, tuple):  # Classification model
                         group_logits, offset_logits = preds
-                        
+
                         # Get model bin parameters
                         n_groups = int(model.n_bin_groups_tensor.item()) if hasattr(model, 'n_bin_groups_tensor') else None
                         last_group_size = int(model.last_group_size_tensor.item()) if hasattr(model, 'last_group_size_tensor') else None
-                        
+
                         if n_groups is not None and last_group_size is not None:
                             # Compute confidence metrics
                             confidence_dict = compute_classifier_confidence(
@@ -840,18 +840,18 @@ def generate(
                                 n_groups=n_groups,
                                 last_group_size=last_group_size,
                             )
-                            
+
                             # Extract per-peak confidence scores
                             conf_joint = confidence_dict["conf_joint"]  # (B, L)
                             padding_mask = batch.get("spectra_mask", None)
-                            
+
                             # Store per-peak confidence if requested
                             if store_per_peak_confidence:
                                 per_peak_confidence = conf_joint.cpu().numpy()  # (B, L)
                                 # Also store decomposed group/offset confidence
                                 per_peak_conf_group = confidence_dict["conf_group"].cpu().numpy()  # (B, L)
                                 per_peak_conf_offset = confidence_dict["conf_offset"].cpu().numpy()  # (B, L)
-                            
+
                             # Compute per-spectrum confidence by aggregating per-peak confidences
                             if padding_mask is not None:
                                 # Compute mean confidence over non-padded peaks
@@ -906,11 +906,11 @@ def generate(
                     per_peak_conf_group = None
                     per_peak_conf_offset = None
                     predicted_mz_normalized = None
-            
+
             # Convert to numpy
             embeddings_np = embeddings.cpu().numpy()
             batch_size_actual = len(embeddings_np)
-            
+
             # Check if we need to trim this batch to respect max_samples
             if max_samples is not None:
                 samples_remaining = max_samples - total_samples_processed
@@ -924,15 +924,15 @@ def generate(
                             batch[key] = batch[key][:samples_remaining]
                         elif isinstance(batch[key], list) and len(batch[key]) > samples_remaining:
                             batch[key] = batch[key][:samples_remaining]
-            
+
             # Collect embeddings
             all_embeddings.append(embeddings_np)
             total_samples_processed += batch_size_actual
-            
+
             # Collect all metadata from batch (already processed by collate_fn)
             # This includes both data fields and metadata columns
             batch_metadata = {}
-            
+
             for key, value in batch.items():
                 # Store spectra if per-peak confidence is requested (needed for confidence signal analysis)
                 # Otherwise skip spectra to save memory
@@ -941,7 +941,7 @@ def generate(
                         # Store spectra for confidence signal analysis
                         batch_metadata[key] = value.cpu().numpy()
                     continue
-                
+
                 # Convert to numpy/list as appropriate
                 if isinstance(value, torch.Tensor):
                     batch_metadata[key] = value.cpu().numpy()
@@ -984,18 +984,18 @@ def generate(
                             batch_metadata[prefixed_key] = np.full(batch_size_actual, v, dtype=object)
                 else:
                     batch_metadata[key] = value
-            
+
             # Add batch index for tracking
             batch_metadata["batch_idx"] = np.full(batch_size_actual, batch_idx)
             batch_metadata["sample_idx"] = np.arange(batch_size_actual) + batch_idx * batch_size
-            
+
             # Add spectrum confidence if computed
             if spectrum_confidence is not None:
                 # Trim confidence array if batch was trimmed due to max_samples
                 if len(spectrum_confidence) > batch_size_actual:
                     spectrum_confidence = spectrum_confidence[:batch_size_actual]
                 batch_metadata["spectrum_confidence"] = spectrum_confidence
-            
+
             # Add per-peak confidence if computed
             if per_peak_confidence is not None:
                 # Trim confidence array if batch was trimmed due to max_samples
@@ -1033,19 +1033,19 @@ def generate(
                     if len(pre_emb_np) > batch_size_actual:
                         pre_emb_np = pre_emb_np[:batch_size_actual]
                     batch_metadata["peak_embeddings_pretransformer"] = pre_emb_np
-            
+
             all_metadata.append(batch_metadata)
-    
-    
+
+
     # Concatenate all embeddings and metadata
     embeddings_array = np.concatenate(all_embeddings, axis=0)
-    
+
     # Merge metadata dictionaries
     # Collect all unique keys across all batches
     all_keys = set()
     for md in all_metadata:
         all_keys.update(md.keys())
-    
+
     merged_metadata = {}
     for key in all_keys:
         # Collect values for this key from all batches (skip if missing)
@@ -1053,7 +1053,7 @@ def generate(
         for md in all_metadata:
             if key in md:
                 values_to_concat.append(md[key])
-        
+
         # Only concatenate if all batches have this key
         if len(values_to_concat) == len(all_metadata):
             try:
@@ -1065,7 +1065,7 @@ def generate(
         else:
             # Key not present in all batches - skip it
             logger.warning(f"Metadata key '{key}' not present in all batches. Skipping.")
-    
+
     # Compute hydrophobicity from peptide sequences if available.
     # Try 'peptides' first (may be tokenized integer tensors, in which case
     # compute_hydrophobicity returns None), then fall back to 'sequence' (raw
@@ -1079,7 +1079,7 @@ def generate(
                     logger.debug(f"Computed hydrophobicity from '{_seq_key}' for {len(hydrophobicity)} entries")
             except Exception as e:
                 logger.warning(f"Failed to compute hydrophobicity from '{_seq_key}': {e}")
-    
+
     # Extract search_project from USI if available (needed by LinearProbeTask for project-disjoint splitting)
     if 'usi' in merged_metadata and 'search_project' not in merged_metadata:
         try:
@@ -1113,30 +1113,30 @@ def generate(
     if 'sequence' in merged_metadata:
         try:
             sequences = merged_metadata['sequence']
-            
+
             # Vectorized cleaning: process all sequences at once
             # Pre-allocate array for better memory efficiency
             cleaned_sequences = np.empty(len(sequences), dtype=object)
-            
+
             # Vectorized check for valid sequences
             is_valid = np.array([
                 seq is not None and isinstance(seq, str) and len(seq.strip()) > 0
                 for seq in sequences
             ], dtype=bool)
-            
+
             # Clean only valid sequences (avoid unnecessary function calls)
             for i, seq in enumerate(sequences):
                 if is_valid[i]:
                     cleaned_sequences[i] = DataProcessor.clean_peptide_for_pyopenms(seq, keep_modifications=True)
                 else:
                     cleaned_sequences[i] = None
-            
+
             # Extract modification types from cleaned sequences
             modification_types = compute_modification_types(cleaned_sequences, use_modified_peptide=True)
-            
+
             if modification_types is not None and len(modification_types) > 0:
                 merged_metadata['modification_types'] = modification_types
-                
+
                 # Vectorized binary PTM presence field creation
                 # Single vectorized comparison instead of loop
                 is_modified = modification_types != 'Unmodified'
@@ -1159,34 +1159,34 @@ def generate(
                     f"glyco={int(ptm_flags['mod_glyco'].sum())}, "
                     f"deam_n={int(extra['mod_deam_n'].sum())} / {len(sequences)}"
                 )
-                
+
                 logger.debug(f"Modification types: {num_modified}/{len(modification_types)} modified")
-                
+
                 # Vectorized multi-class modification type field creation
                 # Use numpy operations instead of Python loops
-                
+
                 # Vectorized check for multi-modifications (contains ' + ')
                 has_multiple = np.array([' + ' in str(mod) for mod in modification_types], dtype=bool)
-                
+
                 # Initialize with modification types
                 single_mods = modification_types.copy()
-                
+
                 # Assign multi-modifications to "Other" (vectorized)
                 single_mods[has_multiple] = 'Other'
-                
+
                 # Count occurrences (excluding Unmodified and Other)
                 unique_mods, counts = np.unique(single_mods, return_counts=True)
-                
+
                 # Vectorized filtering
                 mask = (unique_mods != 'Unmodified') & (unique_mods != 'Other')
                 ranked_mods = unique_mods[mask]
                 ranked_counts = counts[mask]
-                
+
                 if len(ranked_mods) > 0:
                     # Sort by count (descending) and take top 6
                     sorted_indices = np.argsort(ranked_counts)[::-1]
                     top_6_mods = set(ranked_mods[sorted_indices[:6]])  # Use set for O(1) lookup
-                    
+
                     # Vectorized multi-class label assignment using numpy where
                     modification_class = np.where(
                         single_mods == 'Unmodified',
@@ -1197,9 +1197,9 @@ def generate(
                             'Other'
                         )
                     )
-                    
+
                     merged_metadata['modification_class'] = modification_class
-                    
+
                     # Log class distribution
                     class_unique, class_counts = np.unique(modification_class, return_counts=True)
                     logger.debug(f"Modification classes: {len(class_unique)} types")
@@ -1208,49 +1208,49 @@ def generate(
                 else:
                     # No modifications found, only Unmodified
                     merged_metadata['modification_class'] = single_mods
-                    
+
         except Exception as e:
             logger.warning(f"Failed to extract modification types: {e}")
-    
+
     # Generate theoretical spectra if requested
     if generate_theoretical and theoretical_config is not None:
         theoretical_results = _generate_theoretical_spectra_batch(
             metadata=merged_metadata,
             config=theoretical_config,
         )
-        
+
         if theoretical_results is not None:
             # Add theoretical spectrum data to metadata
             merged_metadata.update(theoretical_results)
             n_ok = theoretical_results.get('n_theoretical_success', 0)
             n_fail = theoretical_results.get('n_theoretical_failed', 0)
             logger.info(f"Theoretical spectra: {n_ok} generated, {n_fail} failed")
-    
+
     # Build FAISS index for similarity search
     dimension = embeddings_array.shape[1]
-    
+
     # Create FAISS index using inner product (cosine similarity for normalized vectors)
     index = faiss.IndexFlatIP(dimension)
-    
+
     # Normalize embeddings for cosine similarity
     embeddings_normalized = embeddings_array.astype(np.float32)
     faiss.normalize_L2(embeddings_normalized)
-    
+
     # Verify normalization
     norms = np.linalg.norm(embeddings_normalized, axis=1)
     mean_norm = np.mean(norms)
     std_norm = np.std(norms)
     assert np.allclose(mean_norm, 1.0, atol=1e-3), f"Embeddings not properly normalized: mean_norm={mean_norm}"
-    
+
     # Add embeddings to index
     index.add(embeddings_normalized)
-    
+
     logger.info(f"Embeddings ready: {embeddings_array.shape}, FAISS index: {index.ntotal} vectors")
-    
+
     # Optionally save to disk
     if save_to is not None:
         save(embeddings_array, merged_metadata, index, save_to, embedding_pooling=embedding_pooling)
-    
+
     return embeddings_array, merged_metadata, index
 
 
@@ -1277,19 +1277,19 @@ def save(
         raise ImportError("h5py is required for saving embeddings. Install with: pip install h5py")
     if not FAISS_AVAILABLE:
         raise ImportError("faiss-cpu is required for saving FAISS index. Install with: pip install faiss-cpu")
-    
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     embeddings_path = out_dir / "embeddings.h5"
     index_path = out_dir / "index.faiss"
-    
+
     # Save embeddings and metadata to HDF5
     logger.info(f"Saving embeddings to {embeddings_path}")
     with h5py.File(embeddings_path, 'w') as f:
         # Save embeddings
         f.create_dataset('embeddings', data=embeddings, compression='gzip', compression_opts=9)
-        
+
         # Save metadata
         meta_group = f.create_group('metadata')
         for key, value in metadata.items():
@@ -1300,7 +1300,7 @@ def save(
                 meta_group.create_dataset(key, data=string_list, dtype=dt, compression='gzip', compression_opts=9)
             else:
                 meta_group.create_dataset(key, data=value, compression='gzip', compression_opts=9)
-        
+
         # Save metadata attributes
         f.attrs['num_embeddings'] = len(embeddings)
         f.attrs['embedding_dim'] = embeddings.shape[1]
@@ -1310,20 +1310,20 @@ def save(
     # Save FAISS index
     logger.info(f"Saving FAISS index to {index_path}")
     faiss.write_index(faiss_index, str(index_path))
-    
+
     logger.info(f"Save complete:")
     logger.info(f"  - Embeddings: {embeddings_path} ({embeddings.shape})")
     logger.info(f"  - FAISS index: {index_path} ({faiss_index.ntotal} vectors)")
-    
+
     return str(embeddings_path), str(index_path)
 
 
 def load(out_dir: str | Path) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
     """Load embeddings, metadata, and FAISS index from disk.
-    
+
     Args:
         out_dir: Directory containing embeddings.h5 and index.faiss
-        
+
     Returns:
         Tuple of (embeddings, metadata, faiss_index):
             - embeddings: numpy array of shape (N, D)
@@ -1334,21 +1334,21 @@ def load(out_dir: str | Path) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
         raise ImportError("h5py is required for embedding loading. Install with: pip install h5py")
     if not FAISS_AVAILABLE:
         raise ImportError("faiss-cpu is required for embedding loading. Install with: pip install faiss-cpu")
-    
+
     out_dir = Path(out_dir)
     embeddings_path = out_dir / "embeddings.h5"
     index_path = out_dir / "index.faiss"
-    
+
     if not embeddings_path.exists():
         raise FileNotFoundError(f"Embeddings file not found: {embeddings_path}")
     if not index_path.exists():
         raise FileNotFoundError(f"FAISS index file not found: {index_path}")
-    
+
     # Load embeddings and metadata
     logger.info(f"Loading embeddings from {embeddings_path}")
     with h5py.File(embeddings_path, 'r') as f:
         embeddings = f['embeddings'][:]
-        
+
         # Load metadata
         metadata = {}
         meta_group = f['metadata']
@@ -1359,16 +1359,16 @@ def load(out_dir: str | Path) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
             if arr.dtype == object and len(arr) > 0 and isinstance(arr.flat[0], (bytes, np.bytes_)):
                 arr = np.array([v.decode('utf-8') if isinstance(v, (bytes, np.bytes_)) else v for v in arr], dtype=object)
             metadata[key] = arr
-    
+
     # Load FAISS index
     logger.info(f"Loading FAISS index from {index_path}")
     faiss_index = faiss.read_index(str(index_path))
-    
+
     logger.info(f"Load complete:")
     logger.info(f"  - Embeddings: {embeddings.shape}")
     logger.info(f"  - Index: {faiss_index.ntotal} vectors")
     logger.info(f"  - Metadata keys: {list(metadata.keys())}")
-    
+
     return embeddings, metadata, faiss_index
 
 
@@ -1379,13 +1379,13 @@ def search_similar(
     return_distances: bool = True,
 ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
     """Search for similar embeddings using FAISS index.
-    
+
     Args:
         query_embedding: Query embedding (1D or 2D array)
         faiss_index: FAISS index to search in
         k: Number of nearest neighbors to return
         return_distances: Whether to return similarity scores
-        
+
     Returns:
         Tuple of (indices, distances):
             - indices: array of shape (n_queries, k) with indices of nearest neighbors
@@ -1393,15 +1393,15 @@ def search_similar(
     """
     if not FAISS_AVAILABLE:
         raise ImportError("faiss-cpu is required for similarity search. Install with: pip install faiss-cpu")
-    
+
     # Ensure query is 2D
     if query_embedding.ndim == 1:
         query_embedding = query_embedding.reshape(1, -1)
-    
+
     # Ensure query is float32 and normalized
     query_embedding = query_embedding.astype(np.float32)
     faiss.normalize_L2(query_embedding)
-    
+
     # Search
     if return_distances:
         distances, indices = faiss_index.search(query_embedding, k)
@@ -1413,15 +1413,15 @@ def search_similar(
 
 def get_embedding_stats(embeddings: np.ndarray) -> Dict[str, float]:
     """Compute statistics for embeddings.
-    
+
     Args:
         embeddings: Embeddings array of shape (N, D)
-        
+
     Returns:
         Dictionary containing embedding statistics (norms, dimensions, etc.)
     """
     norms = np.linalg.norm(embeddings, axis=1)
-    
+
     stats = {
         'num_embeddings': len(embeddings),
         'embedding_dim': embeddings.shape[1],
@@ -1431,5 +1431,5 @@ def get_embedding_stats(embeddings: np.ndarray) -> Dict[str, float]:
         'max_norm': float(np.max(norms)),
         'mean_embedding_norm': float(np.linalg.norm(np.mean(embeddings, axis=0))),
     }
-    
-    return stats 
+
+    return stats

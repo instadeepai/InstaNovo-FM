@@ -15,4 +15,4 @@ __all__ = [
     "FlashMHA",
     "BiasAwareMHA",
     "BaseAttention",
-] 
+]

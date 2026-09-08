@@ -27,19 +27,19 @@ def mask_invalid_offsets(
 ) -> torch.Tensor:
     """
     Mask invalid offset logits for the last bin group.
-    
+
     The last group may have fewer valid bins than group_size. This function
     sets logits for invalid bins to -inf to prevent them from being selected.
-    
+
     Args:
         offset_logits: Offset logits of shape (M, group_size)
         group_pred: Group predictions of shape (M,)
         n_groups: Total number of groups
         last_group_size: Number of valid bins in last group
-        
+
     Returns:
         Masked offset logits of shape (M, group_size)
-        
+
     Example:
         >>> offset_logits = torch.randn(100, 100)  # 100 samples, 100 bins per group
         >>> group_pred = torch.randint(0, 125, (100,))  # Some in last group (124)
@@ -48,15 +48,15 @@ def mask_invalid_offsets(
     """
     # Find samples in last group
     is_last = (group_pred == (n_groups - 1))
-    
+
     if is_last.any():
         # Clone to avoid in-place modification
         offset_logits = offset_logits.clone()
-        
+
         # Set invalid logits to -inf
         m_idx = is_last.nonzero(as_tuple=True)[0]
         offset_logits[m_idx, last_group_size:] = -float("inf")
-    
+
     return offset_logits
 
 
@@ -194,20 +194,20 @@ def compute_classification_loss(
 
 
 def compute_ptm_loss(
-    logits: torch.Tensor, 
-    labels: torch.Tensor, 
-    gamma: float = 2.0, 
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    gamma: float = 2.0,
     alpha: float = 0.25
 ) -> torch.Tensor:
     """
     Compute focal loss for PTM binary classification.
-    
+
     Args:
         logits: PTM logits of shape (B, 2)
         labels: PTM labels of shape (B,) with values 0 or 1
         gamma: Focal loss gamma parameter
         alpha: Focal loss alpha parameter
-        
+
     Returns:
         PTM classification loss
     """
@@ -216,9 +216,9 @@ def compute_ptm_loss(
 
 
 def compute_dmz_loss(
-    logits: torch.Tensor, 
-    labels: torch.Tensor, 
-    gamma: float = 2.0, 
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    gamma: float = 2.0,
     alpha: float = 0.25
 ) -> torch.Tensor:
     """
@@ -326,12 +326,12 @@ def compute_auxiliary_losses(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute auxiliary task losses (charge classification, retention time regression, Δm/z classification, PTM classification, and intensity regression).
-    
+
     Args:
         aux_out: Auxiliary outputs from model
         batch: Input batch containing targets
         aux_config: Auxiliary task configuration
-        
+
     Returns:
         Tuple of (charge_loss, rt_loss, dmz_loss, ptm_loss, intensity_loss, total_aux_loss)
     """
@@ -364,21 +364,21 @@ def compute_auxiliary_losses(
         charge_loss = F.cross_entropy(aux_out["charge"], batch["charge_id"])
     else:
         charge_loss = torch.zeros((), device=device, requires_grad=True)
-    
+
     # RT loss removed (MDN dead code)
     rt_loss = torch.zeros((), device=device, requires_grad=True)
-    
+
     # Δm/z classification loss (only if enabled)
     if lambda_dmz > 0.0 and "dmz" in aux_out and "dmz_labels" in batch:
         dmz_loss = compute_dmz_loss(
-            aux_out["dmz"], 
-            batch["dmz_labels"], 
+            aux_out["dmz"],
+            batch["dmz_labels"],
             gamma=aux_config.get("dmz_focal_gamma", 2.0),
             alpha=aux_config.get("dmz_focal_alpha", 0.25)
         )
     else:
         dmz_loss = torch.zeros((), device=device, requires_grad=True)
-    
+
     # PTM classification loss (only if enabled)
     if lambda_ptm > 0.0 and "ptm" in aux_out and "ptm_present" in batch:
         ptm_loss = compute_ptm_loss(
@@ -389,7 +389,7 @@ def compute_auxiliary_losses(
         )
     else:
         ptm_loss = torch.zeros((), device=device, requires_grad=True)
-    
+
     # Create intensity_labels from spectra if not present
     # This handles the case where intensity task is enabled but labels weren't created in data processor
     if lambda_intensity > 0.0 and "intensity" in aux_out:
@@ -433,7 +433,7 @@ def compute_auxiliary_losses(
         )
     else:
         intensity_loss = torch.zeros((), device=device, requires_grad=True)
-    
+
     # Total loss with configurable weights
     total_aux_loss = (
         lambda_charge * charge_loss
@@ -442,7 +442,7 @@ def compute_auxiliary_losses(
         + lambda_ptm * ptm_loss
         + lambda_intensity * intensity_loss
     )
-    
+
     return charge_loss, rt_loss, dmz_loss, ptm_loss, intensity_loss, total_aux_loss
 
 

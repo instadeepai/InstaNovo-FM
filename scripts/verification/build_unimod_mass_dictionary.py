@@ -1,13 +1,24 @@
-"""Build UNIMOD Mass Dictionary from Excel Files.
+"""Build a UNIMOD residue-mass dictionary from Excel modification annotations.
 
-This script reads modification annotations from Excel files, queries the Pyteomics
-UNIMOD database to discover amino acid specificities and masses, and generates:
+Run when gold-standard or ambiguous modification tables change, before
+re-checking calculated m/z. The script queries UNIMOD for specificities and
+masses and writes:
+
 1. A YAML mass dictionary with all observed modifications
 2. A markdown validation report for proteomics practitioners
 3. An Excel file of custom IN:xxx modifications requiring expert annotation
+
+CLI::
+
+    uv run python -m scripts.verification.build_unimod_mass_dictionary --help
+    uv run python -m scripts.verification.build_unimod_mass_dictionary \
+        --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
+        --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx \
+        --output-dir assets/mod_dicts
 """
 
 import re
+import logging
 import sys
 import tempfile
 import urllib.request
@@ -20,14 +31,18 @@ import typer
 from lxml import etree
 from pyteomics import mass
 
+from scripts.logging_setup import configure_script_logging
+from scripts.paths import (
+    DEFAULT_AMBIGUOUS_MODS,
+    DEFAULT_GOLD_STANDARD_MODS,
+    DEFAULT_MOD_DICTS_DIR,
+)
+
+logger = logging.getLogger(__name__)
+
 # Type aliases for clarity
 ModificationInfo = Dict[str, Any]
 SpecificityInfo = Dict[str, Any]
-
-# Default paths
-DEFAULT_GOLD_STANDARD = Path("mod_dicts/gold_standard_modifications.xlsx")
-DEFAULT_AMBIGUOUS_MODS = Path("mod_dicts/PXD009449_ambiguous_mods.xlsx")
-DEFAULT_OUTPUT_DIR = Path("mod_dicts")
 
 # UNIMOD namespace for XML parsing
 UNIMOD_NS = {"umod": "http://www.unimod.org/xmlns/schema/unimod_tables_1"}
@@ -42,26 +57,38 @@ POSITION_MAP = {
     "6": "Protein C-term",
 }
 
-app = typer.Typer(help="Build UNIMOD mass dictionary from Excel modification files.")
+app = typer.Typer(
+    help="Build UNIMOD mass dictionary from Excel modification files.",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 
 def read_excel_files(
     gold_standard_path: Path, ambiguous_mods_path: Path
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
-    """Read both Excel files with modification data."""
-    print("Reading Excel files...")
+    """Load gold-standard and ambiguous annotation tables that seed the mass dictionary.
+
+    Args:
+        gold_standard_path: Excel of curated modification encodings.
+        ambiguous_mods_path: Excel of additional/ambiguous encodings.
+
+    Returns:
+        The two tables with encoding column names normalised.
+    """
+    logger.info("Reading Excel files...")
 
     gold_standard = pl.read_excel(gold_standard_path)
     ambiguous_mods = pl.read_excel(ambiguous_mods_path)
 
-    # Normalize column names
+    # Normalise column names
     if "proposed encoding" in gold_standard.columns:
         gold_standard = gold_standard.rename(
             {"proposed encoding": "proposed_unimod_encoding"}
         )
 
-    print(f"  - Gold standard: {len(gold_standard)} rows")
-    print(f"  - Ambiguous mods: {len(ambiguous_mods)} rows")
+    logger.info(f"  Gold standard: {len(gold_standard)} rows")
+    logger.info(f"  Ambiguous mods: {len(ambiguous_mods)} rows")
 
     return gold_standard, ambiguous_mods
 
@@ -69,8 +96,16 @@ def read_excel_files(
 def separate_modification_types(
     df1: pl.DataFrame, df2: pl.DataFrame
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
-    """Separate UNIMOD modifications from custom IN:xxx modifications."""
-    print("\nSeparating modification types...")
+    """Split UNIMOD encodings from custom IN: tokens so only UNIMOD ids are queried.
+
+    Args:
+        df1: First annotation table.
+        df2: Second annotation table.
+
+    Returns:
+        UNIMOD rows and custom IN:xxx rows.
+    """
+    logger.info("Separating modification types...")
 
     combined = pl.concat([df1, df2], how="diagonal")
 
@@ -81,22 +116,21 @@ def separate_modification_types(
         pl.col("proposed_unimod_encoding").str.contains("IN:", literal=True)
     )
 
-    print(f"  - UNIMOD modifications: {len(unimod_mods)} rows")
-    print(f"  - Custom IN:xxx modifications: {len(custom_mods)} rows")
+    logger.info(f"  UNIMOD modifications: {len(unimod_mods)} rows")
+    logger.info(f"  Custom IN:xxx modifications: {len(custom_mods)} rows")
 
     return unimod_mods, custom_mods
 
 
 def parse_encyclopedia_modification(mod_str: str) -> Tuple[bool, str, str]:
-    """Parse encyclopeDIA modification notation, returning the amino acid, the encyclopedia modification ID, and whether the modification is terminal.
+    """Recover site and terminal status from encyclopeDIA notation for observed combos.
+
+    Args:
+        mod_str: EncyclopeDIA-style token such as ``K[156]`` or ``n[43]A``.
 
     Returns:
-        (is_terminal, amino_acid, encyclopedia_modification_id)
-
-    Examples:
-        "K[156]" -> (False, "K", "156")
-        "n[43]A" -> (True, "A", "43")
-        "S[167]" -> (False, "S", "167")
+        ``(is_terminal, amino_acid, encyclopedia_modification_id)``. Empty strings
+        when the notation cannot be parsed.
     """
     # N-terminal modification: n[mass]AA
     n_term_match = re.match(r"n\[(\d+)\]([A-Z])", mod_str)
@@ -112,16 +146,13 @@ def parse_encyclopedia_modification(mod_str: str) -> Tuple[bool, str, str]:
 
 
 def parse_unimod_encoding(encoding: str) -> int:
-    """Parse UNIMOD encoding to extract the UNIMOD ID.
+    """Read the UNIMOD accession from a proposed encoding (site comes from the modification column).
 
-    The amino acid is read from the modification column, not from the encoding.
+    Args:
+        encoding: String such as ``[UNIMOD:1]``.
 
     Returns:
-        unimod_id (0 if not found)
-
-    Examples:
-        "[UNIMOD:1]" -> 1
-        "[UNIMOD:385]" -> 385
+        UNIMOD id, or 0 when none is present.
     """
     match = re.search(r"\[UNIMOD:(\d+)\]", encoding)
     if match:
@@ -130,7 +161,7 @@ def parse_unimod_encoding(encoding: str) -> int:
 
 
 def _process_single_row(row: Dict[str, Any], observed: Dict[int, Set[str]]) -> None:
-    """Process a single row and update observed combinations."""
+    """Record which amino acids (or N-term) were actually seen with each UNIMOD id."""
     modification = row.get("modification", "")
     encoding = row.get("proposed_unimod_encoding", "")
 
@@ -152,37 +183,41 @@ def _process_single_row(row: Dict[str, Any], observed: Dict[int, Set[str]]) -> N
 
 
 def _format_amino_acid_list(amino_acids: Set[str]) -> List[str]:
-    """Format amino acids set for display, with N-term first if present."""
+    """Put N-term first in reports so terminal vs residue sites are obvious."""
     if "" in amino_acids:
         return ["N-term"] + [a for a in sorted(amino_acids) if a]
     return sorted(amino_acids)
 
 
 def extract_observed_combinations(unimod_df: pl.DataFrame) -> Dict[int, Set[str]]:
-    """Extract which amino acids were actually observed with each UNIMOD ID.
+    """Limit the mass dictionary to amino acid + UNIMOD pairs that appear in the Excel.
+
+    Args:
+        unimod_df: Rows with proposed UNIMOD encodings.
 
     Returns:
-        Dict mapping UNIMOD ID -> Set of amino acids (empty string for terminal)
+        UNIMOD id to set of amino acids (empty string for terminal).
     """
-    print("\nExtracting observed amino acid + UNIMOD combinations...")
+    logger.info("Extracting observed amino acid + UNIMOD combinations...")
 
     observed: Dict[int, Set[str]] = defaultdict(set)
 
     for row in unimod_df.iter_rows(named=True):
         _process_single_row(row, observed)
 
-    print(f"  - Found {len(observed)} unique UNIMOD IDs")
+    logger.info(f"  Found {len(observed)} unique UNIMOD IDs")
     for unimod_id, amino_acids in sorted(observed.items()):
         aa_list = _format_amino_acid_list(amino_acids)
-        print(f"    - UNIMOD:{unimod_id}: {', '.join(aa_list)}")
+        logger.info(f"    UNIMOD:{unimod_id}: {', '.join(aa_list)}")
 
     return dict(observed)
 
 
 def _download_with_progress(url: str, destination: Path) -> None:
-    """Download a file with a progress bar."""
+    """Show download progress so a first-run UNIMOD fetch is not mistaken for a hang."""
 
     def report_hook(block_num: int, block_size: int, total_size: int) -> None:
+        """Redraw the progress bar so a large UNIMOD download looks alive."""
         downloaded = block_num * block_size
         percent = min(100, downloaded * 100 / total_size) if total_size > 0 else 0
         bar_length = 40
@@ -205,30 +240,30 @@ def _download_with_progress(url: str, destination: Path) -> None:
 
 
 def _get_unimod_cache() -> Optional[Path]:
-    """Set up and return the UNIMOD cache file path, downloading if needed."""
+    """Reuse a cached unimod.xml so later dictionary builds do not re-download."""
     cache_dir = Path(tempfile.gettempdir()) / "pyteomics_unimod"
     cache_dir.mkdir(exist_ok=True)
     cache_file = cache_dir / "unimod.xml"
 
     if cache_file.exists():
-        print("  - Using cached UNIMOD database")
+        logger.info("  Using cached UNIMOD database")
         return cache_file
 
-    print("  - Downloading UNIMOD database (first run only)...")
+    logger.info("  Downloading UNIMOD database (first run only)...")
     unimod_url = "http://www.unimod.org/xml/unimod_tables.xml"
     try:
         _download_with_progress(unimod_url, cache_file)
-        print(f"  - Cached to {cache_file}")
+        logger.info(f"  Cached to {cache_file}")
         return cache_file
     except Exception as e:
-        print(f"  - ERROR: Could not download UNIMOD database: {e}")
+        logger.error(f"  Could not download UNIMOD database: {e}")
         return None
 
 
 def _parse_unimod_xml(cache_file: Path) -> Optional[etree._Element]:
-    """Parse the UNIMOD XML file and return the root element."""
+    """Parse UNIMOD XML with network/DTD disabled so the cache cannot fetch entities."""
     try:
-        print("  - Parsing XML database...")
+        logger.info("  Parsing XML database...")
         parser = etree.XMLParser(
             load_dtd=False,
             no_network=True,
@@ -236,17 +271,17 @@ def _parse_unimod_xml(cache_file: Path) -> Optional[etree._Element]:
             remove_comments=True,
         )
         tree = etree.parse(str(cache_file), parser)
-        print("  - Extracting modification data...")
+        logger.info("  Extracting modification data...")
         return tree.getroot()
     except Exception as e:
-        print(f"  - ERROR: Could not parse UNIMOD XML: {e}")
+        logger.error(f"  Could not parse UNIMOD XML: {e}")
         return None
 
 
 def _find_modification_element(
     root: etree._Element, unimod_id: int
 ) -> Optional[etree._Element]:
-    """Find modification element by record_id, trying with and without namespace."""
+    """Locate a modification row with or without namespace so older dumps still parse."""
     mod_elem = root.find(
         f".//umod:modifications_row[@record_id='{unimod_id}']", UNIMOD_NS
     )
@@ -256,7 +291,7 @@ def _find_modification_element(
 
 
 def _extract_required_attr(elem: etree._Element, attr: str, unimod_id: int) -> str:
-    """Extract a required attribute from an element, raising if missing."""
+    """Fail fast when UNIMOD XML is missing mass or name attributes needed for the dictionary."""
     value = elem.get(attr)
     if not value:
         raise ValueError(f"Missing '{attr}' attribute for UNIMOD:{unimod_id}")
@@ -266,7 +301,7 @@ def _extract_required_attr(elem: etree._Element, attr: str, unimod_id: int) -> s
 def _parse_specificity_element(
     spec_elem: etree._Element, unimod_id: int
 ) -> SpecificityInfo:
-    """Parse a single specificity element into a dict."""
+    """Turn a UNIMOD specificity row into site/position/rare flags for mis-labelling checks."""
     site = spec_elem.get("one_letter")
     if site is None:
         raise ValueError(
@@ -298,7 +333,7 @@ def _parse_specificity_element(
 def _find_specificity_elements(
     root: etree._Element, unimod_id: int
 ) -> List[etree._Element]:
-    """Find all specificity elements for a given modification."""
+    """Collect all site rows for a modification, including rare sites."""
     spec_elems = root.findall(
         f".//umod:specificity_row[@mod_key='{unimod_id}']", UNIMOD_NS
     )
@@ -310,13 +345,10 @@ def _find_specificity_elements(
 def _extract_modification_info(
     root: etree._Element, unimod_id: int
 ) -> Optional[ModificationInfo]:
-    """Extract all information for a single UNIMOD modification.
-
-    This includes the title, full name, monoisotopic mass, and specificities (including rare sites).
-    """
+    """Pull title, mass, and specificities (including rare sites) for one UNIMOD id."""
     mod_elem = _find_modification_element(root, unimod_id)
     if mod_elem is None:
-        print(f"  - WARNING: Could not find UNIMOD:{unimod_id}")
+        logger.warning(f"  Could not find UNIMOD:{unimod_id}")
         return None
 
     title = _extract_required_attr(mod_elem, "code_name", unimod_id)
@@ -340,7 +372,7 @@ def _extract_modification_info(
         if not spec_info["rare"]:
             specificities.append(spec_info)
 
-    print(f"  - UNIMOD:{unimod_id} ({title}): {mono_mass:.6f} Da")
+    logger.info(f"  UNIMOD:{unimod_id} ({title}): {mono_mass:.6f} Da")
 
     return {
         "id": unimod_id,
@@ -353,15 +385,15 @@ def _extract_modification_info(
 
 
 def query_unimod_database(unimod_ids: List[int]) -> Dict[int, ModificationInfo]:
-    """Query UNIMOD database for each modification by parsing XML directly.
+    """Look up observed UNIMOD ids in the official XML so masses and sites are authoritative.
 
-    This function finds the modification information for each UNIMOD ID in the database.
-    Includes the title, full name, monoisotopic mass, and specificities (including rare sites).
+    Args:
+        unimod_ids: Accessions seen in the Excel tables.
 
     Returns:
-        Dict mapping UNIMOD ID -> modification info
+        UNIMOD id to title, full name, monoisotopic mass, and specificities (including rare sites).
     """
-    print("\nQuerying UNIMOD database...")
+    logger.info("Querying UNIMOD database...")
 
     cache_file = _get_unimod_cache()
     if cache_file is None:
@@ -379,13 +411,13 @@ def query_unimod_database(unimod_ids: List[int]) -> Dict[int, ModificationInfo]:
             if info is not None:
                 mod_info[unimod_id] = info
         except Exception as e:
-            print(f"  - WARNING: Error processing UNIMOD:{unimod_id} - {e}")
+            logger.warning(f"  Error processing UNIMOD:{unimod_id} - {e}")
 
     return mod_info
 
 
 def _get_all_unimod_sites(mod: ModificationInfo) -> Set[str]:
-    """Extract all amino acid sites (including rare) from a modification's specificities."""
+    """Include rare sites when judging whether an observed AA is a mis-labelling."""
     return {
         spec["site"]
         for spec in mod.get("all_specificities", mod["specificities"])
@@ -396,13 +428,16 @@ def _get_all_unimod_sites(mod: ModificationInfo) -> Set[str]:
 def validate_observed_sites(
     observed_combos: Dict[int, Set[str]], unimod_info: Dict[int, ModificationInfo]
 ) -> List[Tuple[int, str, str]]:
-    """Check observed AA + modification combos against UNIMOD specificity data.
+    """Flag Excel AA+UNIMOD pairs that are not valid UNIMOD sites (possible mis-labelling).
+
+    Args:
+        observed_combos: UNIMOD id to amino acids seen in the Excel.
+        unimod_info: Official UNIMOD records.
 
     Returns:
-        List of (unimod_id, amino_acid, mod_title) tuples for combinations where
-        the amino acid is not listed as a valid site in UNIMOD (potential mis-labelling).
+        ``(unimod_id, amino_acid, mod_title)`` tuples for unexpected sites.
     """
-    print("\nValidating observed sites against UNIMOD specificities...")
+    logger.info("Validating observed sites against UNIMOD specificities...")
 
     suspect: List[Tuple[int, str, str]] = []
 
@@ -417,28 +452,28 @@ def validate_observed_sites(
         unexpected = observed_regular_aas - all_sites
         for aa in sorted(unexpected):
             suspect.append((unimod_id, aa, mod["title"]))
-            print(
-                f"  - WARNING: Potential mis-labelling: {aa}[UNIMOD:{unimod_id}] "
+            logger.warning(
+                f"  Potential mis-labelling: {aa}[UNIMOD:{unimod_id}] "
                 f"({mod['title']}) — {aa} is not a known UNIMOD site for this "
                 f"modification (known sites: {', '.join(sorted(all_sites))})"
             )
 
     if not suspect:
-        print(
-            "  - All observed amino acid + modification combinations are valid UNIMOD sites"
+        logger.info(
+            "  All observed amino acid + modification combinations are valid UNIMOD sites"
         )
     else:
-        print(f"  - Found {len(suspect)} potential mis-labelling(s)")
+        logger.info(f"  Found {len(suspect)} potential mis-labelling(s)")
 
     return suspect
 
 
 def _resolve_aa_mass(aa: str, unimod_id: int) -> float:
-    """Look up the standard mass for an amino acid, warning and defaulting to 0 if missing."""
+    """Default unknown residue masses to 0 with a warning rather than aborting the dictionary."""
     aa_mass = mass.std_aa_mass.get(aa)
     if aa_mass is None:
-        print(
-            f"  - WARNING: No standard mass for amino acid '{aa}' "
+        logger.warning(
+            f"  No standard mass for amino acid '{aa}' "
             f"in {aa}[UNIMOD:{unimod_id}], defaulting to 0"
         )
         return 0.0
@@ -450,10 +485,10 @@ def _add_modified_tokens(
     observed_combos: Dict[int, Set[str]],
     unimod_info: Dict[int, ModificationInfo],
 ) -> None:
-    """Add modified amino acid tokens to the mass dictionary (mutates token_masses)."""
+    """Add only observed modified tokens so unused UNIMOD sites do not bloat the dictionary."""
     for unimod_id, observed_aas in sorted(observed_combos.items()):
         if unimod_id not in unimod_info:
-            print(f"  - WARNING: Skipping UNIMOD:{unimod_id} (not in database)")
+            logger.warning(f"  Skipping UNIMOD:{unimod_id} (not in database)")
             continue
 
         mod_mass = unimod_info[unimod_id]["mono_mass"]
@@ -469,11 +504,18 @@ def _add_modified_tokens(
 def build_mass_dictionary(
     observed_combos: Dict[int, Set[str]], unimod_info: Dict[int, ModificationInfo]
 ) -> Dict[str, float]:
-    """Build the token -> mass dictionary.
+    """Build residue tokens used by calc_mz, omitting J (I/L is collapsed in preprocessing).
 
     Only includes amino acid + modification combinations that were observed.
+
+    Args:
+        observed_combos: UNIMOD id to amino acids seen in the Excel.
+        unimod_info: Official UNIMOD masses.
+
+    Returns:
+        Token to monoisotopic mass for YAML output.
     """
-    print("\nBuilding mass dictionary...")
+    logger.info("Building mass dictionary...")
 
     token_masses: Dict[str, float] = {}
 
@@ -487,22 +529,27 @@ def build_mass_dictionary(
 
     _add_modified_tokens(token_masses, observed_combos, unimod_info)
 
-    print(f"  - Total tokens: {len(token_masses)}")
-    print("  - Standard amino acids: 20")
-    print(f"  - Modified tokens: {len(token_masses) - 20}")
+    logger.info(f"  Total tokens: {len(token_masses)}")
+    logger.info("  Standard amino acids: 20")
+    logger.info(f"  Modified tokens: {len(token_masses) - 20}")
 
     return token_masses
 
 
 def _get_unimod_id_from_token(token: str) -> int:
-    """Extract UNIMOD ID from a token string."""
+    """Sort YAML/report tokens by UNIMOD id rather than lexicographic AA order."""
     match = re.search(r"UNIMOD:(\d+)", token)
     return int(match.group(1)) if match else 0
 
 
 def generate_yaml_output(token_masses: Dict[str, float], output_path: Path) -> None:
-    """Generate YAML file with residue masses."""
-    print(f"\nGenerating YAML output: {output_path}")
+    """Write residue_masses.yaml grouped as standard AA, modified AA, then N-terminal mods.
+
+    Args:
+        token_masses: Token to mass mapping.
+        output_path: YAML destination.
+    """
+    logger.info(f"Generating YAML output: {output_path}")
 
     lines = ["residues:"]
 
@@ -536,7 +583,7 @@ def generate_yaml_output(token_masses: Dict[str, float], output_path: Path) -> N
             lines.append(f'  "{token}": {token_masses[token]:.6f}')
 
     output_path.write_text("\n".join(lines) + "\n")
-    print(f"  - Wrote {len(lines)} lines")
+    logger.info(f"  Wrote {len(lines)} lines")
 
 
 def _generate_modification_section(
@@ -545,7 +592,7 @@ def _generate_modification_section(
     observed_aas: Set[str],
     token_masses: Dict[str, float],
 ) -> List[str]:
-    """Generate markdown lines for a single modification."""
+    """Document one UNIMOD entry for users reviewing the validation report."""
     lines = [
         f"### UNIMOD:{unimod_id} - {mod['title']}",
         "",
@@ -579,7 +626,7 @@ def _generate_token_lines(
     observed_aas: Set[str],
     token_masses: Dict[str, float],
 ) -> List[str]:
-    """Generate token breakdown lines for a modification."""
+    """Show AA + delta = token mass so users can check the dictionary arithmetic."""
     lines = []
     for aa in sorted(observed_aas):
         if aa == "":
@@ -602,7 +649,7 @@ def _generate_token_lines(
 def _check_site_coverage(
     unimod_sites: Set[str], observed_sites: Set[str]
 ) -> Optional[str]:
-    """Return a coverage note if observed amino acids are a subset of or equal to UNIMOD sites."""
+    """Note incomplete site coverage so missing non-rare residues are not treated as errors."""
     if not unimod_sites or not observed_sites:
         return None
     if observed_sites < unimod_sites:
@@ -619,12 +666,12 @@ def _check_site_coverage(
 def _check_unexpected_sites(
     all_unimod_sites: Set[str], observed_sites: Set[str]
 ) -> Optional[str]:
-    """Return a mis-labelling warning if observed amino acids are outside all UNIMOD sites."""
+    """Warn when Excel sites sit outside even rare UNIMOD specificities."""
     unexpected = observed_sites - all_unimod_sites
     if not unexpected:
         return None
     return (
-        f"- **⚠️ Potential mis-labelling**: Observed on "
+        f"- **Potential mis-labelling**: Observed on "
         f"{', '.join(sorted(unexpected))}, which "
         f"{'is' if len(unexpected) == 1 else 'are'} not listed as "
         f"{'a ' if len(unexpected) == 1 else ''}valid UNIMOD "
@@ -634,7 +681,7 @@ def _check_unexpected_sites(
 
 
 def _generate_site_lines(mod: ModificationInfo, observed_aas: Set[str]) -> List[str]:
-    """Generate site information lines for a modification."""
+    """Contrast observed sites with UNIMOD (including rare) for the validation report."""
     all_sites: Set[str] = set()
     non_rare_sites: Set[str] = set()
 
@@ -674,8 +721,16 @@ def generate_markdown_report(
     suspect_sites: List[Tuple[int, str, str]],
     output_path: Path,
 ) -> None:
-    """Generate markdown validation report."""
-    print(f"\nGenerating markdown report: {output_path}")
+    """Write a user-facing report of tokens, sites, and possible mis-labellings.
+
+    Args:
+        observed_combos: UNIMOD id to amino acids seen in the Excel.
+        unimod_info: Official UNIMOD records.
+        token_masses: Generated dictionary.
+        suspect_sites: Observed sites that are not valid UNIMOD sites.
+        output_path: Markdown destination.
+    """
+    logger.info(f"Generating markdown report: {output_path}")
 
     lines = [
         "# UNIMOD Modification Validation Report",
@@ -694,11 +749,11 @@ def generate_markdown_report(
     if suspect_sites:
         lines.extend(
             [
-                f"- **⚠️ Potential mis-labellings**: {len(suspect_sites)}",
+                f"- **Potential mis-labellings**: {len(suspect_sites)}",
                 "",
                 "---",
                 "",
-                "## ⚠️ Potential Mis-labellings",
+                "## Potential mis-labellings",
                 "",
                 "The following amino acid + modification combinations were observed in the "
                 "data but are **not** listed as valid sites in the UNIMOD database (not even "
@@ -736,15 +791,20 @@ def generate_markdown_report(
         )
 
     output_path.write_text("\n".join(lines))
-    print(f"  - Wrote {len(lines)} lines")
+    logger.info(f"  Wrote {len(lines)} lines")
 
 
 def export_custom_modifications(custom_df: pl.DataFrame, output_path: Path) -> None:
-    """Export custom IN:xxx modifications to Excel for expert annotation."""
-    print(f"\nExporting custom modifications: {output_path}")
+    """Export IN:xxx tokens for expert annotation instead of guessing masses.
+
+    Args:
+        custom_df: Rows whose encoding contains ``IN:``.
+        output_path: Excel destination.
+    """
+    logger.info(f"Exporting custom modifications: {output_path}")
 
     if len(custom_df) == 0:
-        print("  - No custom modifications found")
+        logger.info("  No custom modifications found")
         return
 
     summary = (
@@ -771,8 +831,8 @@ def export_custom_modifications(custom_df: pl.DataFrame, output_path: Path) -> N
 
     summary.write_excel(output_path)
 
-    print(f"  - Exported {len(summary)} unique custom modification combinations")
-    print(f"  - Total occurrences: {summary['observed_count'].sum()}")
+    logger.info(f"  Exported {len(summary)} unique custom modification combinations")
+    logger.info(f"  Total occurrences: {summary['observed_count'].sum()}")
 
 
 def run_pipeline(
@@ -780,10 +840,14 @@ def run_pipeline(
     ambiguous_mods_path: Path,
     output_dir: Path,
 ) -> None:
-    """Run the full UNIMOD mass dictionary building pipeline."""
-    print("=" * 80)
-    print("Building UNIMOD Mass Dictionary")
-    print("=" * 80)
+    """Build YAML masses, a validation report, and the custom-mod annotation workbook.
+
+    Args:
+        gold_standard_path: Curated modifications Excel.
+        ambiguous_mods_path: Ambiguous modifications Excel.
+        output_dir: Directory for residue_masses.yaml and companion reports.
+    """
+    logger.info("Building UNIMOD Mass Dictionary")
 
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -826,33 +890,29 @@ def run_pipeline(
         markdown_report_output,
     )
 
-    print("\n" + "=" * 80)
-    print("Complete!")
-    print("=" * 80)
-    print(f"\nOutput files saved to: {output_dir}/")
-    print(f"  1. {residue_masses_output.name}")
-    print(f"  2. {markdown_report_output.name}")
-    print(f"  3. {custom_mods_output.name}")
-    print()
+    logger.info(
+        f"Complete! Output files saved to: {output_dir}/\n"
+        f"  1. {residue_masses_output.name}\n"
+        f"  2. {markdown_report_output.name}\n"
+        f"  3. {custom_mods_output.name}"
+    )
 
 
 @app.command()
 def main(
-    gold_standard: Annotated[
+    gold_standard_mods: Annotated[
         Path,
         typer.Option(
-            "--gold-standard",
-            "-g",
+            "--gold-standard-mods",
             help="Path to gold standard modifications Excel file.",
             exists=True,
             dir_okay=False,
         ),
-    ] = DEFAULT_GOLD_STANDARD,
+    ] = DEFAULT_GOLD_STANDARD_MODS,
     ambiguous_mods: Annotated[
         Path,
         typer.Option(
             "--ambiguous-mods",
-            "-a",
             help="Path to ambiguous modifications Excel file.",
             exists=True,
             dir_okay=False,
@@ -862,14 +922,25 @@ def main(
         Path,
         typer.Option(
             "--output-dir",
-            "-o",
             help="Output directory for generated files.",
             file_okay=False,
         ),
-    ] = DEFAULT_OUTPUT_DIR,
+    ] = DEFAULT_MOD_DICTS_DIR,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
-    """Build UNIMOD mass dictionary from Excel modification annotation files."""
-    run_pipeline(gold_standard, ambiguous_mods, output_dir)
+    """Build a UNIMOD mass dictionary from Excel annotation files for calc_mz and training.
+
+    Args:
+        gold_standard_mods: Path to gold standard modifications Excel file.
+        ambiguous_mods: Path to ambiguous modifications Excel file.
+        output_dir: Output directory for generated files.
+        verbose: Enable DEBUG logging.
+    """
+    configure_script_logging(verbose=verbose)
+    run_pipeline(gold_standard_mods, ambiguous_mods, output_dir)
 
 
 if __name__ == "__main__":

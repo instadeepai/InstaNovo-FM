@@ -303,4 +303,3 @@ class MMseqs2:
             self._clean_tmp_dir()
 
         return cluster_ids
-

@@ -50,39 +50,39 @@ def test_foundational_collate_dtype_standardization() -> None:
             }
         }
     ]
-    
+
     # Test with metadata columns that should be converted to tensors
     metadata_columns = ["extra_feature"]
     batch[0]["extra_feature"] = [1.5]  # List that should become tensor
     batch[1]["extra_feature"] = [2.5]  # List that should become tensor
-    
+
     # Test meta field selection
     meta_field_selection = {
         "include_collision_energy": True,
         "include_frag": True,
         "include_acq": True,
     }
-    
+
     result = spectra_collator(
         batch=batch,
         meta_field_selection=meta_field_selection,
         metadata_columns=metadata_columns
     )
-    
+
     # Check dtype standardization
     assert result["precursors"].dtype == torch.float32, "Precursors should be float32"
     assert result["charge_id"].dtype == torch.int64, "Charge ID should be int64"
-    
+
     # Check that metadata columns are converted to tensors
     assert isinstance(result["extra_feature"], torch.Tensor), "Extra feature should be tensor"
     assert result["extra_feature"].dtype == torch.float32, "Extra feature should be float32"
-    
+
     # Check meta dict contains tensors
     assert isinstance(result["meta"]["collision_energy"], torch.Tensor), "Meta collision_energy should be tensor"
     assert result["meta"]["collision_energy"].dtype == torch.float32, "Meta collision_energy should be float32"
     assert isinstance(result["meta"]["frag_id"], torch.Tensor), "Meta frag_id should be tensor"
     assert result["meta"]["frag_id"].dtype == torch.long, "Meta frag_id should be long"
-    
+
     # Check shapes
     assert result["spectra"].shape[0] == 2, "Batch size should be 2"
     assert result["charge_id"].shape[0] == 2, "Charge ID batch size should be 2"
@@ -120,9 +120,9 @@ def test_foundational_collate_handles_mixed_dtypes() -> None:
             }
         }
     ]
-    
+
     result = spectra_collator(batch=batch)
-    
+
     # All tensors should be standardized to expected dtypes
     assert result["precursors"].dtype == torch.float32, "Precursors should be float32"
     assert result["charge_id"].dtype == torch.int64, "Charge ID should be int64"
@@ -147,26 +147,26 @@ def test_foundational_collate_metadata_list_conversion() -> None:
             }
         }
     ]
-    
+
     metadata_columns = ["numeric_list"]
     batch[0]["numeric_list"] = [42.0]  # List that should become tensor
-    
+
     # Include meta field selection to ensure collision_energy is processed
     meta_field_selection = {
         "include_collision_energy": True,
         "include_frag": True,
     }
-    
+
     result = spectra_collator(
         batch=batch,
         meta_field_selection=meta_field_selection,
         metadata_columns=metadata_columns
     )
-    
+
     # Check that lists in meta dict are converted to tensors
     assert isinstance(result["meta"]["collision_energy"], torch.Tensor), "Meta collision_energy should be tensor"
     assert isinstance(result["meta"]["frag_id"], torch.Tensor), "Meta frag_id should be tensor"
-    
+
     # Check that metadata columns are converted to tensors
     assert isinstance(result["numeric_list"], torch.Tensor), "Numeric list should be tensor"
-    assert result["numeric_list"].dtype == torch.float32, "Numeric list should be float32" 
+    assert result["numeric_list"].dtype == torch.float32, "Numeric list should be float32"

@@ -22,16 +22,16 @@ from .factories import (
 __all__ = [
     # Relative bias components (used by unified encoder)
     "ALiBi",
-    
+
     # New unified encoder
     "UnifiedEncoderLayer",
     "UnifiedTransformerEncoder",
-    
+
     # Factory functions
     "create_positional_encoding",
-    "create_relative_bias", 
+    "create_relative_bias",
     "create_attention_mechanism",
     "parse_architecture_config",
     "validate_architecture_config",
     "create_unified_encoder_stack",
-] 
+]

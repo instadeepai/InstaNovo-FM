@@ -34,11 +34,11 @@ CONFIG_PATH = Path(__file__).parent.parent.parent / "configs"
 
 class FoundationalTrainer(AccelerateDeNovoTrainer):
     """Trainer for InstaNovo Foundation Model.
-    
+
     Implements self-supervised learning through masked m/z reconstruction.
     Unlike transformer/diffusion models, this is encoder-only and doesn't
     require peptide annotations during training.
-    
+
     Key differences from supervised trainers:
         - No decoder setup (encoder-only)
         - No sequence-based metrics during training
@@ -110,13 +110,13 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def _cache_bin_params(self) -> None:
         """Cache bin group parameters from model to avoid recomputing every step.
-        
+
         This method extracts bin parameters from the model once and caches them
         as trainer attributes. For classification tasks, this avoids costly
         reflection and recomputation in the hot path.
         """
         mz_task = self.config.model.get("mz_head", {}).get("task", "classification")
-        
+
         if mz_task == "classification":
             try:
                 # Unwrap model to access buffers
@@ -195,7 +195,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def setup_model(self) -> nn.Module:
         """Setup the foundation model.
-        
+
         Returns:
             Foundation model (encoder-only transformer).
         """
@@ -229,14 +229,14 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             max_mz=config.get("max_mz", 2500.0),
             min_mz=config.get("min_mz", 0.0),
             max_charge=config.get("max_charge", 10),
-            peak_encoder_type=config.get("peak_encoder", {}).get("type", "multiscale") 
-                if isinstance(config.get("peak_encoder"), dict) 
+            peak_encoder_type=config.get("peak_encoder", {}).get("type", "multiscale")
+                if isinstance(config.get("peak_encoder"), dict)
                 else config.get("peak_encoder", "multiscale"),
             mz_task=config.get("mz_head", {}).get("task", "regression"),
             use_meta_token=config.get("meta_token", {}).get("enabled", False),
             cfg=config,  # Pass full config for advanced settings
         )
-        
+
         logger.info(f"FoundationModel created with {sum(p.numel() for p in model.parameters())} parameters")
 
         # Apply torch.compile if enabled (before accelerator.prepare)
@@ -267,9 +267,9 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def setup_optimizer(self) -> torch.optim.Optimizer:
         """Setup the optimizer.
-        
+
         Uses Adam with configurable learning rate and weight decay.
-        
+
         Returns:
             Adam optimizer.
         """
@@ -284,10 +284,10 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def setup_decoder(self) -> Decoder:
         """Setup the decoder.
-        
+
         Foundation model is encoder-only, so no decoder is needed for training.
         Returns None as a placeholder.
-        
+
         Returns:
             None (encoder-only model).
         """
@@ -296,20 +296,20 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def setup_data_processors(self) -> tuple[DataProcessor, DataProcessor]:
         """Setup train and validation data processors.
-        
+
         Both processors are configured for self-supervised learning (no sequences).
         Validation processor can optionally include sequences for evaluation.
         Metadata columns from dataset config are passed to processors for extraction.
-        
+
         Returns:
             Tuple of (train_processor, valid_processor).
         """
         # Check if meta token is enabled (needed for filtering metadata columns)
         meta_token_enabled = self.config.model.get("meta_token", {}).get("enabled", False)
-        
+
         # Extract metadata columns from dataset config
         metadata_columns = self.config.dataset.get("metadata_columns", None)
-        
+
         # Filter to only required columns for meta token (performance optimization)
         # Most dataset configs list 30+ columns, but we only need 3:
         # - frag_type, collision_energy (from dataset)
@@ -343,7 +343,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             )
         else:
             metadata_columns_filtered = metadata_columns
-        
+
         # Setup search data manager if enabled
         search_data_config = {
             "use_search_data": self.config.dataset.get("use_search_data", False),
@@ -352,12 +352,12 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             "search_data_spectrum_key": self.config.dataset.get("search_data_spectrum_key", "filepath"),
         }
         search_data_manager = create_search_data_manager(search_data_config)
-        
+
         if search_data_manager:
             logger.info(f"Search data integration enabled: {search_data_manager.summary()}")
         else:
             logger.info("Search data integration disabled")
-        
+
         # Signal-aware masking needs peptide sequences during training
         train_needs_sequences = masking_strategy == "signal_aware_fragment"
         if train_needs_sequences:
@@ -456,9 +456,9 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def save_model(self, is_best_checkpoint: bool = False) -> None:
         """Save model checkpoint.
-        
+
         Saves model state, config, and training metadata.
-        
+
         Args:
             is_best_checkpoint: Whether this is the best checkpoint so far.
         """
@@ -471,7 +471,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         # Determine checkpoint path
         if self.config.get("keep_model_every_interval", False):
             model_path = os.path.join(
-                checkpoint_dir, 
+                checkpoint_dir,
                 f"model_epoch_{self.epoch:02d}_step_{self.global_step + 1}.ckpt"
             )
         else:
@@ -510,7 +510,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
             if S3FileHandler._aichor_enabled():
                 self.s3.upload(
-                    best_model_path, 
+                    best_model_path,
                     S3FileHandler.convert_to_s3_output(best_model_path)
                 )
 
@@ -519,8 +519,8 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         return None
 
     def forward(
-        self, 
-        batch: Any, 
+        self,
+        batch: Any,
         return_preds: bool = False
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]] | tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, dict[str, torch.Tensor]]:
         """Forward pass for masked reconstruction loss.
@@ -547,7 +547,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 Tuple of (loss, loss_components, pred_mz, aux_out) where:
                     - pred_mz: Decoded m/z predictions in Daltons (B, L)
                     - aux_out: Auxiliary outputs dict
-            
+
             loss_components dict includes:
                 * mlm_loss: Main m/z reconstruction loss
                 * classification_loss: Task-specific loss (classification) or huber_loss (regression)
@@ -559,7 +559,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             compute_auxiliary_losses,
             compute_total_loss,
         )
-        
+
         # Forward pass through model
         # Model takes spectra and applies masking internally based on peak_mask
         # Note: Data processor creates 'peak_mask', which is the MLM mask
@@ -591,24 +591,24 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 target_offsets=target_offsets,
                 bin_edges=self._bin_edges,
             )
-            
+
             # Extract targets (original spectra)
             targets = batch["spectra"]  # (B, L, 2) [m/z, intensity]
             target_mz = targets[:, :, 0]  # (B, L) [m/z in 0-1 range]
-            
+
             # Get masks
             padding_mask = batch.get("spectra_mask", None)  # (B, L), True for padding
-            
+
             # If no MLM mask provided, we can't compute loss
             if mlm_mask is None:
                 raise ValueError("peak_mask (MLM mask) must be provided for training")
-            
+
             # Valid positions: masked but not padded
             if padding_mask is not None:
                 valid_mask = mlm_mask & ~padding_mask
             else:
                 valid_mask = mlm_mask
-            
+
             # Get m/z task configuration
             mz_head_cfg = self.config.model.get("mz_head", {})
             mz_task = mz_head_cfg.get("task", "classification")
@@ -673,12 +673,12 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             # Combine all losses
             total_loss = compute_total_loss(total_loss, aux_loss)
             loss_components["total_loss"] = total_loss.detach()
-            
+
             # If requested, decode predictions for validation (single-pass approach)
             if return_preds:
                 # Get max_mz for denormalization
                 max_mz = self.config.model.get("max_mz", 2500.0)
-                
+
                 if mz_task == "classification":
                     # Classification: decode grouped logits to m/z values
                     from instanovo_fm.trainer.utils import bin_groups_to_mz
@@ -788,9 +788,9 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                             last_group_size=last_group_size,
                         )
                         aux_out.update(confidence_dict)
-                
+
                 return total_loss, loss_components, pred_mz, aux_out
-        
+
         return total_loss, loss_components
 
     def get_predictions(self, batch: Any) -> tuple[list[str] | list[list[str]], list[str] | list[list[str]]]:
@@ -937,7 +937,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                     metrics_tracker.update_entropy_metrics(
                         aux_out["group_logits"], aux_out["offset_logits"], valid_mask
                     )
-                
+
                 # Compute classification targets (shared by confidence + annotated/unannotated)
                 group_targets = None
                 offset_targets = None
@@ -1310,7 +1310,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         gathered_num_batches = self.accelerator.gather_for_metrics(
             torch.tensor(batch_count, device=self.accelerator.device)
         )
-        
+
         if self.accelerator.is_main_process and self.tracker is not None:
             # Sum the losses and batch counts from all devices
             # Convert to tensor if needed (gather_for_metrics may return list/dict in some accelerate versions)
@@ -1329,24 +1329,24 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 
     def run_embedding_evaluation(self) -> None:
         """Run comprehensive embedding evaluation using EmbeddingEvaluator.
-        
+
         This method leverages the existing EmbeddingEvaluator infrastructure
         while reusing the already-loaded validation dataloader for efficiency.
-        
+
         Results are saved to a timestamped subdirectory and key metrics are logged
         to TensorBoard/Neptune under the 'eval/embed/' prefix.
         """
         if not self.accelerator.is_main_process:
             return
-        
+
         embed_eval_config = self.config.get("embedding_evaluation", {})
         if not embed_eval_config.get("enabled", False):
             return
-        
+
         if self.valid_dataloader is None:
             logger.warning("Validation dataloader not available, skipping embedding evaluation")
             return
-        
+
         logger.info("=" * 80)
         logger.info("Running comprehensive embedding evaluation...")
         logger.info("=" * 80)
@@ -1354,7 +1354,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         try:
             from instanovo_fm.eval.evaluator import EmbeddingEvaluator
             from instanovo_fm.eval import embedding_io
-            
+
             # Create evaluator config with step-specific output directory
             eval_config_dict = {
                 "evaluation": OmegaConf.to_container(self.config.evaluation, resolve=True),
@@ -1363,7 +1363,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
                 "num_workers": self.config.get("num_workers", 4),
                 "model_save_folder_path": self.config.get("model_save_folder_path", "./checkpoints"),
             }
-            
+
             # Override output directory to organize by training step
             base_output_dir = Path(eval_config_dict["evaluation"].get("output_dir", "./evaluation_results"))
             step_output_dir = base_output_dir / f"step_{self.global_step + 1:06d}"
@@ -1373,12 +1373,12 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             embed_tasks = embed_eval_config.get("tasks_to_run", None)
             if embed_tasks is not None:
                 eval_config_dict["evaluation"]["tasks_to_run"] = list(embed_tasks)
-            
+
             evaluator_config = OmegaConf.create(eval_config_dict)
-            
+
             # Create evaluator
             evaluator = EmbeddingEvaluator(evaluator_config)
-            
+
             # Use the in-training model directly (no checkpoint loading)
             unwrapped_model = self._unwrap_model()
             unwrapped_model.eval()
@@ -1465,7 +1465,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             logger.info("=" * 80)
             logger.info(f"Results saved to: {step_output_dir}")
             logger.info("=" * 80)
-            
+
             # Restore model to train mode
             self.model.train()
 
@@ -1488,7 +1488,7 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
             if 'evaluator' in dir():
                 del evaluator
             gc.collect()
-    
+
     def run_post_training_evaluation(self) -> None:
         """Run full embedding evaluation on the best checkpoint after training completes.
 
@@ -1604,11 +1604,11 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
         embeddings_info: dict[str, Any]
     ) -> None:
         """Log embedding evaluation metrics to TensorBoard/Neptune.
-        
+
         This method uses the evaluator's get_metrics_for_logging() to extract
         loggable metrics from task results. Each task defines its own metrics
         via get_loggable_metrics(), ensuring clean separation of concerns.
-        
+
         Args:
             evaluator: EmbeddingEvaluator instance
             results: Dictionary of task results from evaluator
@@ -1718,13 +1718,13 @@ class FoundationalTrainer(AccelerateDeNovoTrainer):
 @hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational")
 def main(config: DictConfig) -> None:
     """Main training entry point.
-    
+
     Args:
         config: Hydra configuration loaded from foundational.yaml
     """
     logger.info("Initializing InstaNovo Foundation Model training")
     logger.info("Self-supervised learning via masked m/z reconstruction")
-    
+
     try:
         trainer = FoundationalTrainer(config)
         trainer.train()
@@ -1755,4 +1755,3 @@ def main(config: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
-

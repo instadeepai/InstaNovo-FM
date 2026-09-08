@@ -133,10 +133,10 @@ mz_head:
 meta_token:
   enabled: False  # Use meta token for precursor/metadata encoding
   n_freq: 16     # Number of Fourier frequencies for continuous features
-  
+
   # Continuous feature bounds
   precursor_mass_max: 6500.0  # Maximum precursor mass in Da (observed max in data)
-  
+
   # Feature inclusion flags
   include_frag_type: True           # Fragmentation type (HCD, CID, ETD, HCID)
   include_instrument: True          # Instrument model (20 categories)
@@ -152,25 +152,25 @@ meta_token:
 # ===== Auxiliary Tasks =====
 auxiliary:
   enabled: True  # Enable auxiliary prediction tasks
-  
+
   # Task weights (set to 0.0 to disable individual tasks)
   lambda_charge: 0.0      # Charge state classification
   lambda_rt: 0.0          # Retention time prediction (MDN)
   lambda_dmz: 0.0         # Δm/z classification
   lambda_ptm: 0.0         # PTM presence classification
   lambda_intensity: 0.2   # Intensity prediction
-  
+
   # Charge classification
   n_charge_classes: 10    # Number of charge classes
-  
+
   # Retention time prediction (MDN)
   n_rt_components: 3      # Number of Gaussian components
   max_log_rt: 10.5        # Maximum log(RT+1) value
-  
+
   # Δm/z classification
   dmz_focal_gamma: 2.0
   dmz_focal_alpha: 0.25
-  
+
   # PTM classification
   ptm_focal_gamma: 2.0
   ptm_focal_alpha: 0.25

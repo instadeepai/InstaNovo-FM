@@ -20,11 +20,11 @@ TASK_REGISTRY: Dict[str, Type['BaseTask']] = {}
 class SpectrumEvalTask(type):
     """
     Metaclass for automatically registering evaluation tasks.
-    
+
     Any class that uses this metaclass will be automatically added to
     the TASK_REGISTRY when the module is imported.
     """
-    
+
     def __init__(cls, name: str, bases: tuple, attrs: dict):
         """Register the class in the task registry if it's not the base class."""
         if name != 'BaseTask':
@@ -40,10 +40,10 @@ class SpectrumEvalTask(type):
 class BaseTask(metaclass=SpectrumEvalTask):
     """
     Base class for all evaluation tasks.
-    
+
     All evaluation tasks should inherit from this class. They will be
     automatically registered in the TASK_REGISTRY when their module is imported.
-    
+
     Attributes:
         name: Human-readable name for the task
         description: Description of what the task does
@@ -51,23 +51,23 @@ class BaseTask(metaclass=SpectrumEvalTask):
         requires_faiss: Whether the task requires FAISS index
         requires_model: Whether the task requires direct model access (for attention/gradient analysis)
     """
-    
+
     name: str = "Base Task"
     description: str = "Base evaluation task"
     requires_metadata: bool = True
     requires_faiss: bool = False
     requires_model: bool = False
     requires_multi_split: bool = False
-    
+
     def __init__(self, **kwargs):
         """Initialize the task with optional configuration."""
         self.config = kwargs
-    
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any, 
+
+    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any,
             model: Any = None, dataloader: Any = None, config: Any = None, device: Any = None) -> Dict[str, Any]:
         """
         Run the evaluation task.
-        
+
         Args:
             emb: Embeddings array of shape (N, D)
             meta: Metadata dictionary with keys mapping to arrays of length N
@@ -76,28 +76,28 @@ class BaseTask(metaclass=SpectrumEvalTask):
             dataloader: DataLoader instance (only provided if requires_model=True)
             config: Configuration dict (only provided if requires_model=True)
             device: Device to run on (only provided if requires_model=True)
-            
+
         Returns:
             Dictionary containing evaluation results
         """
         raise NotImplementedError("Subclasses must implement run()")
-    
+
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
         """
         Extract metrics suitable for logging to TensorBoard/Neptune from task results.
-        
+
         This method should be overridden by subclasses to define which metrics
         from their results should be logged. The returned dictionary should have
         flat string keys (without prefixes) and scalar float values.
-        
+
         Args:
             task_results: Results dictionary returned by run()
-            
+
         Returns:
             Dictionary mapping metric names to scalar values for logging.
             Keys should be simple metric names (e.g., "recall@5", "accuracy").
             The evaluator/trainer will add task-specific prefixes.
-            
+
         Example:
             {
                 "recall@1": 0.85,
@@ -109,31 +109,31 @@ class BaseTask(metaclass=SpectrumEvalTask):
         # Default implementation: return empty dict (no metrics to log)
         # Subclasses should override this to extract their specific metrics
         return {}
-    
+
     def validate_inputs(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any) -> None:
         """
         Validate inputs before running the task.
-        
+
         Args:
             emb: Embeddings array
             meta: Metadata dictionary
             faiss_index: FAISS index
-            
+
         Raises:
             ValueError: If inputs are invalid
         """
         if emb is None or len(emb.shape) != 2:
             raise ValueError("emb must be a 2D numpy array")
-        
+
         if self.requires_metadata and (meta is None or len(meta) == 0):
             raise ValueError(f"Task {self.name} requires metadata but none provided")
-        
+
         if self.requires_faiss and faiss_index is None:
             raise ValueError(f"Task {self.name} requires FAISS index but none provided")
-        
+
         # Note: Model access validation is handled by the evaluator, not here
         # since model/dataloader/config/device are passed separately
-        
+
         # Check that metadata arrays have the same length as embeddings
         # Skip non-array values (dicts, scalars, strings) which are aggregate metadata
         if meta:
@@ -202,13 +202,13 @@ class BaseTask(metaclass=SpectrumEvalTask):
 def get_task(task_name: str) -> Type[BaseTask]:
     """
     Get a task class by name.
-    
+
     Args:
         task_name: Name of the task (case-insensitive)
-        
+
     Returns:
         Task class
-        
+
     Raises:
         KeyError: If task not found
     """
@@ -222,25 +222,25 @@ def get_task(task_name: str) -> Type[BaseTask]:
 def list_tasks() -> Dict[str, Type[BaseTask]]:
     """
     List all available tasks.
-    
+
     Returns:
         Dictionary mapping task names to task classes
     """
     return TASK_REGISTRY.copy()
 
 
-def run_task(task_name: str, emb: np.ndarray, meta: Dict[str, np.ndarray], 
+def run_task(task_name: str, emb: np.ndarray, meta: Dict[str, np.ndarray],
              faiss_index: Any = None, **task_kwargs) -> Dict[str, Any]:
     """
     Run a specific task by name.
-    
+
     Args:
         task_name: Name of the task to run
         emb: Embeddings array
         meta: Metadata dictionary
         faiss_index: FAISS index (optional)
         **task_kwargs: Additional arguments to pass to task constructor
-        
+
     Returns:
         Task results
     """

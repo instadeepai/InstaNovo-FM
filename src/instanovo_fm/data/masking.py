@@ -61,17 +61,17 @@ def _compute_isotope_shift_match(
         charge_states = torch.arange(1, max_frag_charge + 1, device=device, dtype=torch.float32)
     else:
         charge_states = torch.arange(1, max_charge + 1, device=device, dtype=torch.float32)
-    
+
     # Determine effective max_order (adaptive)
     if masked_mz.numel() > 0:
         median_mz = torch.median(masked_mz).item()
         effective_max_order = int(min(3, max(1, round(median_mz / 600))))
     else:
         effective_max_order = max_order
-    
+
     # Ensure we check at least up to max_order for small m/z values
     effective_max_order = max(effective_max_order, max_order)
-    
+
     # Vectorized isotope checking
     is_isotope = torch.zeros(candidate_mz.numel(), dtype=torch.bool, device=device)
 
@@ -94,23 +94,23 @@ def _compute_isotope_shift_match(
 def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor, device: torch.device):
     """
     Identify all contiguous spans in a 1D mask (OPTIMIZED).
-    
+
     Parameters
     ----------
     span_mask : (L,) bool tensor
     intensity : (L,) intensity tensor
     device : torch device
-    
+
     Returns
     -------
     spans : list of dicts with keys 'start', 'positions', 'length', 'intensity'
     """
     L = span_mask.shape[0]
     masked_indices = torch.nonzero(span_mask, as_tuple=False).squeeze(-1)
-    
+
     if masked_indices.numel() == 0:
         return []
-    
+
     # Find span boundaries (vectorized)
     if masked_indices.numel() > 1:
         diffs = masked_indices[1:] - masked_indices[:-1]
@@ -118,25 +118,25 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
         span_start_indices = masked_indices[span_starts_mask]
     else:
         span_start_indices = masked_indices
-    
+
     # Vectorized span identification
     spans = []
     for start_idx in span_start_indices:
         start_pos = int(start_idx.item())
-        
+
         # Find span end efficiently using vectorized operations
         # Create a mask for positions >= start_pos
         pos_range = torch.arange(start_pos, L, device=device)
         valid_positions = pos_range[span_mask[start_pos:]]
-        
+
         if valid_positions.numel() == 0:
             continue
-            
+
         # Find where the span breaks (gap > 1)
         if valid_positions.numel() > 1:
             gaps = valid_positions[1:] - valid_positions[:-1]
             break_points = torch.nonzero(gaps > 1, as_tuple=False).squeeze(-1)
-            
+
             if break_points.numel() > 0:
                 # Span ends at first break point
                 end_pos = valid_positions[break_points[0]].item()
@@ -146,21 +146,21 @@ def _identify_contiguous_spans(span_mask: torch.Tensor, intensity: torch.Tensor,
                 span_positions = valid_positions.tolist()
         else:
             span_positions = valid_positions.tolist()
-        
+
         span_length = len(span_positions)
         if span_length == 0:
             continue
-            
+
         # Vectorized intensity calculation
         span_intensity = intensity[torch.tensor(span_positions, device=device)].mean().item()
-        
+
         spans.append({
             'start': start_pos,
             'positions': span_positions,
             'length': span_length,
             'intensity': span_intensity,
         })
-    
+
     return spans
 
 
@@ -313,22 +313,22 @@ def find_isotopic_neighbors(
 
         masked_mz = mz[b, masked_pos]
         candidate_mz = mz[b, candidate_pos]
-        
+
         # SPAN-AWARE: Only check candidates near masked peaks
         mz_distances = torch.abs(candidate_mz.unsqueeze(1) - masked_mz.unsqueeze(0))
         nearby_mask = mz_distances <= ISOTOPE_DISTANCE_WINDOW
-        
+
         charge_b = charges[b] if charges is not None else None
         is_isotope = torch.zeros(candidate_pos.numel(), dtype=torch.bool, device=device)
-        
+
         for c_idx in range(candidate_pos.numel()):
             nearby_masked_indices = nearby_mask[c_idx]
-            
+
             if not nearby_masked_indices.any():
                 continue
-            
+
             nearby_masked_mz = masked_mz[nearby_masked_indices]
-            
+
             is_iso = _compute_isotope_shift_match(
                 candidate_mz=candidate_mz[c_idx:c_idx+1],
                 masked_mz=nearby_masked_mz,
@@ -339,7 +339,7 @@ def find_isotopic_neighbors(
                 max_order=max_order,
                 device=device,
             )
-            
+
             is_isotope[c_idx] = is_iso.any()
 
         isotope_mask[b, candidate_pos[is_isotope]] = True
@@ -456,7 +456,7 @@ def uniform_random_mask(
     take = rank < num_to_sample.unsqueeze(1)
     mask = torch.zeros_like(valid, dtype=torch.bool)
     mask.scatter_(1, order, take)
-    
+
     return mask
 
 
@@ -518,13 +518,13 @@ def thompson_sampling_span_mask(
     B, L = intensity.shape
     device = intensity.device
     valid = ~spectra_mask
-    
+
     # Always sort by m/z for consistent span masking, then unsort at end
     if mz is not None:
         mz_for_sorting = torch.where(spectra_mask, torch.tensor(float('inf'), device=device, dtype=mz.dtype), mz)
         sort_indices = torch.argsort(mz_for_sorting, dim=1)
         unsort_indices = torch.argsort(sort_indices, dim=1)
-        
+
         intensity_for_masking = torch.gather(intensity, 1, sort_indices)
         mz_for_isotopes = torch.gather(mz, 1, sort_indices)
         spectra_mask_sorted = torch.gather(spectra_mask, 1, sort_indices)
@@ -588,23 +588,23 @@ def thompson_sampling_span_mask(
     current_masked_counts = span_mask.sum(dim=1)
     target_masked_counts = (valid_counts.float() * mask_portion).long()
     needs_trimming = (current_masked_counts > target_masked_counts) & (valid_counts >= span_min)
-    
+
     # Per-batch trimming (only for batches that need it)
     for b in torch.nonzero(needs_trimming, as_tuple=False).squeeze(-1):
         b_idx = b.item()
         excess = (current_masked_counts[b_idx] - target_masked_counts[b_idx]).item()
-        
+
         spans = _identify_contiguous_spans(span_mask[b_idx], intensity_for_masking[b_idx], device)
         if not spans:
             continue
-        
+
         spans.sort(key=lambda s: (s['length'], s['intensity']))
-        
+
         removed_count = 0
         for span in spans:
             if removed_count >= excess:
                 break
-            
+
             span_positions = torch.tensor(span['positions'], device=device, dtype=torch.long)
             span_mask[b_idx, span_positions] = False
             removed_count += span['length']
@@ -650,11 +650,11 @@ def thompson_sampling_span_mask(
             positions_to_remove = masked_positions[sorted_by_priority[:excess]]
 
             span_mask[b_idx, positions_to_remove] = False
-    
+
     # Unsort mask back to original peak order
     if unsort_indices is not None:
         span_mask = torch.gather(span_mask, 1, unsort_indices)
-    
+
     return span_mask
 
 

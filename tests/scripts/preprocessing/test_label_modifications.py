@@ -4,6 +4,7 @@ This module provides comprehensive tests for the label_modifications script
 to ensure it correctly labels modifications in peptide sequences.
 """
 
+import os
 import tempfile
 import shutil
 from pathlib import Path
@@ -193,11 +194,13 @@ class TestLabelModifications:
         result = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "lcfm_splits"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -220,7 +223,7 @@ class TestLabelModifications:
         )
 
     def test_label_modifications_pxd009449_file_specific(self) -> None:
-        """Test PXD009449 file-specific modification labeling with one-to-many mapping."""
+        """Test PXD009449 file-specific modification labelling with one-to-many mapping."""
         # Test 1: File with "ubiquitin" in name - K[242] should map to [UNIMOD:1848]K
         test_data = {
             "peptide": ["PEPTIDEK"],
@@ -235,11 +238,13 @@ class TestLabelModifications:
         result = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "PXD009449"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -269,11 +274,13 @@ class TestLabelModifications:
         result2 = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "PXD009449"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -327,11 +334,13 @@ class TestLabelModifications:
         result = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "PXD009449"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -362,11 +371,13 @@ class TestLabelModifications:
         result = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "lcfm_splits"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -384,13 +395,16 @@ class TestLabelModifications:
     def test_label_modifications_empty_modifications(self) -> None:
         """Test label_modifications with empty modification dictionaries."""
         # Create data with no modifications
-        empty_data: dict[str, list[str]] = {
-            "modification": [],
-            "project_name": [],
-            "file_name": [],
-            "proposed_unimod_encoding": [],
+        empty_schema = {
+            "modification": pl.String,
+            "project_name": pl.String,
+            "file_name": pl.String,
+            "proposed_unimod_encoding": pl.String,
         }
-        df = pl.DataFrame(empty_data)
+        df = pl.DataFrame(
+            {col: [] for col in empty_schema},
+            schema=empty_schema,
+        )
         empty_file = self.output_dir / "empty_modifications.xlsx"
         df.write_excel(empty_file)
 
@@ -419,11 +433,13 @@ class TestLabelModifications:
         result = runner.invoke(
             label_app,
             [
-                "label-mods",
+                "--input-dir",
                 str(self.data_dir / "lcfm_splits"),
+                "--gold-standard-mods",
                 str(self.gold_standard_file),
+                "--ambiguous-mods",
                 str(self.pxd009449_file),
-                "--sequence-col",
+                    "--sequence-col",
                 "peptide",
                 "--modified-sequence-col",
                 "modified_peptide",
@@ -526,3 +542,45 @@ class TestLabelModifications:
 
         # Cleanup
         shutil.rmtree(self.test_dir)
+
+
+def test_label_modifications_unimod(preprocessing_env) -> None:
+    """Test label_modifications script with UNIMOD modifications."""
+    mod_dir = preprocessing_env.data_dir / "mcfm_mods"
+    mod_dir.mkdir(parents=True, exist_ok=True)
+    mod_data = {
+        "unmodified_peptide": ["PEPTIDEK", "PEPTIDER", "PEPTIDEM"],
+        "modified_peptide": [
+            "PEPTIDEK[242]",
+            "PEPTIDER[170]",
+            "PEPTIDEM[142]",
+        ],
+    }
+    mod_file = mod_dir / "test_mods.parquet"
+    pl.DataFrame(mod_data).write_parquet(mod_file)
+
+    runner = CliRunner()
+    # The script resolves --input-dir relative to the working directory.
+    original_cwd = Path.cwd()
+    try:
+        os.chdir(preprocessing_env.data_dir)
+        result = runner.invoke(
+            label_app,
+            [
+                "--input-dir",
+                "mcfm_mods",
+                "--gold-standard-mods",
+                str(preprocessing_env.gold_standard_file),
+                "--ambiguous-mods",
+                str(preprocessing_env.pxd009449_file),
+                "--sequence-col",
+                "unmodified_peptide",
+            ],
+        )
+    finally:
+        os.chdir(original_cwd)
+
+    assert int(result.exit_code) == 0
+
+    out_df = pl.read_parquet(mod_file)
+    assert "sequence" in out_df.columns

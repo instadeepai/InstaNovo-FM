@@ -1,434 +1,336 @@
-# Data Splitting Workflow Guide
+# Splitting scripts
 
-> **Ported from the internal repo.** Paths that were mount-specific are written
-> as `<data-root>`; pass your own. The peptide registry is fetched from and
-> published to the HuggingFace dataset (see `split_labelled_data.py`).
+Build confidence subsets, peptide-disjoint train/test/validation splits, and shuffled shards.
+For the full pipeline order, which runs preprocessing then verification then this stage, see [`../README.md`](../README.md).
 
-This guide helps you reproduce the data splitting workflow for large-scale mass spectrometry datasets. All scripts use **Typer CLI** for easy command-line interaction.
+All scripts in this folder use Typer.
+Run them from the repository root as `uv run python -m scripts.splitting.<script>` (see [`../README.md`](../README.md)).
 
-## Quick Start
+## Basic workflow
 
-### Prerequisites
+1. Build quality-curated subsets MCFM and HCFM from LCFM with `create_subsets.py`.
+2. Load the existing InstNovo peptide registry from HuggingFace (default) or a local copy via `--registry-dir`.
+3. Update splits on labelled trees (typically LCFM first) so unseen peptides are assigned without moving known ones.
+4. Split each corpus (LCFM, and MCFM/HCFM) with `split-only` against that registry.
+5. Shuffle data for unbiased training.
+
 ```bash
-pip install -r requirements.txt
+# 1. Build MCFM / HCFM confidence subsets from scored labelled data
+uv run python -m scripts.splitting.create_subsets \
+    --input-dir <data-root>/lcfm \
+    --medium-output-dir <data-root>/mcfm \
+    --high-output-dir <data-root>/hcfm
+
+# 2. Extend the InstaNovo registry with new labelled peptides (LCFM),
+#    then write train/test/valid parquet. Omit --registry-dir to download
+#    peptide_registry.parquet from HuggingFace.
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/lcfm \
+    --output-dir <data-root>/lcfm_splits \
+    --mode both
+
+# 3. Optionally update the registry from additional labelled trees in one pass
+uv run python -m scripts.splitting.split_labelled_data batch <data-root>/mcfm <data-root>/hcfm \
+    --output-dir <data-root>/registry_update \
+    --registry-dir <data-root>/lcfm_splits \
+    --mode update-splits
+
+# 4. Partition each corpus using the updated registry (errors if any peptide
+#    is missing — run update-splits first for that tree)
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/mcfm \
+    --output-dir <data-root>/mcfm_splits \
+    --registry-dir <data-root>/registry_update \
+    --mode split-only
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/hcfm \
+    --output-dir <data-root>/hcfm_splits \
+    --registry-dir <data-root>/registry_update \
+    --mode split-only
+
+# 5. Shuffle the splits
+uv run python -m scripts.splitting.shuffle_2pass --input-dir <data-root>/lcfm_splits --output-dir shuffled_splits
 ```
 
-### Basic Workflow
-1. **Consolidate splits** from multiple sources
-2. **Create initial splits** from labeled data (lcfm)
-3. **Create subset splits** using existing assignments (mcfm, hcfm)
-4. **Shuffle data** for unbiased training
+### About the peptide registry
 
-### Example: Complete Workflow
-```bash
-# 1. Consolidate multiple split files first
-python create_consolidated_split_assignments.py consolidate splits/file1.csv splits/file2.csv
+Labelled splitting keeps peptides in the split they already had in the base InstaNovo HuggingFace registry (`peptide_registry.parquet`), then assigns only unseen sequences 80/10/10.
+That is how you extend the training data without breaking consistency with the original model splits.
 
-# 2. Split labeled data (lcfm)
-python split_labelled_data.py split --input-dir <data-root>/lcfm --output-dir <data-root>/lcfm_splits
+Peptide identity for the registry (and for leakage checks) is the unmodified peptide with I and L treated as the same residue:
 
-# 3. Create subset splits (mcfm, hcfm)
-python create_labelled_subset_splits.py subset --input-dir <data-root>/mcfm --output-dir <data-root>/mcfm_splits
-python create_labelled_subset_splits.py subset --input-dir <data-root>/hcfm --output-dir <data-root>/hcfm_splits
+1. Prefer the `unmodified_peptide` column when present. If it is missing, derive it from `sequence` by stripping bracketed and parenthesised modification tags such as `[UNIMOD:4]`, along with hyphens.
+2. Map every `I` to `L` on that string. Registry keys and split assignment use this normalised form, so `PEPTIDE` and `PEPTLDE` share a split.
 
-# 4. Shuffle the splits
-python shuffle_2pass.py --base-dir <data-root> --output-dir shuffled_splits
-```
+Quality filters (see data quality requirements below) apply before both registry updates and writing split parquet.
+Only spectra that pass are considered; failing rows are skipped (not written).
 
-### About Consolidation
+- Default: omit `--registry-dir` to download the registry from HuggingFace.
+- Local copy: pass `--registry-dir` pointing at a directory that contains `peptide_registry.parquet` (e.g. the output of a previous `update-splits` run).
+- Modes: `update-splits` only updates and saves the registry; `split-only` partitions files and fails if any peptide is not in the registry; `both` (default) does update then split.
 
-The consolidation step combines existing split files from datasets used to train the base InstaNovo model. This allows you to add new datasets (lcfm, mcfm, hcfm) to the existing training data while maintaining consistency with the original splits.
+Confidence subsets (MCFM/HCFM) are built separately with `create_subsets.py` (score thresholds), not by a second train/test/val splitter.
 
-**When to use consolidation:**
-- **Adding to existing model**: If you're extending a pre-trained InstaNovo model
-- **Consistency requirements**: When you need to maintain split assignments from previous training
-- **Incremental training**: For fine-tuning or transfer learning scenarios
+## Individual script usage
 
-**When consolidation is optional:**
-- **New model training**: If you're training a model from scratch
-- **Independent datasets**: When your new datasets are self-contained
-- **Research experiments**: When you want fresh, independent splits
+### 1. Split labelled data (`split_labelled_data.py`)
 
-If you're not extending an existing model, you can skip the consolidation step and proceed directly to splitting your datasets.
-
-## Individual Script Usage
-
-### 1. Split Labeled Data (`split_labelled_data.py`)
-
-Creates train/test/validation splits from labeled peptide data.
+Creates train/test/validation splits from labelled peptide data using the peptide registry.
 
 ```bash
-# Basic usage
-python split_labelled_data.py split
+# Basic usage (download HF registry, update + split)
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/lcfm \
+    --output-dir <data-root>/lcfm_splits
 
 # Custom parameters
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits \
     --rows-per-file 500000
 
-# Batch processing
-python split_labelled_data.py batch <data-root>/lcfm <data-root>/mcfm <data-root>/hcfm \
-    --output-base <data-root>
+# Update registry only
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/lcfm \
+    --output-dir <data-root>/lcfm_splits \
+    --mode update-splits
+
+# Split files only (registry must already contain all peptides)
+uv run python -m scripts.splitting.split_labelled_data split \
+    --input-dir <data-root>/lcfm \
+    --output-dir <data-root>/lcfm_splits \
+    --registry-dir <data-root>/lcfm_splits \
+    --mode split-only
+
+# Batch: one combined update/split pass over several directories
+uv run python -m scripts.splitting.split_labelled_data batch <data-root>/lcfm <data-root>/mcfm <data-root>/hcfm \
+    --output-dir <data-root>/combined_splits
 ```
 
-**Key Features:**
-- 80/10/10 train/test/validation split ratios
-- Filters: RT ≤ 10800 s, lower offset ≤ 300 Da, charge 0–7 **inclusive**, m/z ≤ 2000,
-  and no modification unresolvable to UNIMOD (`[IN:<digits>]` in `sequence`)
-- Peptide-level shuffling with split preservation
+**Key features:**
+
+- Respects existing HF (or local) registry assignments
+- 80/10/10 train/test/validation for new peptides only
+- Filters: RT ≤ 10800 s, lower offset ≤ 300 Da, charge 0–7 inclusive, m/z ≤ 2000, and no modification unresolvable to UNIMOD (`[IN:<digits>]` in `sequence`)
+- Normalises peptides for registry lookup (strip mods if needed, then I→L; see above)
 - Batch processing for multiple datasets
 
-### 2. Create Subset Splits (`create_labelled_subset_splits.py`)
+### 2. Create MCFM / HCFM subsets (`create_subsets.py`)
 
-Creates splits for subset datasets using existing assignments.
+Builds medium-confidence (MCFM) and high-confidence (HCFM) parquet trees from a root directory of all-confidence labelled spectra, with one subfolder per dataset and `.parquet` files inside.
+This is separate from `split_labelled_data.py`, because it filters rows by a global score threshold rather than by train, test and validation splits.
 
-```bash
-# Basic usage
-python create_labelled_subset_splits.py subset
+#### How scoring works
 
-# Custom parameters
-python create_labelled_subset_splits.py subset \
-    --input-dir <data-root>/hcfm \
-    --output-dir <data-root>/hcfm_splits \
-    --split-assignments <data-root>/output_files/split_assignments.csv
+1. The composite score, held in the temporary column `_composite_score`, combines EncyclopeDIA-style scores, each taken as a percentile rank within peptide length.
+   - `1 - expectation`, `probability` and `hyperscore` contribute ranked components.
+   - If `nextscore` is present, the term `(hyperscore - nextscore)` is included and the average is over four parts rather than three.
+   - Rank uses `(rank - 1) / (count - 1)`, so the best item in a group scores 1.0, the worst scores 0.0, and singletons default to 0.5.
+   - Peptide length comes from a `peptide_length` or `peptide length` column when present, and otherwise from the uppercase-letter count in `peptide` or `unmodified_peptide`.
+2. Pass one reads every file, computes composite scores for the finite values, and concatenates them.
+3. Global thresholds are then taken as linear quantiles on the pooled scores.
+   - MCFM keeps rows scoring strictly above the 90th percentile, roughly the top 10% of PSMs globally.
+   - HCFM keeps rows scoring strictly above the 98th percentile, roughly the top 2% globally.
+4. Pass two applies those thresholds and writes the filtered parquets to `--medium-output-dir` and `--high-output-dir`, preserving the input subfolder and filename layout.
 
-# Batch processing
-python create_labelled_subset_splits.py batch <data-root>/mcfm <data-root>/hcfm \
-    --output-base <data-root>
-```
-
-**Key Features:**
-- Uses existing split assignments from main dataset
-- Same filtering criteria as main split script
-- Maintains consistency across datasets
-
-### 3. Consolidate Splits (`create_consolidated_split_assignments.py`)
-
-Combines multiple split files and resolves conflicts.
+Passing `--hold-back-modified-rows` drops rows whose `sequence` contains the internal `[IN:<digits>]` modification tokens before scoring and output, so those rows affect neither the thresholds nor the exported subsets.
 
 ```bash
-# Use default files
-python create_consolidated_split_assignments.py default
-
-# Custom consolidation
-python create_consolidated_split_assignments.py consolidate \
-    splits/file1.csv splits/file2.csv \
-    --output-file splits/consolidated.csv
-
-# Batch processing
-python create_consolidated_split_assignments.py batch "splits/*_splits.csv"
+uv run python -m scripts.splitting.create_subsets \
+    --input-dir <data-root>/lcfm/ \
+    --medium-output-dir <data-root>/mcfm/ \
+    --high-output-dir <data-root>/hcfm/ \
+    --hold-back-modified-rows
 ```
 
-**Key Features:**
-- Handles I/L ambiguity normalization
-- Creates blacklist for conflicting assignments
-- Supports glob patterns for batch processing
+### 3. ACFM split data (`split_unlabelled_data.py`)
 
-### 4. ACFM Split Data (`split_unlabelled_data.py`)
-
-Advanced splitting for unlabeled data using LSH clustering.
+Advanced splitting for unlabelled data using LSH clustering.
 
 ```bash
 # Full processing (recommended)
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode full \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits
 
 # LSH computation only
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode lsh_only \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits
 
 # Splitting only (using existing LSH)
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode split_only \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits \
     --lsh-assignments ./acfm_splits/lsh_assignments.parquet
 ```
 
-**Key Features:**
+**Key features:**
+
 - LSH clustering for similarity-based grouping
 - Checkpointing for long-running processes
 - Memory-efficient processing
 - Configurable LSH parameters
 
-**Checkpointing Support:**
-- **Automatic resume**: Restart with same parameters to resume from last checkpoint
-- **Checkpoint files**: `split_checkpoint.json`, `split_buffers.pkl`, `split_progress.json`
-- **Checkpoint interval**: Save every N files (default: 10, configurable with `--checkpoint-interval`)
-- **Error recovery**: Automatically saves state before errors, allows resume after fixes
-- **Fresh start**: Use `--clear-checkpoint` to start over or `--no-checkpoint` to disable
+**Checkpointing support:**
 
-### 5. 2-Pass Shuffle (`shuffle_2pass.py`)
+- Automatic resume: restart with the same parameters to resume from the last checkpoint
+- Checkpoint files: `split_checkpoint.json`, `split_buffers.pkl`, `split_progress.json`
+- Checkpoint interval: save every N files (default: 10, configurable with `--checkpoint-interval`)
+- Error recovery: automatically saves state before errors, allows resume after fixes
+- Fresh start: use `--clear-checkpoint` to start over or `--no-checkpoint` to disable
 
-High-performance shuffling for large datasets.
+### 4. 2-pass shuffle (`shuffle_2pass.py`)
+
+High-performance shuffling for large datasets (such as ACFM and LCFM).
 
 ```bash
 # Basic usage (auto-detects optimal settings)
-python shuffle_2pass.py \
-    --base-dir <data-root> \
+uv run python -m scripts.splitting.shuffle_2pass \
+    --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits
 
 # Custom configuration
-python shuffle_2pass.py \
-    --base-dir <data-root> \
+uv run python -m scripts.splitting.shuffle_2pass \
+    --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits \
-    --target-chunk-size 100000 \
-    --first-pass-processes 8 \
-    --second-pass-processes 8 \
+    --chunk-size 100000 \
+    --pass1-procs 8 \
+    --pass2-procs 8 \
     --seed 42
 
 # Memory forecasting
-python shuffle_2pass.py \
-    --forecast-chunk-size \
-    --available-ram-gb 32
+uv run python -m scripts.splitting.shuffle_2pass \
+    --forecast \
+    --ram-gb 32 \
+    --sample-file train_0.parquet
 ```
 
-**Key Features:**
+**Key features:**
+
 - Memory-efficient 2-pass algorithm
 - Parallel processing
 - Auto-detection of optimal chunk sizes
 - Deterministic output with seeds
 
-### 6. RAM-Based Shuffle (`shuffle_in_ram.py`)
+### 5. RAM-based shuffle (`shuffle_in_ram.py`)
 
-**Note: This approach was used for shuffling the hcfm and mcfm subsets.**
+Note: this approach was used for shuffling the HCFM and MCFM subsets.
 
 Simple and fast shuffling for the smallest datasets that fit entirely in RAM.
 
 ```bash
 # Basic usage
-python shuffle_in_ram.py \
-    --base-dir <data-root> \
-    --output-dir shuffled_splits
+uv run python -m scripts.splitting.shuffle_in_ram \
+    --input-dir <data-root>/hcfm_splits \
+    --output-dir shuffled_splits \
+    --target-chunk-size 50000
 
 # Custom configuration
-python shuffle_in_ram.py \
-    --base-dir <data-root> \
+uv run python -m scripts.splitting.shuffle_in_ram \
+    --input-dir <data-root>/hcfm_splits \
     --output-dir shuffled_splits \
     --target-chunk-size 50000 \
     --seed 42
 ```
 
-**Key Features:**
+**Key features:**
+
 - Loads entire split into RAM for global shuffling
 - Fastest approach for small datasets
 - Auto-detects optimal chunk size from input files
 - Deterministic output with seeds
 
 **When to use:**
-- **Small datasets**: When all data for a split fits in available RAM
-- **Subset datasets**: Like hcfm and mcfm which are smaller than main datasets
-- **Fast processing**: When speed is more important than memory efficiency
-- **Simple workflow**: When you want the most straightforward shuffling approach
 
-### Alternative: Index-Based Shuffle (`shuffle_indices.py`)
+- Small datasets: when all data for a split fits in available RAM
+- Subset datasets: like HCFM and MCFM, which are smaller than the main datasets
+- Fast processing: when speed is more important than memory efficiency
+- Simple workflow: when you want the most straightforward shuffling approach
 
-**Note: This is NOT the approach used in our workflow, but available as a simpler alternative.**
+### Alternative: index-based shuffle (`shuffle_indices.py`)
+
+Note: this is not the approach used in our workflow, but is available as a simpler alternative.
 
 Slower but simpler shuffling approach for smaller datasets that still do not fit into RAM.
 
 ```bash
 # Basic usage
-python shuffle_indices.py \
-    --base-dir <data-root> \
+uv run python -m scripts.splitting.shuffle_indices \
+    --input-dir <data-root> \
     --output-dir shuffled_splits \
     --chunk-size 400000 \
     --seed 42
 ```
 
-**Key Features:**
+**Key features:**
+
 - Simpler algorithm (easier to understand)
 - Lower memory usage per process
 - Index-based row selection
 - Good for smaller datasets
 
-### Shuffling Algorithm Comparison
+### Shuffling algorithm comparison
 
-| Approach | Time Complexity | Memory Complexity | Use Case |
-|----------|----------------|-------------------|----------|
-| **RAM-Based** | O(N) | O(N) total | Smallest datasets that fit in RAM (hcfm, mcfm) |
-| **2-Pass** | O(N + M log M) | O(chunk_size × processes) total | Extremely large datasets where time is a constraint |
-| **Index-Based** | O(N²) | O(N) for indices + O(chunk_size) single-threaded | Medium datasets where memory is a constraint |
+| Approach | Time complexity | Memory complexity | Use case |
+| --- | --- | --- | --- |
+| RAM-based | O(N) | O(N) total | Smallest datasets that fit in RAM (HCFM, MCFM) |
+| 2-pass | O(N + M log M) | O(chunk_size × processes) total | Extremely large datasets where time is a constraint |
+| Index-based | O(N²) | O(N) for indices + O(chunk_size) single-threaded | Medium datasets where memory is a constraint |
 
-## Typer CLI Benefits
+## Data requirements
 
-All scripts use **Typer** for enhanced CLI experience:
+### Input files
 
-- **Auto-generated help**: `python script.py --help`
-- **Command completion**: Tab completion for options
-- **Type validation**: Automatic type checking
-- **Rich error messages**: Clear error reporting
-- **Legacy compatibility**: Original functions preserved
+- Parquet files: for split scripts (peptide data)
+- Directory structure: organised by dataset type
 
-### Example: Getting Help
-```bash
-# Show all commands
-python split_labelled_data.py --help
+### Output files
 
-# Show command-specific help
-python split_labelled_data.py split --help
+- Split parquet files: organised by train/test/validation
+- Peptide registry: `peptide_registry.parquet` written under `--output-dir` on update
 
-# Show batch command help
-python split_labelled_data.py batch --help
-```
+### Required columns and datatypes
 
-## Data Format Requirements
+#### Labelled LCFM, MCFM and HCFM (`split_labelled_data.py`)
 
-### Input Files
-- **Parquet files**: For split scripts (peptide data)
-- **CSV files**: For consolidate script (sequence + split columns)
-- **Directory structure**: Organized by dataset type
+| Column | Datatype | Description |
+| --- | --- | --- |
+| `unmodified_peptide` or `sequence` | `str` | Peptide sequence (e.g., "ACDEFGHIK") |
+| `retention_time` | `float` | Retention time in seconds |
+| `precursor_mz` | `float` | Precursor m/z value |
+| `precursor_charge` | `int` | Precursor charge state (0-7; 0 denotes an unassigned charge) |
+| `lower_offset` | `float` | Lower offset value |
+| `collision_energy` | `str` | Collision energy (can be "Unknown") |
+| `isolation_target` | `float` | Isolation target m/z |
+| `frag_type` | `str` | Fragmentation type |
+| `mz_array` | `list[float]` | m/z array for spectrum |
+| `intensity_array` | `list[float]` | Intensity array for spectrum |
+| `scan` | `int` | Scan number |
+| `header` | `str` | Experiment header |
+| `index` | `int` | Row index |
+| `scale_factor` | `float` | Intensity scaling factor |
 
-### Output Files
-- **Split parquet files**: Organized by train/test/validation
-- **Consolidated CSV**: Resolved conflicts and assignments
-- **Blacklist files**: Peptides to exclude from processing
+#### Unlabelled ACFM (`split_unlabelled_data.py`)
 
-### Required Columns and Datatypes
+Spectrum columns match the labelled table (`mz_array`, `intensity_array`, and the other scan-level fields). These two peptide fields are extra:
 
-#### For Split Scripts (Parquet Input)
-| Column | Datatype | Description | Required |
-|--------|----------|-------------|----------|
-| `peptide` | `str` | Peptide sequence (e.g., "ACDEFGHIK") | Yes |
-| `rt` | `float` | Retention time in seconds | Yes |
-| `precursor_mz` | `float` | Precursor m/z value | Yes |
-| `charge` | `int` | Precursor charge state (0-7; 0 denotes an unassigned charge) | Yes |
-| `offset` | `float` | Lower offset value | Yes |
-| `collision_energy` | `str` | Collision energy (can be "Unknown") | Yes |
-| `isolation_target` | `float` | Isolation target m/z | Yes |
-| `frag_type` | `str` | Fragmentation type | Yes |
-| `mz` | `list[float]` | m/z array for spectrum | Yes |
-| `intensity` | `list[float]` | Intensity array for spectrum | Yes |
-| `scan` | `int` | Scan number | Yes |
-| `header` | `str` | Experiment header | Yes |
-| `index` | `int` | Row index | Yes |
-| `scale_factor` | `float` | Intensity scaling factor | Yes |
+| Column | Datatype | Description |
+| --- | --- | --- |
+| `modified_peptide` | `str` | Modified peptide sequence |
+| `modifications` | `str` | Modification information |
 
-#### For Consolidate Script (CSV Input)
-| Column | Datatype | Description | Required |
-|--------|----------|-------------|----------|
-| `sequence` | `str` | Peptide sequence | Yes |
-| `split` | `str` | Split assignment ("train", "test", "valid") | Yes |
+### Data quality requirements
 
-#### For ACFM Script (Additional Columns)
-| Column | Datatype | Description | Required |
-|--------|----------|-------------|----------|
-| `modified_peptide` | `str` | Modified peptide sequence | Yes |
-| `modifications` | `str` | Modification information | Yes |
-
-### Data Quality Requirements
-
-**Filtering Criteria Applied** — these are `filter_spectra()` in
-`split_labelled_data.py`; five conditions, and a row is kept only if it satisfies all
-of them:
+Filtering criteria applied — these are `filter_spectra()` in `split_labelled_data.py` (and the same predicates in `collect_unique_peptides`); five conditions, and a row is kept only if it satisfies all of them:
 
 - `retention_time` ≤ 10800 seconds
 - `lower_offset` ≤ 300 Da
-- `precursor_charge` ≥ 0 **and** ≤ 7 — note **0 is kept**, not excluded
+- `precursor_charge` ≥ 0 and ≤ 7 — note 0 is kept, not excluded
 - `precursor_mz` ≤ 2000 Da
-- `sequence` contains no `[IN:<digits>]` token — a private namespace for modifications
-  the pipeline could not resolve to a UNIMOD identifier. Measured across the corpus
-  these are 175 distinct tokens, ids 3000–3174, predominantly N-glycan compositions on
-  asparagine; `N[IN:3173]` and `K[IN:3174]` fall outside the internal glyco mapping,
-  and the latter is on lysine, so this is **not** a glyco-only condition.
-  Glycopeptides whose glycan *does* have a UNIMOD identifier are retained.
+- `sequence` contains no `[IN:<digits>]` token — a private namespace for modifications the pipeline could not resolve to a UNIMOD identifier. Measured across the corpus these are 175 distinct tokens, predominantly glycopeptides.
 
-A null in any of the four numeric columns **passes** the corresponding condition
-(`_nullable_filter`), so a reimplementation that drops nulls produces a different
-dataset. Measured on the published corpus there are no nulls in these columns, so this
-does not bite today, but it is what the code does.
-
-Measured effect on LCFM (184,607,213 → 181,777,591 PSMs, 98.5% retained): retention
-time removes ~2.54 M, the glycan condition ~385 k, and `lower_offset` 8,147. **The
-charge and `precursor_mz` bounds remove nothing** — no PSM in the corpus exceeds
-either, even before filtering.
-
-**Data Validation:**
-- Peptide sequences must be valid amino acid strings
-- m/z and intensity arrays must have matching lengths
-- All numeric values must be finite (not NaN or inf)
-- Charge states must be positive integers
-
-**Special Handling:**
-- I/L ambiguity is normalized (I → L) for consistent grouping
-- "Unknown" values in `collision_energy` are converted to null
-- Missing `isolation_target` values are inferred from `precursor_mz`
-
-## Troubleshooting
-
-### Common Issues
-
-**Memory Errors:**
-- Reduce chunk size or process count
-- Lower safety factor
-- Use memory forecasting mode
-
-**File Not Found:**
-- Check input directory paths
-- Verify file permissions
-- Ensure required columns exist
-
-**Slow Performance:**
-- Increase process count (if memory allows)
-- Use SSD storage
-- Optimize chunk sizes
-
-### Getting Help
-```bash
-# Show script help
-python script.py --help
-
-# Show command help
-python script.py command --help
-
-# Verbose logging
-python script.py command --verbose
-```
-
-## Advanced Configuration
-
-### Custom Filtering
-Modify filtering criteria in script parameters:
-- Retention time limits
-- Charge state ranges
-- m/z thresholds
-- Offset constraints
-
-### Shuffling Strategies
-- **Labelled data**: Peptide-level preservation
-- **Unlabelled data**: LSH-based clustering
-- **Global shuffling**: 2-pass algorithm
-
-### Checkpointing
-- Available for long-running processes
-- Configurable checkpoint intervals
-- Clear checkpoint option for fresh starts
-
-## Reference
-
-### Command Options Summary
-
-| Script | Main Command | Key Options |
-|--------|-------------|-------------|
-| `split_labelled_data.py` | `split` | `--input-dir`, `--output-dir`, `--rows-per-file` |
-| `create_labelled_subset_splits.py` | `subset` | `--input-dir`, `--split-assignments` |
-| `create_consolidated_split_assignments.py` | `consolidate` | `--output-file`, `--blacklist-file` |
-| `split_unlabelled_data.py` | `--mode full` | `--input-dir`, `--output-dir`, `--mz-max` |
-| `shuffle_2pass.py` | `--base-dir` | `--target-chunk-size`, `--seed` |
-
-### Batch Processing
-All scripts support batch processing for multiple datasets:
-```bash
-python script.py batch dir1 dir2 dir3 --output-base /path/to/output
-```
-
-### Legacy Compatibility
-Original functions preserved for backward compatibility:
-```bash
-python script.py  # Runs original main() function
-```
+Rows that fail are omitted from the registry update and from the split outputs; input parquet is left unchanged.

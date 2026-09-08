@@ -48,7 +48,7 @@ class ESM2Embedder:
             raise ImportError(
                 "ESM2 is not available. Please install it with: pip install fair-esm"
             )
-        
+
         # Auto-detect device
         if device is None:
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -103,7 +103,7 @@ class ESM2Embedder:
             if len(cleaned_seq) > 0:
                 valid_sequences.append(cleaned_seq)
                 valid_indices.append(i)
-        
+
         if not valid_sequences:
             logging.warning("No valid amino acid sequences found")
             return np.empty((0, 0))
@@ -128,7 +128,7 @@ class ESM2Embedder:
 
         # Concatenate
         valid_embeddings = np.vstack(embeddings)
-        
+
         # If we filtered out some sequences, we need to create a full array with zeros for invalid sequences
         if len(valid_indices) < len(sequences):
             # Get embedding dimension from valid embeddings
@@ -143,7 +143,7 @@ class ESM2Embedder:
             else:
                 # No valid embeddings at all
                 return np.empty((len(sequences), 0))
-        
+
         return valid_embeddings
 
     def _embed_batch(
@@ -154,12 +154,12 @@ class ESM2Embedder:
     ) -> np.ndarray:
         """
         Compute embeddings for a single batch with specified pooling strategy.
-        
+
         Args:
             batch: List of (label, sequence) tuples
             layer: Transformer layer to extract
             pooling: Pooling strategy ('mean', 'cls', 'attention')
-            
+
         Returns:
             Embeddings array
         """
@@ -173,7 +173,7 @@ class ESM2Embedder:
         embeddings = []
         for i, seq in enumerate(seqs):
             seq_len = len(seq)
-            
+
             if pooling == 'cls':
                 # Extract BOS token (index 0) - this is the ESM-2 CLS analogue
                 # BOS is trained to attend to the whole sequence and contains learned summary
@@ -185,7 +185,7 @@ class ESM2Embedder:
             else:  # 'mean' (default)
                 # Mean pool over sequence tokens (exclude start/end)
                 emb = reps[i, 1 : seq_len + 1].mean(dim=0).cpu().numpy()
-            
+
             embeddings.append(emb)
 
         return np.stack(embeddings)

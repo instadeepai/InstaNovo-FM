@@ -90,7 +90,7 @@ class FourierFeatures(nn.Module):
 
         self.b = nn.Parameter(self.b, requires_grad=self.trainable)
         self.register_parameter('fourier_frequencies', self.b)
-        
+
         # Track if frequencies have been frozen
         self._frequencies_frozen = False
 
@@ -107,7 +107,7 @@ class FourierFeatures(nn.Module):
         elif self.funcs == 'sin':
             x = torch.sin(x)
         return x
-    
+
     def freeze_frequencies(self):
         """Freeze the Fourier frequencies to prevent further training."""
         if not self._frequencies_frozen:

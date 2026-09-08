@@ -10,48 +10,48 @@ import torch.nn.functional as F
 def mu_law_encode(x: torch.Tensor, k: int = 255) -> torch.Tensor:
     """
     μ-law encoding for compressing m/z values.
-    
+
     Args:
         x: Input tensor in [0, 1] range
         k: Compression parameter (default: 255)
-    
+
     Returns:
         Encoded tensor in [-1, 1] range
     """
     # Ensure x is in [0, 1] range
     x = torch.clamp(x, 0.0, 1.0)
-    
+
     # Center the signal to [-1, 1] range for symmetric μ-law encoding
     y = 2 * x - 1  # Map [0, 1] to [-1, 1]
-    
+
     # Apply μ-law encoding
     mu = torch.tensor(k - 1, dtype=x.dtype, device=x.device)
     x_mu = torch.sign(y) * torch.log1p(mu * torch.abs(y)) / torch.log1p(mu)
-    
+
     return x_mu
 
 
 def mu_law_decode(x_mu: torch.Tensor, k: int = 255) -> torch.Tensor:
     """
     μ-law decoding for decompressing m/z values.
-    
+
     Args:
         x_mu: Encoded tensor in [-1, 1] range
         k: Compression parameter (default: 255)
-    
+
     Returns:
         Decoded tensor in [0, 1] range
     """
     # Ensure x_mu is in [-1, 1] range
     x_mu = torch.clamp(x_mu, -1.0, 1.0)
-    
+
     # Apply μ-law decoding
     mu = torch.tensor(k - 1, dtype=x_mu.dtype, device=x_mu.device)
     y = torch.sign(x_mu) * (torch.exp(torch.abs(x_mu) * torch.log1p(mu)) - 1) / mu
-    
+
     # Map back from [-1, 1] to [0, 1] range
     x = (y + 1) / 2
-    
+
     return torch.clamp(x, 0.0, 1.0)
 
 
@@ -198,31 +198,31 @@ def bin_groups_to_mz(
 def focal_loss(logits: torch.Tensor, targets: torch.Tensor, gamma: float = 2.0, alpha: float = 0.25) -> torch.Tensor:
     """
     Focal Loss for handling class imbalance.
-    
+
     Args:
         logits: Model predictions (N, num_classes) - flattened batch
         targets: Ground truth labels (N,) - flattened batch of class indices
         gamma: Focusing parameter (default: 2.0)
         alpha: Weighting parameter for rare classes (default: 0.25)
-    
+
     Returns:
         Focal loss value
     """
     # Apply softmax to get probabilities
     probs = F.softmax(logits, dim=-1)
-    
+
     # Get the probability of the correct class
     num_classes = logits.shape[-1]
     targets_one_hot = F.one_hot(targets, num_classes=num_classes).float()
     pt = (probs * targets_one_hot).sum(dim=-1)  # (N,)
-    
+
     # Calculate focal loss with improved class weighting
     focal_weight = (1 - pt) ** gamma
-    
+
     # Use per-class alpha weighting: alpha for positive class, 1-alpha for negative
     alpha_weight = alpha * targets_one_hot + (1 - alpha) * (1 - targets_one_hot)
     alpha_weight = alpha_weight.sum(dim=-1)  # (N,)
-    
+
     focal_loss = -alpha_weight * focal_weight * torch.log(pt + 1e-8)
-    
+
     return focal_loss.mean()

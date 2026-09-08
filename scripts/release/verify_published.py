@@ -159,7 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001 - the verdict per config is what matters
             # The message alone said only that a file could not be located, naming
             # neither the file nor the HTTP status. The chain and traceback carry both.
-            chain, cur = [], exc
+            chain: list[str] = []
+            cur: BaseException | None = exc
             while cur is not None:
                 chain.append(f"{type(cur).__name__}: {cur}")
                 cur = cur.__cause__ or cur.__context__

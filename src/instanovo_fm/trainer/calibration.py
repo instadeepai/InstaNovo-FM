@@ -18,8 +18,7 @@ def compute_ece(
     targets: torch.Tensor,
     n_bins: int = 15,
 ) -> Tuple[float, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Compute Expected Calibration Error (ECE) and reliability diagram data.
+    """Compute Expected Calibration Error (ECE) and reliability diagram data.
 
     ECE measures the expected difference between confidence and accuracy.
     Well-calibrated models have ECE close to 0.
@@ -51,7 +50,7 @@ def compute_ece(
 
     accuracies = (predictions == targets).float()
 
-    for i, (bin_lower, bin_upper) in enumerate(zip(bin_lowers, bin_uppers)):
+    for i, (bin_lower, bin_upper) in enumerate(zip(bin_lowers, bin_uppers, strict=False)):
         in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
 
         if in_bin.any():

@@ -45,6 +45,7 @@ class UMAPVisualisationTask(BaseTask):
     requires_faiss = False
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
         # Sampling and output
         self.max_samples: int = kwargs.get("max_samples", 10000)
@@ -70,9 +71,7 @@ class UMAPVisualisationTask(BaseTask):
         # Visualization parameters
         self.create_multiple_plots: bool = kwargs.get("create_multiple_plots", True)
         plot_size_raw = kwargs.get("plot_size", (10, 8))
-        self.plot_size: Tuple[int, int] = (
-            tuple(plot_size_raw) if isinstance(plot_size_raw, (list, tuple)) else (10, 8)
-        )
+        self.plot_size: Tuple[int, int] = tuple(plot_size_raw) if isinstance(plot_size_raw, (list, tuple)) else (10, 8)
         self.dpi: int = kwargs.get("dpi", 200)
         self.alpha: float = kwargs.get("alpha", 0.7)
         self.point_size: int = kwargs.get("point_size", 8)
@@ -185,7 +184,7 @@ class UMAPVisualisationTask(BaseTask):
         sorted_counts = counts[order]
 
         if len(sorted_values) <= max_cat:
-            labels = [f"{v} (n={c})" for v, c in zip(sorted_values, sorted_counts)]
+            labels = [f"{v} (n={c})" for v, c in zip(sorted_values, sorted_counts, strict=False)]
             return sorted_values, sorted_counts, labels
 
         if self.collapse_rare_categories:
@@ -197,14 +196,14 @@ class UMAPVisualisationTask(BaseTask):
             filtered_values = np.concatenate([top_values, ["Other"]])
             filtered_counts = np.concatenate([top_counts, [other_count]])
 
-            labels = [f"{v} (n={c})" for v, c in zip(top_values, top_counts)]
+            labels = [f"{v} (n={c})" for v, c in zip(top_values, top_counts, strict=False)]
             preview = ", ".join(str(v) for v in other_values[:3])
             suffix = "..." if len(other_values) > 3 else ""
             labels.append(f"Other ({preview}{suffix}) (n={other_count})")
         else:
             filtered_values = sorted_values[:max_cat]
             filtered_counts = sorted_counts[:max_cat]
-            labels = [f"{v} (n={c})" for v, c in zip(filtered_values, filtered_counts)]
+            labels = [f"{v} (n={c})" for v, c in zip(filtered_values, filtered_counts, strict=False)]
 
         return filtered_values, filtered_counts, labels
 
@@ -235,7 +234,9 @@ class UMAPVisualisationTask(BaseTask):
                 added["sequence_length"] = seq_lens
                 logger.debug(
                     "Computed sequence lengths: min=%d, max=%d, mean=%.1f",
-                    seq_lens.min(), seq_lens.max(), seq_lens.mean(),
+                    seq_lens.min(),
+                    seq_lens.max(),
+                    seq_lens.mean(),
                 )
             except Exception as e:
                 logger.warning("Failed to compute sequence length: %s", e)
@@ -280,9 +281,12 @@ class UMAPVisualisationTask(BaseTask):
 
                 logger.debug(
                     "Spectral properties: n_peaks [%d-%d], CoM [%.1f-%.1f], spread [%.1f-%.1f]",
-                    n_peaks.min(), n_peaks.max(),
-                    np.nanmin(com), np.nanmax(com),
-                    np.nanmin(spread), np.nanmax(spread),
+                    n_peaks.min(),
+                    n_peaks.max(),
+                    np.nanmin(com),
+                    np.nanmax(com),
+                    np.nanmin(spread),
+                    np.nanmax(spread),
                 )
             except Exception as e:
                 logger.warning("Failed to compute spectral properties: %s", e)
@@ -319,7 +323,7 @@ class UMAPVisualisationTask(BaseTask):
 
         match_metrics = meta["match_metrics"]  # object array of dicts
         spectrum_quality = meta["spectrum_quality"]  # object array of dicts
-        N = len(match_metrics)
+        N = len(match_metrics)  # noqa: N806
 
         annotation_ratio = np.full(N, np.nan, dtype=np.float32)
         backbone_coverage = np.full(N, np.nan, dtype=np.float32)
@@ -356,7 +360,7 @@ class UMAPVisualisationTask(BaseTask):
         meta["n_fragment_groups_metric"] = n_fragment_groups
         meta["median_ppm_error"] = median_ppm_error
 
-        added = {
+        added: dict[str, Any] = {
             "annotation_ratio": annotation_ratio,
             "backbone_coverage": backbone_coverage,
             "signal_intensity_ratio": signal_intensity_ratio,
@@ -368,7 +372,10 @@ class UMAPVisualisationTask(BaseTask):
         if n_valid > 0:
             logger.debug(
                 "Annotation properties: %d/%d spectra, annotation_ratio [%.2f-%.2f]",
-                n_valid, N, np.nanmin(annotation_ratio), np.nanmax(annotation_ratio),
+                n_valid,
+                N,
+                np.nanmin(annotation_ratio),
+                np.nanmax(annotation_ratio),
             )
         else:
             logger.debug("No annotation data available")
@@ -401,10 +408,11 @@ class UMAPVisualisationTask(BaseTask):
             return added
 
         seqs = meta[seq_key]
-        N = len(seqs)
+        N = len(seqs)  # noqa: N806
 
         # Count occurrences
         from collections import Counter
+
         seq_counts: Counter = Counter()
         for s in seqs:
             s_str = str(s).strip()
@@ -444,7 +452,10 @@ class UMAPVisualisationTask(BaseTask):
         n_in_top = int((label_arr != other_idx).sum())
         logger.debug(
             "Top %d duplicate peptides cover %d/%d spectra (%.1f%%)",
-            len(top_dups), n_in_top, N, 100.0 * n_in_top / N,
+            len(top_dups),
+            n_in_top,
+            N,
+            100.0 * n_in_top / N,
         )
 
         return added
@@ -514,9 +525,7 @@ class UMAPVisualisationTask(BaseTask):
             nn_2d = NearestNeighbors(n_neighbors=k_knn + 1, metric="euclidean").fit(emb_2d)
             idx_hd = nn_hd.kneighbors(emb_hd, return_distance=False)[:, 1:]
             idx_2d = nn_2d.kneighbors(emb_2d, return_distance=False)[:, 1:]
-            overlaps = np.array(
-                [len(set(a) & set(b)) / k_knn for a, b in zip(idx_hd, idx_2d)]
-            )
+            overlaps = np.array([len(set(a) & set(b)) / k_knn for a, b in zip(idx_hd, idx_2d, strict=False)])
             metrics[f"knn_preservation_k{k_knn}"] = float(overlaps.mean())
 
         return metrics
@@ -548,9 +557,7 @@ class UMAPVisualisationTask(BaseTask):
         if isinstance(data, np.ndarray) and data.dtype == object and len(data) > 0:
             if isinstance(data[0], np.ndarray):
                 try:
-                    data = np.array(
-                        [item.item() if isinstance(item, np.ndarray) and item.size == 1 else item for item in data]
-                    )
+                    data = np.array([item.item() if isinstance(item, np.ndarray) and item.size == 1 else item for item in data])
                 except Exception:
                     return None, None, False, None, set()
 
@@ -584,12 +591,10 @@ class UMAPVisualisationTask(BaseTask):
             mod_types = np.asarray(data)
             unique_mods, counts = np.unique(mod_types, return_counts=True)
             if self.modification_collapse_rare:
-                filt_mods, _, labels = self._manage_categorical_legend(
-                    unique_mods, counts, max_categories=self.modification_max_categories
-                )
+                filt_mods, _, labels = self._manage_categorical_legend(unique_mods, counts, max_categories=self.modification_max_categories)
             else:
                 filt_mods = unique_mods
-                labels = [f"{v} (n={c})" for v, c in zip(filt_mods, counts)]
+                labels = [f"{v} (n={c})" for v, c in zip(filt_mods, counts, strict=False)]
             mod_to_idx = {m: i for i, m in enumerate(filt_mods)}
             numeric = np.array([mod_to_idx.get(m, len(filt_mods) - 1) for m in mod_types])
             bg = {i for i, lbl in enumerate(labels) if "Unmodified" in lbl}
@@ -602,8 +607,8 @@ class UMAPVisualisationTask(BaseTask):
             ptm = np.array([0 if str(m).strip() == "Unmodified" else 1 for m in mod_types], dtype=int)
             unique_vals, counts = np.unique(ptm, return_counts=True)
             labels = []
-            bg: Set[int] = set()
-            for val, cnt in zip(unique_vals, counts):
+            bg = set()
+            for val, cnt in zip(unique_vals, counts, strict=False):
                 if val == 0:
                     labels.append(f"Unmodified (n={cnt})")
                     bg.add(len(labels) - 1)
@@ -633,7 +638,7 @@ class UMAPVisualisationTask(BaseTask):
             top_n = 10
             top_clusters = unique_cl[order[:top_n]]
             top_counts = cl_counts[order[:top_n]]
-            labels = [f"Cluster {i + 1} (n={c})" for i, (_, c) in enumerate(zip(top_clusters, top_counts))]
+            labels = [f"Cluster {i + 1} (n={c})" for i, (_, c) in enumerate(zip(top_clusters, top_counts, strict=False))]
             bg = set()
             if len(unique_cl) > top_n:
                 other_cnt = int(np.sum(cl_counts[order[top_n:]]))
@@ -689,7 +694,7 @@ class UMAPVisualisationTask(BaseTask):
         """
         # Use full colormap (not truncated to len(labels)) so colors stay saturated
         n_fg = max(1, len(labels) - len(background_indices))
-        cmap_obj = plt.cm.get_cmap(cmap_name, max(n_fg, 8))
+        cmap_obj = plt.get_cmap(cmap_name).resampled(max(n_fg, 8))
         handles: List[plt.Artist] = []
 
         # Background layer first (gray, lower alpha)
@@ -702,9 +707,13 @@ class UMAPVisualisationTask(BaseTask):
             if not mask.any():
                 continue
             h = ax.scatter(
-                emb_2d[mask, 0], emb_2d[mask, 1],
-                c="gray", s=self.point_size, alpha=self.alpha * 0.6,
-                edgecolors="none", label=labels[idx],
+                emb_2d[mask, 0],
+                emb_2d[mask, 1],
+                c="gray",
+                s=self.point_size,
+                alpha=self.alpha * 0.6,
+                edgecolors="none",
+                label=labels[idx],
             )
             handles.append(h)
 
@@ -720,9 +729,13 @@ class UMAPVisualisationTask(BaseTask):
                 fg_color_idx += 1
                 continue
             h = ax.scatter(
-                emb_2d[mask, 0], emb_2d[mask, 1],
-                c=[cmap_obj(fg_color_idx % cmap_obj.N)], s=self.point_size, alpha=self.alpha,
-                edgecolors="none", label=lbl,
+                emb_2d[mask, 0],
+                emb_2d[mask, 1],
+                c=[cmap_obj(fg_color_idx % cmap_obj.N)],
+                s=self.point_size,
+                alpha=self.alpha,
+                edgecolors="none",
+                label=lbl,
             )
             handles.append(h)
             fg_color_idx += 1
@@ -772,9 +785,15 @@ class UMAPVisualisationTask(BaseTask):
                     )
             else:
                 scatter = ax.scatter(
-                    emb_2d[:, 0], emb_2d[:, 1],
-                    c=color_data, cmap=cmap, s=self.point_size, alpha=self.alpha,
-                    edgecolors="none", vmin=vmin, vmax=vmax,
+                    emb_2d[:, 0],
+                    emb_2d[:, 1],
+                    c=color_data,
+                    cmap=cmap,
+                    s=self.point_size,
+                    alpha=self.alpha,
+                    edgecolors="none",
+                    vmin=vmin,
+                    vmax=vmax,
                 )
                 ax.set_title(f"UMAP: {title}")
                 ax.set_xlabel("UMAP-1")
@@ -822,7 +841,7 @@ class UMAPVisualisationTask(BaseTask):
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(8 * n_cols, 6 * n_rows))
         axes_flat = np.asarray(axes).flatten()
 
-        for idx, (cfg, cd, cl, is_cat, labels, bg) in enumerate(available):
+        for idx, (cfg, cd, _cl, is_cat, labels, bg) in enumerate(available):
             ax = axes_flat[idx]
             name = cfg["name"]
             title = cfg["title"]
@@ -835,9 +854,15 @@ class UMAPVisualisationTask(BaseTask):
                 vmin = float(cfg["vmin"]) if cfg.get("vmin") is not None else None
                 vmax = float(cfg["vmax"]) if cfg.get("vmax") is not None else None
                 sc = ax.scatter(
-                    emb_2d[:, 0], emb_2d[:, 1],
-                    c=cd, cmap=cmap, s=max(1, self.point_size // 2),
-                    alpha=self.alpha, edgecolors="none", vmin=vmin, vmax=vmax,
+                    emb_2d[:, 0],
+                    emb_2d[:, 1],
+                    c=cd,
+                    cmap=cmap,
+                    s=max(1, self.point_size // 2),
+                    alpha=self.alpha,
+                    edgecolors="none",
+                    vmin=vmin,
+                    vmax=vmax,
                 )
                 fig.colorbar(sc, ax=ax, shrink=0.7)
 
@@ -877,18 +902,25 @@ class UMAPVisualisationTask(BaseTask):
             logger.info("Conditional UMAP subset: %s", subset_name)
 
             emb_filt, meta_filt, desc = self.apply_conditional_filter(
-                emb_sampled, meta_sampled, subset_cfg,
+                emb_sampled,
+                meta_sampled,
+                subset_cfg,
             )
             n_filt = len(emb_filt)
             logger.info(
                 "  Filtered: %d / %d spectra (%.1f%%) — %s",
-                n_filt, len(emb_sampled), 100.0 * n_filt / max(len(emb_sampled), 1), desc,
+                n_filt,
+                len(emb_sampled),
+                100.0 * n_filt / max(len(emb_sampled), 1),
+                desc,
             )
 
             if n_filt < self.conditional_min_samples:
                 logger.warning(
                     "  Skipping subset '%s': only %d samples (min=%d)",
-                    subset_name, n_filt, self.conditional_min_samples,
+                    subset_name,
+                    n_filt,
+                    self.conditional_min_samples,
                 )
                 conditional_results[subset_name] = {
                     "skipped": True,
@@ -938,7 +970,10 @@ class UMAPVisualisationTask(BaseTask):
             if self.create_multiple_plots:
                 for cfg in self.visualization_configs:
                     plot_path = self._create_single_visualization(
-                        emb_2d_filt, meta_filt, cfg, subset_dir,
+                        emb_2d_filt,
+                        meta_filt,
+                        cfg,
+                        subset_dir,
                     )
                     if plot_path:
                         subset_paths.append(plot_path)
@@ -961,7 +996,10 @@ class UMAPVisualisationTask(BaseTask):
             knn_pres = subset_quality.get("knn_preservation_k15", 0)
             logger.info(
                 "  %s: %d spectra, knn_preservation=%.3f, %d plots saved",
-                subset_name, n_filt, knn_pres, len(subset_paths),
+                subset_name,
+                n_filt,
+                knn_pres,
+                len(subset_paths),
             )
 
         results["conditional_umaps"] = conditional_results
@@ -970,7 +1008,7 @@ class UMAPVisualisationTask(BaseTask):
     # Main entry point
     # ------------------------------------------------------------------
 
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:
+    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:  # type: ignore[override]  # base class run() signature differs across tasks
         """Run the UMAP visualisation task.
 
         Args:
@@ -1048,8 +1086,7 @@ class UMAPVisualisationTask(BaseTask):
         coord_root = Path(self.output_dir) if self.output_dir else save_dir
         # (i) marker — proves this block executed in the running image
         try:
-            (coord_root / "COORDS_BLOCK_REACHED.txt").write_text(
-                f"reached run() coord-save: {len(emb_2d)} points\n")
+            (coord_root / "COORDS_BLOCK_REACHED.txt").write_text(f"reached run() coord-save: {len(emb_2d)} points\n")
             saved_paths.append(str(coord_root / "COORDS_BLOCK_REACHED.txt"))
         except Exception as e:
             logger.warning("UMAP_COORDS_MARKER_FAILED: %s", e)
@@ -1076,6 +1113,7 @@ class UMAPVisualisationTask(BaseTask):
         # (iv) parquet — convenient for polars/pandas; per-column so one failure is skipped
         try:
             import polars as pl
+
             cols = {}
             for k, v in data.items():
                 try:
@@ -1108,7 +1146,7 @@ class UMAPVisualisationTask(BaseTask):
                         "created": False,
                     }
         else:
-            default_cfg = {"name": "charge", "key": "precursor_charge", "title": "Precursor Charge", "cmap": "viridis"}
+            default_cfg: dict[str, Any] = {"name": "charge", "key": "precursor_charge", "title": "Precursor Charge", "cmap": "viridis"}
             plot_path = self._create_single_visualization(emb_2d, meta_sampled, default_cfg, save_dir)
             if plot_path:
                 saved_paths.append(plot_path)
@@ -1165,14 +1203,34 @@ class UMAPVisualisationTask(BaseTask):
             "metadata_availability": {
                 key: key in meta_sampled
                 for key in [
-                    "precursor_charge", "sequence", "retention_time", "collision_energy",
-                    "precursor_mz", "hyperscore", "search_acquisition", "search_enzyme",
-                    "search_detector", "search_instrument", "search_project", "search_organism",
-                    "search_quant", "modifications", "frag_type", "ptm_present",
-                    "modified_peptide", "hydrophobicity", "modification_types",
-                    "seq_cluster_id", "spectrum_confidence", "sequence_length",
-                    "unmodified_peptide", "annotation_ratio", "backbone_coverage",
-                    "signal_intensity_ratio", "n_fragment_groups_metric", "median_ppm_error",
+                    "precursor_charge",
+                    "sequence",
+                    "retention_time",
+                    "collision_energy",
+                    "precursor_mz",
+                    "hyperscore",
+                    "search_acquisition",
+                    "search_enzyme",
+                    "search_detector",
+                    "search_instrument",
+                    "search_project",
+                    "search_organism",
+                    "search_quant",
+                    "modifications",
+                    "frag_type",
+                    "ptm_present",
+                    "modified_peptide",
+                    "hydrophobicity",
+                    "modification_types",
+                    "seq_cluster_id",
+                    "spectrum_confidence",
+                    "sequence_length",
+                    "unmodified_peptide",
+                    "annotation_ratio",
+                    "backbone_coverage",
+                    "signal_intensity_ratio",
+                    "n_fragment_groups_metric",
+                    "median_ppm_error",
                 ]
             },
         }
@@ -1180,7 +1238,11 @@ class UMAPVisualisationTask(BaseTask):
         if self.enable_conditional_umaps:
             logger.info("Running instrument-conditional UMAPs...")
             self._run_conditional_umaps(
-                emb_sampled, meta_sampled, save_dir, saved_paths, results,
+                emb_sampled,
+                meta_sampled,
+                save_dir,
+                saved_paths,
+                results,
             )
             # Update execution time to include conditional UMAPs
             results["execution_time"] = time.time() - start_time

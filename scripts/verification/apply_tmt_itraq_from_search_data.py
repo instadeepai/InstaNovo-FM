@@ -1,38 +1,43 @@
-r"""Apply TMT or iTRAQ lysine labels from search-data Excel.
+r"""Apply tandem mass tag (TMT) or iTRAQ lysine labels from search-data Excel.
 
-For each user-specified (project, tag kind), labels bare K in parquet sequences with
-the matching UNIMOD (TMT 6/8/10 → 737, TMT 16/18 → 2016, iTRAQ-4plex → 214).
+Run after search metadata is known so unmodified lysines in parquet sequences
+can be written with the UNIMOD accession used by the original search
+(TMT 6/8/10-plex → 737, TMT 16/18-plex → 2016, iTRAQ 4-plex → 214).
 
-**TMT** (primary): each row must match both ``quant`` = TMT and TMT-plex markers in
-``modifications`` (see ``modifications_match_tag_kind``).
+For each user-specified (project, tag kind), unmodified lysines are labelled
+with that UNIMOD accession.
 
-**iTRAQ** (primary): only ``modifications`` are used — the row must match **iTRAQ
-4-plex** text (``itraq`` + ``4`` + optional ``plex`` / spacing; see
-``modifications_match_itraq_4plex``). Other iTRAQ plexes are not matched. If
-``quant`` is not exactly ``iTRAQ`` (case-insensitive), a **warning** is logged but
-labeling still proceeds for those rows.
+**TMT** (primary): each row must match both ``quant`` = TMT and TMT multiplex
+markers in ``modifications`` (see ``modifications_match_tag_kind``).
 
-If no row qualifies on the primary rules, the script prints a quant summary and may
-require ``--confirm-project-wide PROJECT`` or interactive confirmation before a
-**quant-only** fallback (TMT or ``quant`` = iTRAQ for ITRAQ specs).
+**iTRAQ** (primary): only ``modifications`` are used — the row must match
+**iTRAQ 4-plex** text (``itraq`` + ``4`` + optional ``plex`` / spacing; see
+``modifications_match_itraq_4plex``). Other iTRAQ multiplex sets are not matched.
+If ``quant`` is not exactly ``iTRAQ`` (case-insensitive), a **warning** is logged
+but labelling still proceeds for those rows.
+
+If no row qualifies on the primary rules, the script prints a quantification
+summary and may require ``--confirm-project-wide PROJECT`` or interactive
+confirmation before a **quant-only** fallback (TMT, or ``quant`` = iTRAQ for
+iTRAQ specs).
 
 **YAML spec file:** must be a single mapping ``project_id: TAG_KIND``. Duplicate
-project keys are invalid in YAML (the last wins). To run the same project with more
-than one tag kind (e.g. mixed TMT 10-plex and 16-plex files), use repeated
-``--spec PROJECT:TAG`` on the CLI and/or split entries across multiple YAML files.
+project keys are invalid in YAML (the last wins). To run the same project with
+more than one tag kind (for example mixed TMT 10-plex and 16-plex files), use
+repeated ``--spec PROJECT:TAG`` on the command line and/or split entries across
+multiple YAML files.
 
-USAGE:
-======
-python scripts/verification/apply_tmt_itraq_from_search_data.py \\
-    --search-data search_data.xlsx \\
-    --input-dir <data-root>/lcfm/ \\
-    --spec PXD001:TMT_6_8_10 \\
-    --dry-run
+CLI::
 
-python scripts/verification/apply_tmt_itraq_from_search_data.py \\
-    --search-data search_data.xlsx \\
-    --input-dir <data-root>/lcfm/ \\
-    --spec-file tags.yaml
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data --help
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data \
+        --input-dir <data-root>/lcfm/ \
+        --spec PXD001:TMT_6_8_10 \
+        --dry-run
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data \
+        --search-data data/search_data.xlsx \
+        --input-dir <data-root>/lcfm/ \
+        --spec-file tags.yaml
 """
 
 from __future__ import annotations
@@ -51,18 +56,21 @@ import polars as pl
 import typer
 import yaml
 
+from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_SEARCH_DATA
+from scripts.preprocessing.parquet_io import search_data_lookup_key
 from scripts.verification.verify_calc_mz import (
-    extract_file_name,
     find_parquet_files_in_project,
     is_tmt_quant,
     label_unmodified_lysines,
 )
 
-app = typer.Typer(help="Apply TMT/iTRAQ K-labels using search-data Excel")
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+app = typer.Typer(
+    help="Apply TMT or iTRAQ lysine labels using search-data Excel",
+    no_args_is_help=True,
+    add_completion=False,
 )
+
 logger = logging.getLogger(__name__)
 
 REQUIRED_SEARCH_COLUMNS = [
@@ -75,7 +83,7 @@ REQUIRED_SEARCH_COLUMNS = [
 
 
 class TagKind(str, Enum):
-    """Isobaric label family for CLI specs and UNIMOD mapping."""
+    """Name the isobaric family so command-line and YAML specs map to one UNIMOD accession on lysine."""
 
     TMT_6_8_10 = "TMT_6_8_10"
     TMT_16_18 = "TMT_16_18"
@@ -88,7 +96,7 @@ UNIMOD_BY_KIND: Dict[TagKind, str] = {
     TagKind.ITRAQ: "214",
 }
 
-# Modifications substrings (case-insensitive). TMT 16/18 vs 6/8/10 are chosen explicitly.
+# Modifications substrings (case-insensitive). TMT 16/18-plex vs 6/8/10-plex are chosen explicitly.
 _TMT_16_18_SUBSTRINGS = ("tmt16", "tmt18")
 _TMT_6_8_10_SUBSTRINGS = ("tmt6", "tmt8", "tmt10")
 
@@ -101,26 +109,55 @@ _ITRAQ_4_PLEX_MOD_RE = re.compile(
 
 
 def modifications_match_itraq_4plex(modifications: object) -> bool:
-    """True if modifications indicate iTRAQ 4-plex labeling (not other iTRAQ plexes)."""
+    """Restrict iTRAQ labelling to 4-plex text so 8-plex and generic iTRAQ strings are not tagged.
+
+    Args:
+        modifications: Search-data modifications cell.
+
+    Returns:
+        True when the text matches iTRAQ 4-plex (``itraq`` + ``4`` + optional plex).
+    """
     if modifications is None:
         return False
     return bool(_ITRAQ_4_PLEX_MOD_RE.search(str(modifications)))
 
 
 def is_itraq_quant(quant: object) -> bool:
-    """True if search-data quant value indicates iTRAQ (exact strip, case-insensitive)."""
+    """Treat only an exact ``iTRAQ`` quant cell as iTRAQ (case-insensitive, stripped).
+
+    Args:
+        quant: Search-data quant cell.
+
+    Returns:
+        True when the value is exactly ``itraq`` after strip and casefold.
+    """
     if quant is None:
         return False
     return str(quant).strip().casefold() == "itraq"
 
 
 def is_dia_acquisition(acquisition: object) -> bool:
-    """True if acquisition column indicates DIA."""
+    """Split data-independent acquisition (DIA) files from the rest when summarising quant fallback risk.
+
+    Args:
+        acquisition: Search-data acquisition cell.
+
+    Returns:
+        True when the value is exactly ``DIA`` after strip.
+    """
     return acquisition is not None and str(acquisition).strip() == "DIA"
 
 
 def modifications_match_tag_kind(modifications: object, kind: TagKind) -> bool:
-    """True if modifications string matches the given tag kind (case-insensitive)."""
+    """Match multiplex-specific modification text so TMT 6/8/10-plex is not confused with 16/18-plex.
+
+    Args:
+        modifications: Search-data modifications cell.
+        kind: Requested tag family.
+
+    Returns:
+        True when modifications indicate that multiplex set (iTRAQ uses 4-plex only).
+    """
     if kind == TagKind.ITRAQ:
         return modifications_match_itraq_4plex(modifications)
     s = str(modifications).casefold() if modifications is not None else ""
@@ -132,14 +169,30 @@ def modifications_match_tag_kind(modifications: object, kind: TagKind) -> bool:
 
 
 def quant_matches_tag_kind(quant: object, kind: TagKind) -> bool:
-    """True if quant column matches the tag family (TMT vs iTRAQ)."""
+    """Use the quant column to distinguish TMT vs iTRAQ families, not the multiplex set.
+
+    Args:
+        quant: Search-data quant cell.
+        kind: Requested tag family.
+
+    Returns:
+        True when quant matches TMT (for either TMT multiplex set) or exact iTRAQ.
+    """
     if kind in (TagKind.TMT_6_8_10, TagKind.TMT_16_18):
         return bool(is_tmt_quant(quant))
     return is_itraq_quant(quant)
 
 
 def row_qualifies_primary(row: dict, kind: TagKind) -> bool:
-    """True if row passes primary file selection (ITRAQ: mods only; TMT: mods+quant)."""
+    """Select files by the strict TMT (modifications plus quant) or iTRAQ (4-plex modifications only) rules.
+
+    Args:
+        row: Search-data row as a mapping.
+        kind: Requested tag family.
+
+    Returns:
+        True when this row is eligible without the quant-only fallback.
+    """
     if kind == TagKind.ITRAQ:
         return modifications_match_itraq_4plex(row.get("modifications"))
     return quant_matches_tag_kind(
@@ -148,12 +201,31 @@ def row_qualifies_primary(row: dict, kind: TagKind) -> bool:
 
 
 def row_qualifies_fallback_quant(row: dict, kind: TagKind) -> bool:
-    """True if row quant matches tag family (fallback when mods do not match)."""
+    """Widen file selection to quant-only when primary multiplex markers are missing.
+
+    Args:
+        row: Search-data row as a mapping.
+        kind: Requested tag family.
+
+    Returns:
+        True when quant matches the tag family.
+    """
     return quant_matches_tag_kind(row.get("quant"), kind)
 
 
 def load_search_data(path: str | Path) -> pl.DataFrame:
-    """Load search Excel and validate required columns."""
+    """Load search Excel so file stems can be joined to parquet trees.
+
+    Args:
+        path: Search-data workbook with project, raw-filename file path,
+            acquisition, quant, and modifications.
+
+    Returns:
+        The validated search table.
+
+    Raises:
+        ValueError: When required columns are missing.
+    """
     df = pl.read_excel(path)
     missing = [c for c in REQUIRED_SEARCH_COLUMNS if c not in df.columns]
     if missing:
@@ -162,7 +234,15 @@ def load_search_data(path: str | Path) -> pl.DataFrame:
 
 
 def iter_project_rows(df: pl.DataFrame, project: str) -> Iterable[dict]:
-    """Yield search rows for a single project id (stripped match)."""
+    """Yield only the search rows for one project id (stripped match).
+
+    Args:
+        df: Full search-data table.
+        project: Project identifier to match.
+
+    Returns:
+        Named-row dicts for that project.
+    """
     p = project.strip()
     for row in df.iter_rows(named=True):
         if str(row["project"]).strip() != p:
@@ -175,7 +255,16 @@ def collect_stems_for_predicate(
     project: str,
     predicate: Callable[[dict], bool],
 ) -> Set[str]:
-    """Collect unique file stems for rows in project where predicate(row) is true."""
+    """Collect unique experiment stems for parquets that pass a TMT/iTRAQ predicate.
+
+    Args:
+        df: Search-data table.
+        project: Project whose rows are scanned.
+        predicate: Row filter (primary or fallback).
+
+    Returns:
+        File stems that should receive lysine labelling.
+    """
     stems: Set[str] = set()
     for row in iter_project_rows(df, project):
         fp = row.get("file path")
@@ -183,27 +272,37 @@ def collect_stems_for_predicate(
             continue
         if not predicate(row):
             continue
-        stems.add(extract_file_name(str(fp)))
+        stems.add(search_data_lookup_key(str(fp)))
     return stems
 
 
 def parquet_paths_for_stems(
     input_dir: Path, project: str, stems: Set[str]
 ) -> List[Path]:
-    """List parquet paths under input_dir/project whose stem is in stems."""
+    """Map search-data stems onto parquet paths that actually exist on disk.
+
+    Args:
+        input_dir: Root with per-project parquet subfolders.
+        project: Project folder name.
+        stems: Experiment stems selected from search data.
+
+    Returns:
+        Sorted parquet paths whose stem is in ``stems``.
+    """
     if not stems:
         return []
     want = stems
     out: List[Path] = []
     for fp_str in find_parquet_files_in_project(str(input_dir), project):
         p = Path(fp_str)
-        stem = extract_file_name(str(p))
+        stem = search_data_lookup_key(str(p))
         if stem in want:
             out.append(p)
     return sorted(out)
 
 
 def _normalize_quant_display(quant: object) -> str:
+    """Show null/empty quant values as readable tokens in fallback summaries."""
     if quant is None:
         return "(null)"
     return str(quant).strip() or "(empty)"
@@ -211,7 +310,7 @@ def _normalize_quant_display(quant: object) -> str:
 
 @dataclass
 class QuantSummary:
-    """Per-project quant breakdown for user messaging."""
+    """Explain why primary TMT/iTRAQ matching failed so the operator can confirm fallback."""
 
     quant_row_counts: Dict[str, int]
     rows_dia: int
@@ -235,6 +334,7 @@ def _record_quant_file_sets(
     files_itraq_dia: Set[str],
     files_itraq_non_dia: Set[str],
 ) -> None:
+    """Count unique files by TMT, iTRAQ, and data-independent acquisition so fallback risk is visible."""
     if bool(is_tmt_quant(row.get("quant"))):
         files_tmt.add(stem)
         if dia:
@@ -250,7 +350,15 @@ def _record_quant_file_sets(
 
 
 def build_quant_summary(df: pl.DataFrame, project: str) -> QuantSummary:
-    """Aggregate quant values and per-file TMT/iTRAQ counts for one project."""
+    """Build the quantification and acquisition-mode breakdown shown before a project-wide fallback.
+
+    Args:
+        df: Search-data table.
+        project: Project to summarise.
+
+    Returns:
+        Counts that explain whether quant-only labelling is plausible.
+    """
     quant_row_counts: Dict[str, int] = {}
     rows_dia = 0
     rows_non_dia = 0
@@ -270,7 +378,7 @@ def build_quant_summary(df: pl.DataFrame, project: str) -> QuantSummary:
         fp = row.get("file path")
         if fp is None:
             continue
-        stem = extract_file_name(str(fp))
+        stem = search_data_lookup_key(str(fp))
         _record_quant_file_sets(
             row,
             stem,
@@ -297,7 +405,12 @@ def build_quant_summary(df: pl.DataFrame, project: str) -> QuantSummary:
 
 
 def log_quant_summary(project: str, summary: QuantSummary) -> None:
-    """Log quant breakdown from build_quant_summary."""
+    """Print the fallback quantification summary so a user can confirm project-wide labelling.
+
+    Args:
+        project: Project being considered for fallback.
+        summary: Counts from ``build_quant_summary``.
+    """
     logger.info("Project %s — quant column (row counts by value):", project)
     for qv, n in summary.quant_row_counts.items():
         logger.info("  %s: %d rows", qv, n)
@@ -323,6 +436,7 @@ def log_quant_summary(project: str, summary: QuantSummary) -> None:
 
 
 def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
+    """Replace the parquet only after a full write so a crash cannot leave a truncated file."""
     temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=file_path.parent)
     os.close(temp_fd)
     temp_path = Path(temp_path_str)
@@ -336,6 +450,7 @@ def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
 
 
 def _label_sequence(seq: Optional[str], unimod_id: str) -> Optional[str]:
+    """Leave null sequences untouched while tagging unmodified lysines on valid peptides."""
     if seq is None:
         return None
     return label_unmodified_lysines(seq, unimod_id)
@@ -346,7 +461,16 @@ def process_parquet_file(
     unimod_id: str,
     dry_run: bool,
 ) -> Tuple[int, int]:
-    """Return (files_processed 0|1, rows_changed)."""
+    """Tag unmodified lysines in one parquet with the UNIMOD accession chosen for this spec.
+
+    Args:
+        file_path: Parquet whose ``sequence`` column may contain unmodified lysine.
+        unimod_id: UNIMOD accession to write on unmodified lysine (737, 2016, or 214).
+        dry_run: Log intended changes without writing.
+
+    Returns:
+        ``(1, n)`` if the file was processed (n rows changed), or ``(0, 0)`` if skipped.
+    """
     df = pl.read_parquet(file_path)
     if "sequence" not in df.columns:
         logger.warning("Skipping %s: no sequence column", file_path)
@@ -370,6 +494,7 @@ def process_parquet_file(
 
 
 def _relpath_or_abs(base: Path, path: Path) -> Path:
+    """Log a short path when the parquet sits under the input root."""
     try:
         return path.relative_to(base)
     except ValueError:
@@ -377,7 +502,17 @@ def _relpath_or_abs(base: Path, path: Path) -> Path:
 
 
 def parse_tag_kind(s: str) -> TagKind:
-    """Parse CLI/YAML tag string into TagKind."""
+    """Accept command-line and YAML tag aliases so operators can write TMT_6_8_10 or tmt-6-8-10.
+
+    Args:
+        s: Tag kind string from ``--spec`` or YAML.
+
+    Returns:
+        The matching ``TagKind``.
+
+    Raises:
+        ValueError: When the string is not a known tag kind.
+    """
     key = s.strip().upper().replace("-", "_")
     for member in TagKind:
         if member.value == key or member.name == key:
@@ -388,7 +523,17 @@ def parse_tag_kind(s: str) -> TagKind:
 
 
 def parse_spec(spec: str) -> Tuple[str, TagKind]:
-    """Parse ``PROJECT:TAG_KIND`` from ``--spec``."""
+    """Parse ``PROJECT:TAG_KIND`` from ``--spec`` so mixed multiplex sets can be listed on the command line.
+
+    Args:
+        spec: ``PROJECT:TAG_KIND`` string.
+
+    Returns:
+        Project id and tag kind.
+
+    Raises:
+        ValueError: When the spec is missing a colon, project, or valid tag.
+    """
     if ":" not in spec:
         raise ValueError(f"Invalid --spec {spec!r}; expected PROJECT:TAG_KIND")
     proj, tag = spec.split(":", 1)
@@ -399,7 +544,7 @@ def parse_spec(spec: str) -> Tuple[str, TagKind]:
 
 
 def _warn_non_itraq_quant_for_itraq_rows(df: pl.DataFrame, project: str) -> None:
-    """Log when iTRAQ-4plex mods are used but quant is not exactly 'iTRAQ'."""
+    """Warn when 4-plex modifications drive labelling but quantification is not exactly iTRAQ."""
     unexpected: Set[str] = set()
     for row in iter_project_rows(df, project):
         if not modifications_match_itraq_4plex(row.get("modifications")):
@@ -409,7 +554,7 @@ def _warn_non_itraq_quant_for_itraq_rows(df: pl.DataFrame, project: str) -> None
         unexpected.add(_normalize_quant_display(row.get("quant")))
     if unexpected:
         logger.warning(
-            "Project %s (ITRAQ): applying K[UNIMOD:214] from iTRAQ-4plex modifications; "
+            "Project %s (ITRAQ): applying K[UNIMOD:214] from iTRAQ 4-plex modifications; "
             "quant is not 'iTRAQ' on some matching rows (seen: %s).",
             project,
             ", ".join(sorted(unexpected)),
@@ -417,7 +562,17 @@ def _warn_non_itraq_quant_for_itraq_rows(df: pl.DataFrame, project: str) -> None
 
 
 def load_specs_from_yaml(path: str | Path) -> List[Tuple[str, TagKind]]:
-    """Load project → tag kind mapping from YAML (one tag per project key; no duplicate keys)."""
+    """Load a one-tag-per-project YAML map (duplicate keys are invalid YAML; last wins).
+
+    Args:
+        path: YAML file of ``project_id: TAG_KIND``.
+
+    Returns:
+        Specs in file order.
+
+    Raises:
+        ValueError: When the file is not a mapping or a tag is unknown.
+    """
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
@@ -436,7 +591,7 @@ def _primary_or_fallback_stems(
     unimod: str,
     confirm_project_wide: Set[str],
 ) -> Tuple[Set[str], str, int]:
-    """Return (stems, mode, err). err is 1 if this spec should be skipped."""
+    """Prefer multiplex-aware file selection; only fall back to quant-only after confirmation."""
     pred_primary = cast(
         Callable[[dict], bool],
         partial(row_qualifies_primary, kind=kind),
@@ -445,8 +600,8 @@ def _primary_or_fallback_stems(
     if primary:
         if kind == TagKind.ITRAQ:
             _warn_non_itraq_quant_for_itraq_rows(df, project)
-            return primary, "primary (iTRAQ-4plex mods)", 0
-        return primary, "primary (mods+quant)", 0
+            return primary, "primary (iTRAQ 4-plex modifications)", 0
+        return primary, "primary (modifications plus quant)", 0
 
     logger.warning(
         "Project %s (%s): no search rows matched primary rules for this tag.",
@@ -472,7 +627,7 @@ def _primary_or_fallback_stems(
         msg = (
             f"Apply {kind.value} (UNIMOD {unimod}) project-wide by quant only "
             f"to {len(fallback)} file stem(s) under {project}? "
-            f"(Parquets for stems with quant matching this tag, incl. DIA.)"
+            f"(Parquets for stems with quant matching this tag, including DIA.)"
         )
         if not typer.confirm(msg, default=False):
             logger.error(
@@ -493,7 +648,18 @@ def run_apply_labels(
     dry_run: bool,
     confirm_project_wide: Set[str],
 ) -> int:
-    """Return 0 on success, 1 if any spec aborted without confirmation."""
+    """Apply each project/tag spec, aborting unconfirmed quant-only fallbacks.
+
+    Args:
+        search_data: Search Excel used to pick file stems.
+        input_dir: Root with per-project parquet subfolders.
+        specs: ``(project, tag kind)`` pairs from the command line and/or YAML.
+        dry_run: Preview writes without modifying files.
+        confirm_project_wide: Project ids allowed to skip the fallback prompt.
+
+    Returns:
+        0 on full success, 1 if any spec was skipped or had no matching parquets.
+    """
     df = load_search_data(search_data)
     input_path = Path(input_dir)
     exit_code = 0
@@ -545,14 +711,6 @@ def run_apply_labels(
 
 @app.command()
 def main(
-    search_data: Annotated[
-        Path,
-        typer.Option(
-            "--search-data",
-            "-s",
-            help="Search data Excel (project, file path, acquisition, quant, modifications)",
-        ),
-    ],
     input_dir: Annotated[
         Path,
         typer.Option(
@@ -561,6 +719,17 @@ def main(
             help="Root directory with per-project parquet subfolders",
         ),
     ],
+    search_data: Annotated[
+        Path,
+        typer.Option(
+            "--search-data",
+            "-s",
+            help=(
+                "Search-data Excel with project, raw-filename file path, "
+                "acquisition, quant, and modifications"
+            ),
+        ),
+    ] = DEFAULT_SEARCH_DATA,
     spec: Annotated[
         Optional[List[str]],
         typer.Option(
@@ -586,8 +755,24 @@ def main(
             help="Project id (repeat) to allow quant-only fallback without prompt",
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable DEBUG logging"),
+    ] = False,
 ) -> None:
-    """Label bare K with TMT or iTRAQ UNIMOD from search-data rules."""
+    """Label unmodified lysines with TMT or iTRAQ UNIMOD accessions using search-data multiplex rules (and optional quant fallback).
+
+    Args:
+        input_dir: Root directory with per-project parquet subfolders.
+        search_data: Search-data Excel with project, raw-filename file path,
+            acquisition, quant, and modifications.
+        spec: Repeatable ``PROJECT:TAG_KIND`` (TMT_6_8_10, TMT_16_18, ITRAQ).
+        spec_file: YAML mapping project id to tag kind (one entry per project).
+        dry_run: Log actions without writing files.
+        confirm_project_wide: Project ids that may use quant-only fallback without a prompt.
+        verbose: Enable DEBUG logging.
+    """
+    configure_script_logging(verbose=verbose)
     spec_list = spec or []
     confirm_list = confirm_project_wide or []
 

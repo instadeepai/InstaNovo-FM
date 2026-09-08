@@ -1,3 +1,4 @@
+# ruff: noqa: T201 - a CLI check: the printed coverage report is the output
 r"""Check every ``[IN:n]`` modification code against UNIMOD via pyOpenMS.
 
 The corpus annotates modifications as ``[UNIMOD:n]`` where the modification resolves

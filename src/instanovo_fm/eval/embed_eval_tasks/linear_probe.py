@@ -13,11 +13,19 @@ import logging
 import re
 import time
 import warnings
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from scipy.stats import spearmanr
+
+try:
+    from threadpoolctl import threadpool_limits
+
+    _THREADPOOLCTL_AVAILABLE = True
+except ImportError:
+    _THREADPOOLCTL_AVAILABLE = False
 
 try:
     import cuml
@@ -26,8 +34,10 @@ try:
 
     cuml.set_global_output_type("numpy")
     _CUML_AVAILABLE = True
-except ImportError:
+    _CUML_IMPORT_ERROR = None
+except Exception as e:  # broaden beyond ImportError: a CUDA/symbol-load failure must fall back, not crash
     _CUML_AVAILABLE = False
+    _CUML_IMPORT_ERROR = repr(e)
 
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import (
@@ -71,11 +81,12 @@ class LinearProbeTask(BaseTask):
     requires_faiss = False
     requires_multi_split = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
 
         # Target field(s) to probe
-        self.targets = kwargs.get("targets", None)
+        self.targets: list[str] = kwargs.get("targets") or []
         if self.targets is not None and isinstance(self.targets, str):
             self.targets = [self.targets]
 
@@ -106,21 +117,25 @@ class LinearProbeTask(BaseTask):
         self.min_project_samples = kwargs.get("min_project_samples", 5)
         self.run_in_domain_baseline = kwargs.get("run_in_domain_baseline", False)
 
+        # Reproducibility: pin the BLAS/OpenMP thread pool during fitting so the lbfgs
+        # gradient matmuls reduce in a fixed order on every machine
+        self.blas_threads = kwargs.get("blas_threads", 1)
+
         # Classification parameters
-        self.classification_params = {
+        self.classification_params: dict[str, Any] = {
             "max_iter": kwargs.get("max_iter", 1000),
             "solver": kwargs.get("solver", "lbfgs"),
             "class_weight": kwargs.get("class_weight", "balanced"),
             "penalty": kwargs.get("penalty", "l2"),
             "tol": kwargs.get("tol", 1e-4),
             "random_state": self.random_state,
-            "n_jobs": kwargs.get("n_jobs", -1),
+            "n_jobs": kwargs.get("n_jobs", 1),  # reproducibility
         }
         self.c_values = kwargs.get("c_values", [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0])
 
         # cuML-compatible classification params: strip solver/class_weight/n_jobs/random_state (unsupported)
         if _CUML_AVAILABLE:
-            self._cuml_classification_params = {
+            self._cuml_classification_params: dict[str, Any] | None = {
                 k: v for k, v in self.classification_params.items() if k not in ("solver", "class_weight", "random_state", "n_jobs")
             }
         else:
@@ -134,12 +149,12 @@ class LinearProbeTask(BaseTask):
         self.test_size = kwargs.get("test_size", 0.2)
         self.use_grid_search = kwargs.get("use_grid_search", True)
 
-    def run(
+    def run(  # type: ignore[override]  # base class run() signature differs across tasks
         self,
         emb: np.ndarray,
         meta: Dict[str, np.ndarray],
         faiss_index: Any = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run linear probe evaluation.
 
@@ -155,8 +170,10 @@ class LinearProbeTask(BaseTask):
         if self.targets is None:
             raise ValueError("Must specify 'targets' parameter (list of metadata field names)")
 
-        backend = "cuML (GPU)" if _CUML_AVAILABLE else "sklearn (CPU)"
-        logger.info(f"Linear probe backend: {backend}")
+        if _CUML_AVAILABLE:
+            logger.info("Linear probe backend: cuML LogisticRegression/Ridge (GPU)")
+        else:
+            logger.warning(f"Linear probe backend: FALLING BACK to sklearn (CPU) — cuML unavailable ({_CUML_IMPORT_ERROR or 'import failed'}).")
 
         start_time = time.time()
 
@@ -182,16 +199,20 @@ class LinearProbeTask(BaseTask):
                 proj_info = f"dtype={type(proj).__name__}, elem={type(proj[0]).__name__ if len(proj) > 0 else '?'}, n={len(proj)}"
             logger.info(f"  meta: {self.project_key}={proj_info}")
 
-        if splits is not None and (pre_filtered or not self.use_project_split):
-            # Use model splits directly as probe splits (no project reassignment)
-            results = self._run_pre_filtered(splits)
-        elif self.use_project_split and splits is not None:
-            results = self._run_project_disjoint(splits)
-        else:
-            if self.use_project_split and splits is None:
-                logger.warning("use_project_split=True but no splits provided. Falling back to legacy internal split.")
-            self.validate_inputs(emb, meta, faiss_index)
-            results = self._run_legacy(emb, meta)
+        thread_ctx = threadpool_limits(limits=self.blas_threads) if _THREADPOOLCTL_AVAILABLE else nullcontext()
+        if _THREADPOOLCTL_AVAILABLE:
+            logger.info(f"Linear probe: pinning BLAS/OpenMP threads to {self.blas_threads} for reproducible fitting")
+        with thread_ctx:
+            if splits is not None and (pre_filtered or not self.use_project_split):
+                # Use model splits directly as probe splits (no project reassignment)
+                results = self._run_pre_filtered(splits)
+            elif self.use_project_split and splits is not None:
+                results = self._run_project_disjoint(splits)
+            else:
+                if self.use_project_split and splits is None:
+                    logger.warning("use_project_split=True but no splits provided. Falling back to legacy internal split.")
+                self.validate_inputs(emb, meta, faiss_index)
+                results = self._run_legacy(emb, meta)
 
         results["execution_time"] = time.time() - start_time
         return results
@@ -215,8 +236,8 @@ class LinearProbeTask(BaseTask):
         Returns:
             Stats dict with source, split_counts, and embedding statistics.
         """
-        split_counts = {}
-        parts = []
+        split_counts: dict[str, Any] = {}
+        parts: list[Any] = []
         for name in ("train", "val", "test"):
             emb = probe_splits.get(name, {}).get("embeddings")
             if emb is not None and len(emb) > 0:
@@ -230,9 +251,9 @@ class LinearProbeTask(BaseTask):
 
         all_emb = np.concatenate(parts, axis=0)
         stats = embedding_io.get_embedding_stats(all_emb)
-        stats["source"] = source
-        stats["split_counts"] = split_counts
-        return stats
+        stats["source"] = source  # type: ignore[assignment]
+        stats["split_counts"] = split_counts  # type: ignore[assignment]
+        return dict(stats)
 
     @staticmethod
     def _compute_balanced_sample_weight(y: np.ndarray) -> np.ndarray:
@@ -244,7 +265,7 @@ class LinearProbeTask(BaseTask):
         n_samples = len(y)
         n_classes = len(classes)
         weight_per_class = n_samples / (n_classes * counts)
-        class_weight_map = dict(zip(classes, weight_per_class, strict=False))
+        class_weight_map = dict(zip(classes, weight_per_class, strict=True))
         return np.array([class_weight_map[yi] for yi in y], dtype=np.float32)
 
     def _validate_splits(self, splits: Dict[str, tuple]) -> None:
@@ -283,7 +304,7 @@ class LinearProbeTask(BaseTask):
             min_project_samples=self.min_project_samples,
         )
 
-        target_results = {}
+        target_results: dict[str, Any] = {}
         for target_field in self.targets:
             logger.debug(f"Running probe for target: {target_field}")
 
@@ -405,7 +426,7 @@ class LinearProbeTask(BaseTask):
             n0 = len(keep)
             if keep.all():
                 continue
-            new_meta = {}
+            new_meta: dict[str, Any] = {}
             for k, v in meta.items():
                 arr = np.asarray(v)
                 new_meta[k] = arr[keep] if arr.ndim >= 1 and arr.shape[0] == n0 else v
@@ -448,6 +469,7 @@ class LinearProbeTask(BaseTask):
             if data is None:
                 return {"error": f"No valid data for {target_field} in {name} split"}
 
+        assert train_data is not None and val_data is not None and test_data is not None
         train_emb, train_y, label_mapping = train_data
         val_emb, val_y, _ = val_data
         test_emb, test_y, _ = test_data
@@ -474,9 +496,9 @@ class LinearProbeTask(BaseTask):
 
         # Standardize embeddings
         scaler = StandardScaler()
-        X_train = scaler.fit_transform(train_emb)
-        X_val = scaler.transform(val_emb)
-        X_test = scaler.transform(test_emb)
+        X_train = scaler.fit_transform(train_emb)  # noqa: N806
+        X_val = scaler.transform(val_emb)  # noqa: N806
+        X_test = scaler.transform(test_emb)  # noqa: N806
 
         if task_type == "classification":
             test_sequences = None
@@ -521,7 +543,7 @@ class LinearProbeTask(BaseTask):
         Level 1: ptm_present (binary) — on all data.
         Level 2: modification_class — on PTM-positive examples only.
         """
-        result = {}
+        result: dict[str, Any] = {}
 
         # Level 1: ptm_present (binary, all data)
         logger.debug("  Hierarchical PTM: running ptm_present (binary)")
@@ -547,7 +569,7 @@ class LinearProbeTask(BaseTask):
 
         Returns None if any split has too few PTM-positive samples.
         """
-        filtered = {}
+        filtered: dict[str, Any] = {}
         for split_name in ("train", "val", "test"):
             split_data = probe_splits[split_name]
             meta = split_data["metadata"]
@@ -575,7 +597,7 @@ class LinearProbeTask(BaseTask):
                 logger.warning(f"Only {mask.sum()} PTM-positive samples in {split_name} (min: {min_samples}). Skipping modification_class probe.")
                 return None
 
-            filtered_meta = {}
+            filtered_meta: dict[str, Any] = {}
             for k, v in meta.items():
                 try:
                     filtered_meta[k] = v[mask]
@@ -599,11 +621,11 @@ class LinearProbeTask(BaseTask):
 
     def _train_tune_eval_classification(
         self,
-        X_train: np.ndarray,
+        X_train: np.ndarray,  # noqa: N803
         y_train: np.ndarray,
-        X_val: np.ndarray,
+        X_val: np.ndarray,  # noqa: N803
         y_val: np.ndarray,
-        X_test: np.ndarray,
+        X_test: np.ndarray,  # noqa: N803
         y_test: np.ndarray,
         target_field: str,
         label_mapping: Optional[Dict[int, str]] = None,
@@ -635,11 +657,11 @@ class LinearProbeTask(BaseTask):
         best_model = None
         best_c = None
         best_val_score = -np.inf
-        val_scores = {}
+        val_scores: dict[str, Any] = {}
 
         for c in self.c_values:
             if _CUML_AVAILABLE:
-                clf = _CuMLLogisticRegression(C=c, **self._cuml_classification_params)
+                clf = _CuMLLogisticRegression(C=c, **(self._cuml_classification_params or {}))
                 sample_weight = self._compute_balanced_sample_weight(y_train)
                 clf.fit(X_train, y_train, sample_weight=sample_weight)
             else:
@@ -660,6 +682,8 @@ class LinearProbeTask(BaseTask):
         logger.debug(f"  Best C={best_c} (val balanced_acc={best_val_score:.4f})")
 
         # Final evaluation on TEST
+        assert best_model is not None, "no model selected during the sweep"
+        assert best_c is not None
         y_pred = np.asarray(best_model.predict(X_test))
 
         # Probabilities for AUROC / AUCPR
@@ -711,7 +735,7 @@ class LinearProbeTask(BaseTask):
 
         # Per-class metrics
         precision, recall, f1, support = precision_recall_fscore_support(y_test, y_pred, labels=common_classes, zero_division=0)
-        per_class = {}
+        per_class: dict[str, Any] = {}
         for idx, cls in enumerate(common_classes):
             cls_name = label_mapping.get(cls, str(cls)) if label_mapping else str(cls)
             per_class[cls_name] = {
@@ -729,7 +753,7 @@ class LinearProbeTask(BaseTask):
             conf_normalized = np.nan_to_num(conf_matrix / row_sums, nan=0.0)
 
         # Most confused pairs
-        confused_pairs = []
+        confused_pairs: list[Any] = []
         for i in range(len(common_classes)):
             for j in range(len(common_classes)):
                 if i != j and conf_matrix[i, j] > 0:
@@ -745,7 +769,7 @@ class LinearProbeTask(BaseTask):
                     )
         confused_pairs.sort(key=lambda x: x["rate"], reverse=True)
 
-        result = {
+        result: dict[str, Any] = {
             "task_type": "classification",
             "target_field": target_field,
             "accuracy": float(accuracy),
@@ -821,7 +845,7 @@ class LinearProbeTask(BaseTask):
         n_backbones_paired = 0
         n_pairs = 0
         concordant = 0.0  # proba(modified) > proba(unmodified); ties count 0.5
-        per_backbone_auroc = []
+        per_backbone_auroc: list[Any] = []
         pos_probas: list = []
         neg_probas: list = []
 
@@ -861,11 +885,11 @@ class LinearProbeTask(BaseTask):
 
     def _train_tune_eval_regression(
         self,
-        X_train: np.ndarray,
+        X_train: np.ndarray,  # noqa: N803
         y_train: np.ndarray,
-        X_val: np.ndarray,
+        X_val: np.ndarray,  # noqa: N803
         y_val: np.ndarray,
-        X_test: np.ndarray,
+        X_test: np.ndarray,  # noqa: N803
         y_test: np.ndarray,
         target_field: str,
     ) -> Dict[str, Any]:
@@ -892,6 +916,8 @@ class LinearProbeTask(BaseTask):
         logger.debug(f"  Best alpha={best_alpha} (val R²={best_val_score:.4f})")
 
         # Final evaluation on TEST
+        assert best_model is not None, "no model selected during the sweep"
+        assert best_alpha is not None
         y_pred = np.asarray(best_model.predict(X_test))
 
         r2 = r2_score(y_test, y_pred)
@@ -913,7 +939,7 @@ class LinearProbeTask(BaseTask):
             "rmse": rmse,
             "pearson_correlation": pearson,
             "spearman_correlation": spearman,
-            "best_alpha": float(best_alpha),
+            "best_alpha": float(best_alpha) if best_alpha is not None else None,
             "val_scores_by_alpha": val_scores,
             "n_train": int(len(X_train)),
             "n_val": int(len(X_val)),
@@ -933,7 +959,7 @@ class LinearProbeTask(BaseTask):
             rng = np.random.RandomState(self.random_state)
             indices = rng.choice(len(emb), self.max_samples, replace=False)
             emb_sampled = emb[indices]
-            meta_sampled = {}
+            meta_sampled: dict[str, Any] = {}
             for k, v in meta.items():
                 try:
                     meta_sampled[k] = v[indices]
@@ -984,7 +1010,7 @@ class LinearProbeTask(BaseTask):
 
     def _run_legacy_classification(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         y: np.ndarray,
         target_field: str,
         label_mapping: Optional[Dict[int, str]] = None,
@@ -998,7 +1024,7 @@ class LinearProbeTask(BaseTask):
         min_samples_per_class = int(np.min(counts))
         use_stratify = min_samples_per_class >= 2
 
-        X_train, X_test, y_train, y_test = train_test_split(
+        X_train, X_test, y_train, y_test = train_test_split(  # noqa: N806
             X,
             y,
             test_size=self.test_size,
@@ -1078,12 +1104,12 @@ class LinearProbeTask(BaseTask):
 
     def _run_legacy_regression(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         y: np.ndarray,
         target_field: str,
     ) -> Dict[str, Any]:
         """Legacy regression probe with internal split + GridSearchCV."""
-        X_train, X_test, y_train, y_test = train_test_split(
+        X_train, X_test, y_train, y_test = train_test_split(  # noqa: N806
             X,
             y,
             test_size=self.test_size,
@@ -1188,7 +1214,7 @@ class LinearProbeTask(BaseTask):
 
         Returns (flattened_array, label_mapping) or (None, None) on failure.
         """
-        flattened = []
+        flattened: list[Any] = []
         for item in y:
             try:
                 if isinstance(item, np.ndarray):
@@ -1259,7 +1285,7 @@ class LinearProbeTask(BaseTask):
                 val = val[0] if len(val) > 0 else None
 
             s = str(val).strip() if val is not None else None
-            code = str_to_code.get(s, -1)
+            code = str_to_code.get(s, -1) if s is not None else -1
             result.append(code)
 
         result = np.array(result, dtype=int)
@@ -1276,7 +1302,7 @@ class LinearProbeTask(BaseTask):
     def _detect_task_type(self, y: np.ndarray, target_field: str) -> str:
         """Detect classification vs regression from target values."""
         if self.probe_type != "auto":
-            return self.probe_type
+            return str(self.probe_type)
 
         valid_mask = np.isfinite(y)
         y_valid = y[valid_mask]
@@ -1322,8 +1348,10 @@ class LinearProbeTask(BaseTask):
         try:
             import polars as pl
 
-            name = lambda c: (label_mapping.get(c, str(c)) if label_mapping else str(c))
-            data = {
+            def name(c: Any) -> Any:
+                return label_mapping.get(c, str(c)) if label_mapping else str(c)
+
+            data: dict[str, Any] = {
                 "y_true": np.asarray(y_test).astype(int),
                 "y_true_label": [name(int(c)) for c in y_test],
                 "y_pred": np.asarray(y_pred).astype(int),
@@ -1388,7 +1416,14 @@ class LinearProbeTask(BaseTask):
         return float("nan")
 
     def _get_config_summary(self) -> Dict[str, Any]:
-        """Return serialisable config summary."""
+        """Return serialisable config summary.
+
+        Records the solver backend and iteration cap alongside the settings. Probe
+        scores are not comparable across backends -- a run that silently fell back
+        from cuML to scikit-learn reported charge macro-F1 0.468 where cuML gives
+        0.602 -- so every result states which produced it rather than leaving it to
+        the run log.
+        """
         return {
             "targets": list(self.targets) if self.targets else [],
             "use_project_split": self.use_project_split,
@@ -1417,7 +1452,7 @@ class LinearProbeTask(BaseTask):
 
         Full per-target detail is always saved in the JSON results on disk.
         """
-        loggable = {}
+        loggable: dict[str, Any] = {}
 
         if "error" in task_results:
             return loggable

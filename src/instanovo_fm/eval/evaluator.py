@@ -40,7 +40,7 @@ def _collect_numeric_stats(dicts: list) -> dict:
     if not dicts:
         return {}
 
-    result = {}
+    result: dict[str, Any] = {}
     template = dicts[0]
 
     for key, value in template.items():
@@ -52,7 +52,7 @@ def _collect_numeric_stats(dicts: list) -> dict:
             if sub_dicts:
                 result[key] = _collect_numeric_stats(sub_dicts)
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
-            vals = []
+            vals: list[Any] = []
             for d in dicts:
                 v = d.get(key)
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
@@ -62,7 +62,7 @@ def _collect_numeric_stats(dicts: list) -> dict:
                 mean_val = sum(vals) / len(vals)
                 if len(vals) > 1:
                     variance = sum((v - mean_val) ** 2 for v in vals) / (len(vals) - 1)
-                    std_val = variance ** 0.5
+                    std_val = variance**0.5
                 else:
                     std_val = 0.0
                 result[key] = mean_val
@@ -80,20 +80,20 @@ def _collect_numeric_stats(dicts: list) -> dict:
 
 class EmbeddingEvaluator:
     """Evaluator for foundation model embeddings.
-    
+
     This class handles the complete evaluation workflow:
     1. Load model from checkpoint
     2. Setup data loaders
     3. Generate and export embeddings
     4. Run evaluation tasks
     5. Aggregate and save results
-    
+
     Similar to FoundationalTrainer, but focused on evaluation rather than training.
     """
 
     def __init__(self, config: DictConfig) -> None:
         """Initialize the embedding evaluator.
-        
+
         Args:
             config: Hydra configuration with evaluation settings.
         """
@@ -108,7 +108,7 @@ class EmbeddingEvaluator:
 
         # Setup base output directory
         base_output_dir = Path(self.eval_config.get("output_dir", "./evaluation_results"))
-        
+
         # Use provided output_dir directly if it's already specific (e.g., step_XXXXXX
         # from training, or eval_YYYYMMDD_HHMMSS/ckpt_id from multi-checkpoint mode).
         # Otherwise create timestamped folder for standalone evaluation.
@@ -120,18 +120,18 @@ class EmbeddingEvaluator:
             # Standalone evaluation - create unique timestamped folder
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.output_dir = base_output_dir / f"eval_{timestamp}"
-        
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Device setup
         device_str = self.eval_config.get("device", "auto")
         if device_str == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device_str)
-        
+
         logger.info(f"Evaluator: device={self.device}")
-        
+
         # Lazy initialization (done in evaluate() or set externally during training)
         self.model: Optional[FoundationModel] = None
         self.model_config: Optional[DictConfig] = None
@@ -147,10 +147,10 @@ class EmbeddingEvaluator:
 
     def load_model(self) -> Tuple[FoundationModel, DictConfig]:
         """Load model from checkpoint.
-        
+
         Returns:
             Tuple of (model, config)
-            
+
         Raises:
             ValueError: If no checkpoint path is available
         """
@@ -160,7 +160,7 @@ class EmbeddingEvaluator:
                 "1. Set 'evaluation.checkpoint_path' in config for standalone evaluation, or\n"
                 "2. Set evaluator.model directly when using during training"
             )
-        
+
         logger.info(f"Loading model from {self.checkpoint_path}")
 
         # Download checkpoint from S3 if needed (Aichor support)
@@ -172,26 +172,27 @@ class EmbeddingEvaluator:
 
         # Use the model's load method (same as in encoder.py)
         model, model_config = FoundationModel.load(checkpoint_path)
-        
+
         # Move to device and set to eval mode
         model = model.to(self.device)
         model.eval()
-        
+
         num_params = sum(p.numel() for p in model.parameters())
         logger.info(f"Model loaded successfully ({num_params:,} parameters)")
-        
+
         return model, model_config
-    
+
     def setup_data_processor(self) -> FoundationalDataProcessor:
         """Setup data processor for the validation/test split.
-        
+
         Returns:
             Data processor configured for evaluation.
         """
         assert self.model_config is not None, "Model must be loaded first"
-        
+
         # Setup residue set (same as trainer)
         from instanovo.utils.residues import ResidueSet
+
         residue_set = ResidueSet(
             residue_masses=self.config.residues.get("residues"),
             residue_remapping=self.config.dataset.get("residue_remapping", None),
@@ -202,21 +203,21 @@ class EmbeddingEvaluator:
 
         # Extract metadata columns from dataset config (same as trainer)
         metadata_columns = self.config.dataset.get("metadata_columns", None)
-        
+
         # Setup search data manager if enabled (same as trainer)
         from instanovo_fm.data.search_data_manager import create_search_data_manager
-        search_data_config = {
+
+        search_data_config: dict[str, Any] = {
             "use_search_data": self.config.dataset.get("use_search_data", False),
             "search_data_path": self.config.dataset.get("search_data_path", None),
             "search_data_filepath_column": self.config.dataset.get("search_data_filepath_column", "file path"),
             "search_data_spectrum_key": self.config.dataset.get("search_data_spectrum_key", "filepath"),
         }
         search_data_manager = create_search_data_manager(search_data_config)
-        
-        
+
         # Get masking config (same as trainer)
         masking_cfg = self.model_config.get("masking", {})
-        
+
         # Create processor (same as trainer validation processor)
         processor = FoundationalDataProcessor(
             n_peaks=self.model_config.get("n_peaks", 200),
@@ -232,13 +233,13 @@ class EmbeddingEvaluator:
             return_str=True,  # Keep sequences as strings
             metadata_columns=metadata_columns,  # Use metadata columns from config
             # Masking configuration (same as trainer)
-            masking_strategy="none", # Search data integration
+            masking_strategy="none",  # Search data integration
             search_data_manager=search_data_manager,
-            build_metadata=meta_token_enabled
+            build_metadata=meta_token_enabled,
         )
-        
+
         return processor
-    
+
     def setup_dataloader(
         self,
         split: str = "valid",
@@ -257,23 +258,24 @@ class EmbeddingEvaluator:
             DataLoader for the specified split.
         """
         assert self.data_processor is not None, "Data processor must be setup first"
-        
+
         # Get dataset configuration
         dataset_config = self.config.get("dataset", {})
-        
+
         # Determine which split to use
         split_key = f"{split}_path"
         if split_key not in dataset_config:
-            raise ValueError(
-                f"Dataset split '{split}' not found in config. "
-                f"Available keys: {list(dataset_config.keys())}"
-            )
-        
+            raise ValueError(f"Dataset split '{split}' not found in config. Available keys: {list(dataset_config.keys())}")
+
         # Create dataset using SpectrumDataFrame
-        from instanovo.utils.data_handler import SpectrumDataFrame
-        
+        from instanovo_fm.utils.spectrum_dataframe import SpectrumDataFrame
+
         dataset_path = dataset_config[split_key]
-        
+
+        # SpectrumDataFrame reads only local files; materialise S3 parquet locally first.
+        if isinstance(dataset_path, str) and dataset_path.startswith("s3://"):
+            dataset_path = self.s3.download_parquet(dataset_path)
+
         # Load dataset using SpectrumDataFrame.load (same as trainer)
         dataset = SpectrumDataFrame.load(
             source=dataset_path,
@@ -285,7 +287,9 @@ class EmbeddingEvaluator:
             column_mapping=dataset_config.get("column_remapping", None),
             max_shard_size=dataset_config.get("max_shard_size", 100_000),
             add_source_file_column=True,  # synthesize source_file to match training schema; set_format requires it when listed in metadata_columns
-            add_spectrum_id=dataset_config.get("add_spectrum_id", False),  # synthesize spectrum_id (experiment_name:scan_number) when usi is unavailable
+            add_spectrum_id=dataset_config.get(
+                "add_spectrum_id", False
+            ),  # synthesize spectrum_id (experiment_name:scan_number) when usi is unavailable
             preshuffle_across_shards=False,
             verbose=dataset_config.get("verbose_loading", True),
         )
@@ -313,17 +317,19 @@ class EmbeddingEvaluator:
         if max_samples is not None and max_samples < total:
             logger.info(f"Will collect up to {max_samples:,} samples (from {total:,}) via chunked file reads")
         from datasets import Dataset as HFDataset
+
         random_state = self.eval_config.get("random_state", 42)
         df = dataset.collect_chunked(max_samples=max_samples, seed=random_state)
         dataset = HFDataset.from_pandas(df.to_pandas())
 
         logger.info(f"Loaded {len(dataset)} samples from dataset")
-        
+
         # Add prediction_id column to dataset (same as trainer)
         import numpy as np
         from datasets import Value
+
         dataset = dataset.add_column("prediction_id", np.arange(len(dataset)), feature=Value("int32"))
-        
+
         # Add prediction_id column to processor (same as trainer)
         self.data_processor.add_metadata_columns(["prediction_id"])
 
@@ -333,16 +339,16 @@ class EmbeddingEvaluator:
         # Safe here because evaluation always uses a single process — the
         # multi-GPU dispatch_batches broadcast that requires pure-tensor batches
         # only applies to training.
-        self.data_processor._keep_non_tensor_metadata = True
+        self.data_processor._keep_non_tensor_metadata = True  # type: ignore[attr-defined]
 
         # Process dataset using process_dataset which handles format conversion
         # This is the same as trainer validation data processing
         dataset = self.data_processor.process_dataset(dataset, return_format="torch")
-        
+
         # Create dataloader
         batch_size = self.eval_config.get("batch_size", 256)
         num_workers = self.config.get("num_workers", 4)
-        
+
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
@@ -351,13 +357,14 @@ class EmbeddingEvaluator:
             pin_memory=False,
             collate_fn=self.data_processor.collate_fn,
         )
-        
+
         return dataloader
-    
+
     def generate_embeddings(
         self,
         force_regenerate: bool = False,
         override_max_samples: Optional[int] = None,
+        split: Optional[str] = None,
     ) -> Tuple[np.ndarray, Dict[str, np.ndarray], Any]:
         """Generate embeddings for the validation/test set.
 
@@ -372,6 +379,10 @@ class EmbeddingEvaluator:
                 eval config for this call. Used by multi-split generation to give
                 the train split a larger budget (e.g. 100k) than the global
                 max_samples (e.g. 10k) used for single-split evaluation tasks.
+            split: Name of the split being generated. The cache is keyed by it, so
+                that a multi-split run does not read one split's embeddings back
+                for another. Omit for single-split evaluation, which caches
+                directly in ``output_dir``.
 
         Returns:
             Tuple of (embeddings, metadata, faiss_index)
@@ -381,42 +392,45 @@ class EmbeddingEvaluator:
 
         # Check if we should save embeddings to disk
         save_embeddings = self.eval_config.get("save_embeddings", False)
-        
+
+        # The cache lives in output_dir for a single-split run, and in a per-split
+        # subdirectory otherwise. Without the split in the path, train embeddings
+        # would be written first and then loaded back as valid and test.
+        cache_dir = self.output_dir if split is None else self.output_dir / f"embeddings_{split}"
+
         # Check if cached embeddings exist (only relevant when saving is enabled)
         if save_embeddings and not force_regenerate:
-            embeddings_path = self.output_dir / "embeddings.h5"
-            index_path = self.output_dir / "index.faiss"
-            
+            embeddings_path = cache_dir / "embeddings.h5"
+            index_path = cache_dir / "index.faiss"
+
             if embeddings_path.exists() and index_path.exists():
                 # Validate cached embeddings match requested pooling strategy
                 requested_pooling = self.eval_config.get("embedding_pooling", "cls")
                 try:
                     import h5py
-                    with h5py.File(embeddings_path, 'r') as f:
-                        cached_pooling = f.attrs.get('embedding_pooling', 'unknown')
-                    if cached_pooling != 'unknown' and cached_pooling != requested_pooling:
-                        logger.warning(
-                            f"Cached embeddings use pooling='{cached_pooling}' but "
-                            f"config requests '{requested_pooling}'. Regenerating."
-                        )
+
+                    with h5py.File(embeddings_path, "r") as f:
+                        cached_pooling = f.attrs.get("embedding_pooling", "unknown")
+                    if cached_pooling != "unknown" and cached_pooling != requested_pooling:
+                        logger.warning(f"Cached embeddings use pooling='{cached_pooling}' but config requests '{requested_pooling}'. Regenerating.")
                     else:
                         logger.info(f"Found cached embeddings (pooling={cached_pooling}), loading from disk")
-                        return embedding_io.load(self.output_dir)
+                        return embedding_io.load(cache_dir)  # type: ignore[no-any-return]
                 except Exception:
                     logger.info("Found cached embeddings, loading from disk")
-                    return embedding_io.load(self.output_dir)
-        
+                    return embedding_io.load(cache_dir)  # type: ignore[no-any-return]
+
         # Get max_samples limit — per-split override takes precedence over global config
         max_samples = override_max_samples if override_max_samples is not None else self.eval_config.get("max_samples", None)
-        
+
         # Generate embeddings (with optional saving)
         save_str = ", saving to disk" if save_embeddings else ""
         limit_str = f", max_samples={max_samples}" if max_samples else ""
         logger.info(f"Generating embeddings{save_str}{limit_str}")
-        
+
         # Check if we should compute confidence scores
         compute_confidence = self.eval_config.get("compute_spectrum_confidence", False)
-        
+
         # Check if any task requires per-peak confidence, spectra storage, or peak embeddings
         store_per_peak_confidence = False
         store_peak_embeddings = False
@@ -444,8 +458,7 @@ class EmbeddingEvaluator:
         # Check if we should generate theoretical spectra
         theoretical_config = self.eval_config.get("theoretical_spectrum", {})
         generate_theoretical = theoretical_config.get("enabled", False)
-        
-        
+
         embedding_pooling = self.eval_config.get("embedding_pooling", "cls")
 
         embeddings, metadata, faiss_index = embedding_io.generate(
@@ -454,7 +467,7 @@ class EmbeddingEvaluator:
             device=self.device,
             batch_size=self.eval_config.get("batch_size", 256),
             show_progress=True,
-            save_to=self.output_dir if save_embeddings else None,
+            save_to=cache_dir if save_embeddings else None,
             max_samples=max_samples,
             compute_confidence=compute_confidence,
             store_per_peak_confidence=store_per_peak_confidence,
@@ -465,80 +478,73 @@ class EmbeddingEvaluator:
             embedding_pooling=embedding_pooling,
             confidence_temperature=self.eval_config.get("confidence_temperature", 1.0),
         )
-        
+
         return embeddings, metadata, faiss_index
-    
+
     def compute_sequence_similarity_clustering(
         self,
         metadata: Dict[str, np.ndarray],
     ) -> Dict[str, np.ndarray]:
         """Compute sequence similarity clustering using MMseqs2 and inject into metadata.
-        
+
         This method extracts peptide sequences from metadata, performs sequence similarity
         clustering using MMseqs2, and adds the cluster IDs back into metadata as 'seq_cluster_id'.
-        
+
         The clustering is configurable via evaluation config:
         - enable_sequence_clustering: Whether to run clustering (default: False)
         - sequence_identity_threshold: Identity threshold for MMseqs2 (default: 0.7)
         - sequence_key: Metadata key containing sequences (default: 'sequence' or 'peptides')
-        
+
         Args:
             metadata: Metadata dictionary to enrich with clustering information
-            
+
         Returns:
             Updated metadata dictionary with 'seq_cluster_id' field added
         """
         from instanovo_fm.utils.mmseq2 import MMseqs2
-        
+
         # Check if clustering is enabled
         clustering_config = self.eval_config.get("sequence_clustering", {})
         enable_clustering = clustering_config.get("enable", False)
-        
+
         if not enable_clustering:
             return metadata
-        
+
         logger.info("Computing sequence similarity clustering with MMseqs2...")
-        
+
         # Get configuration parameters
         identity_threshold = clustering_config.get("identity_threshold", 0.7)
         sequence_key = clustering_config.get("sequence_key", None)
-        
+
         # Try to find sequence data in metadata
         if sequence_key is None:
             # Auto-detect sequence key
-            possible_keys = ['sequence', 'peptides', 'peptide', 'seq']
+            possible_keys = ["sequence", "peptides", "peptide", "seq"]
             sequence_key = None
             for key in possible_keys:
                 if key in metadata:
                     sequence_key = key
                     break
-            
+
             if sequence_key is None:
-                logger.warning(
-                    "No sequence data found in metadata. "
-                    f"Looked for keys: {possible_keys}. "
-                    "Skipping sequence clustering."
-                )
+                logger.warning(f"No sequence data found in metadata. Looked for keys: {possible_keys}. Skipping sequence clustering.")
                 return metadata
-        
+
         if sequence_key not in metadata:
-            logger.warning(
-                f"Sequence key '{sequence_key}' not found in metadata. "
-                "Skipping sequence clustering."
-            )
+            logger.warning(f"Sequence key '{sequence_key}' not found in metadata. Skipping sequence clustering.")
             return metadata
-        
+
         # Extract sequences
         sequences = metadata[sequence_key]
-        
+
         # Convert to list if numpy array (and decode if bytes)
         if isinstance(sequences, np.ndarray):
-            if sequences.dtype.kind == 'S' or sequences.dtype.kind == 'O':
+            if sequences.dtype.kind == "S" or sequences.dtype.kind == "O":
                 # Byte strings or objects - need to decode
-                sequences_list = []
+                sequences_list: list[Any] = []
                 for seq in sequences:
                     if isinstance(seq, bytes):
-                        sequences_list.append(seq.decode('utf-8'))
+                        sequences_list.append(seq.decode("utf-8"))
                     elif isinstance(seq, str):
                         sequences_list.append(seq)
                     else:
@@ -546,23 +552,23 @@ class EmbeddingEvaluator:
                 sequences = sequences_list
             else:
                 sequences = sequences.tolist()
-        
+
         # Filter out None, empty, or invalid sequences
-        valid_sequences = []
-        valid_indices = []
+        valid_sequences: list[Any] = []
+        valid_indices: list[Any] = []
         for idx, seq in enumerate(sequences):
             if seq is not None and isinstance(seq, str) and len(seq) > 0:
                 # Basic validation: check if it looks like a peptide sequence
-                if all(c.isalpha() or c == '(' or c == ')' or c == '[' or c == ']' for c in seq):
+                if all(c.isalpha() or c == "(" or c == ")" or c == "[" or c == "]" for c in seq):
                     valid_sequences.append(seq)
                     valid_indices.append(idx)
-        
+
         if len(valid_sequences) == 0:
             logger.warning("No valid sequences found for clustering. Skipping sequence clustering.")
             return metadata
-        
+
         logger.info(f"Running MMseqs2 clustering on {len(valid_sequences)} sequences (identity_threshold={identity_threshold})")
-        
+
         try:
             # Run MMseqs2 clustering
             mmseqs = MMseqs2(
@@ -571,55 +577,51 @@ class EmbeddingEvaluator:
                 remove_tmp=True,
                 remove_output=True,
             )
-            
+
             cluster_ids = mmseqs.run()
-            
+
             if cluster_ids is None or len(cluster_ids) == 0:
                 logger.warning("MMseqs2 clustering returned no results")
                 return metadata
-            
+
             # Create full cluster ID array (with -1 for invalid sequences)
             full_cluster_ids = np.full(len(sequences), -1, dtype=np.int32)
-            for valid_idx, cluster_id in zip(valid_indices, cluster_ids):
+            for valid_idx, cluster_id in zip(valid_indices, cluster_ids, strict=False):
                 if cluster_id is not None:
                     full_cluster_ids[valid_idx] = cluster_id
-            
+
             # Add to metadata
-            metadata['seq_cluster_id'] = full_cluster_ids
-            
+            metadata["seq_cluster_id"] = full_cluster_ids
+
             # Log statistics
             num_clusters = len(set(cluster_ids) - {None})
             num_clustered = np.sum(full_cluster_ids >= 0)
-            logger.info(f"Sequence clustering complete:")
+            logger.info("Sequence clustering complete:")
             logger.info(f"  - {num_clusters} unique clusters identified")
             logger.info(f"  - {num_clustered}/{len(sequences)} sequences successfully clustered")
-            logger.info(f"  - Cluster IDs stored in metadata['seq_cluster_id']")
-            
+            logger.info("  - Cluster IDs stored in metadata['seq_cluster_id']")
+
         except Exception as e:
             logger.error(f"MMseqs2 clustering failed: {e}")
             logger.warning("Continuing without sequence clustering")
-        
+
         return metadata
-    
-    def get_metrics_for_logging(
-        self,
-        results: Dict[str, Any],
-        embeddings_info: Dict[str, Any]
-    ) -> Dict[str, float]:
+
+    def get_metrics_for_logging(self, results: Dict[str, Any], embeddings_info: Dict[str, Any]) -> Dict[str, float]:
         """Extract metrics from evaluation results for logging to TensorBoard/Neptune.
-        
+
         This method processes task results and extracts loggable metrics by calling
         each task's get_loggable_metrics() method. It returns a flat dictionary
         with prefixed metric names ready for logging.
-        
+
         Args:
             results: Dictionary of task results from run_evaluation_tasks()
             embeddings_info: Dictionary of embedding statistics
-            
+
         Returns:
             Flat dictionary mapping metric names to scalar values.
             Keys are prefixed with "embed/{task_name}/" for organization.
-            
+
         Example output:
             {
                 "embed/num_embeddings": 2500,
@@ -630,7 +632,7 @@ class EmbeddingEvaluator:
                 "embed/chargelinearprobetask/accuracy": 0.91,
             }
         """
-        loggable_metrics = {}
+        loggable_metrics: dict[str, Any] = {}
 
         # Add primary embedding statistics (without task prefix), if available
         if embeddings_info:
@@ -672,7 +674,7 @@ class EmbeddingEvaluator:
                 continue
 
         return loggable_metrics
-    
+
     def _all_tasks_require_multi_split(self, tasks_to_run: list) -> bool:
         """Return True only if every task in the list has requires_multi_split=True."""
         if not tasks_to_run:
@@ -680,7 +682,7 @@ class EmbeddingEvaluator:
         for task_name in tasks_to_run:
             try:
                 task_class = get_task(task_name)
-                if not getattr(task_class, 'requires_multi_split', False):
+                if not getattr(task_class, "requires_multi_split", False):
                     return False
             except KeyError:
                 return False
@@ -735,20 +737,19 @@ class EmbeddingEvaluator:
         Returns:
             Aggregated results dict with per-seed and summary statistics.
         """
-        logger.info(
-            f"Multi-seed evaluation: running {len(random_states)} seeds: {random_states}"
-        )
+        logger.info(f"Multi-seed evaluation: running {len(random_states)} seeds: {random_states}")
 
         per_seed_results: Dict[int, Dict[str, Any]] = {}
 
         for i, seed in enumerate(random_states):
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Seed {seed} ({i+1}/{len(random_states)})")
-            logger.info(f"{'='*60}")
+            logger.info(f"\n{'=' * 60}")
+            logger.info(f"Seed {seed} ({i + 1}/{len(random_states)})")
+            logger.info(f"{'=' * 60}")
 
             # Override the global random_state for data loading
             original_rs = self.eval_config.get("random_state", 42)
             from omegaconf import open_dict
+
             with open_dict(self.eval_config):
                 self.eval_config.random_state = seed
 
@@ -761,7 +762,8 @@ class EmbeddingEvaluator:
                         tc.random_state = seed
 
             per_split_filters, per_split_max_samples = self._precompute_project_filter(
-                tasks_to_run_list, random_state_override=seed,
+                tasks_to_run_list,
+                random_state_override=seed,
             )
             multi_splits = self._generate_multi_split_embeddings(
                 force_regenerate=True,  # Always regenerate — different splits per seed
@@ -795,6 +797,7 @@ class EmbeddingEvaluator:
             task_output_dir.mkdir(parents=True, exist_ok=True)
             results_path = task_output_dir / "task_results.json"
             import json as _json
+
             with open(results_path, "w") as f:
                 _json.dump(task_agg, f, indent=2, default=str)
             logger.info(f"Saved aggregated multi-seed results to {results_path}")
@@ -823,7 +826,7 @@ class EmbeddingEvaluator:
         aggregated: Dict[str, Any] = {}
 
         for task_name in task_names:
-            seed_task_results = []
+            seed_task_results: list[Any] = []
             for seed in seeds:
                 if task_name in per_seed_results[seed]:
                     seed_task_results.append(per_seed_results[seed][task_name])
@@ -833,16 +836,12 @@ class EmbeddingEvaluator:
 
             # Collect numeric values from the "targets" sub-dict
             summary = _collect_numeric_stats(seed_task_results)
-            summary["per_seed"] = {
-                seed: per_seed_results[seed].get(task_name, {})
-                for seed in seeds
-            }
+            summary["per_seed"] = {seed: per_seed_results[seed].get(task_name, {}) for seed in seeds}
             summary["seeds"] = seeds
             summary["n_seeds"] = len(seeds)
             aggregated[task_name] = summary
 
         return aggregated
-
 
     def _precompute_project_filter(
         self,
@@ -861,7 +860,7 @@ class EmbeddingEvaluator:
         """
         from instanovo_fm.data.search_data_manager import create_search_data_manager
         from instanovo_fm.eval.probe_splitting import _train_priority_assignment
-        from instanovo.utils.data_handler import SpectrumDataFrame
+        from instanovo_fm.utils.spectrum_dataframe import SpectrumDataFrame
 
         dataset_config = self.config.get("dataset", {})
         task_configs = self.eval_config.get("task_configs", {})
@@ -878,7 +877,14 @@ class EmbeddingEvaluator:
         test_samples: int = lp_config.get("test_samples", 10_000)
         min_project_samples: int = lp_config.get("min_project_samples", 5)
         max_per_project_frac: float = lp_config.get("max_per_project_frac", 0.15)
-        per_split_max_samples = {"train": train_samples, "valid": val_samples, "test": test_samples}
+        per_split_max_samples: dict[str, Any] = {"train": train_samples, "valid": val_samples, "test": test_samples}
+
+        # When project-disjoint splitting is disabled, the pre-split train/valid/test files are used
+        # as-is: skip the USI-based project pre-filter entirely (no 'usi' column required) and return
+        # only the per-split size caps. Callers treat empty filters as "no filtering".
+        if not lp_config.get("use_project_split", True):
+            logger.info("use_project_split=false — using the pre-split train/valid/test files as-is (no project pre-filter).")
+            return {}, per_split_max_samples
 
         # Build SearchDataManager for project lookups
         search_data_config = {
@@ -891,12 +897,7 @@ class EmbeddingEvaluator:
 
         use_search_manager = search_manager is not None and search_manager.is_loaded
         if not use_search_manager:
-            logger.info(
-                "SearchDataManager unavailable — will extract project IDs "
-                "directly from filepaths using regex patterns."
-            )
-
-        project_col = "project"  # Raw column in search_data.csv; becomes 'search_project' in embeddings
+            logger.info("SearchDataManager unavailable — will extract project IDs directly from filepaths using regex patterns.")
 
         # Step 1: For each split, lazily load USIs and extract project labels directly.
         # USI format: mzspec:PROJECT:filename:... — project is always the second field.
@@ -909,8 +910,12 @@ class EmbeddingEvaluator:
                 continue
 
             logger.info(f"Pre-filter pass: scanning USIs for model-{split_name} split...")
+
+            split_source = dataset_config[split_key]
+            if isinstance(split_source, str) and split_source.startswith("s3://"):
+                split_source = self.s3.download_parquet(split_source)
             sdf = SpectrumDataFrame.load(
-                source=dataset_config[split_key],
+                source=split_source,
                 source_type=dataset_config.get("source_type", "default"),
                 lazy=True,
                 is_annotated=True,
@@ -921,6 +926,7 @@ class EmbeddingEvaluator:
                 verbose=False,
             )
             import polars as pl
+
             lazy = sdf.to_polars(return_lazy=True)
             usis = lazy.select([pl.col("usi")]).collect()["usi"].to_list()
             split_usis[split_name] = usis
@@ -937,11 +943,8 @@ class EmbeddingEvaluator:
             projects = [self._extract_project_from_usi(u) for u in usis]
             n_matched = sum(1 for p in projects if p)
             n_unmatched = len(projects) - n_matched
-            logger.info(
-                f"  {split_name}: extracted project from USI for "
-                f"{n_matched:,} / {len(usis):,} spectra"
-                + (f" ({n_unmatched:,} unmatched)" if n_unmatched else "")
-            )
+            unmatched_note = f" ({n_unmatched:,} unmatched)" if n_unmatched else ""
+            logger.info(f"  {split_name}: extracted project from USI for {n_matched:,} / {len(usis):,} spectra{unmatched_note}")
 
             split_usi_projects[split_name] = projects
 
@@ -953,18 +956,11 @@ class EmbeddingEvaluator:
                 project_info[proj][norm_name] += 1
 
         if not project_info:
-            logger.warning(
-                "No project labels found from SearchDataManager or filepath regex. "
-                "Falling back to plain per-split size limits."
-            )
+            logger.warning("No project labels found from SearchDataManager or filepath regex. Falling back to plain per-split size limits.")
             return {}, per_split_max_samples
 
         # Filter projects below minimum sample threshold
-        project_info = {
-            proj: counts
-            for proj, counts in project_info.items()
-            if sum(counts.values()) >= min_project_samples
-        }
+        project_info = {proj: counts for proj, counts in project_info.items() if sum(counts.values()) >= min_project_samples}
         logger.info(f"Pre-filter: {len(project_info)} projects with >= {min_project_samples} samples")
 
         # Step 3: Train-priority project assignment
@@ -986,15 +982,9 @@ class EmbeddingEvaluator:
             assigned_projects = set(assignment[probe_name])
             projects = split_usi_projects[split_name]
             usis = split_usis[split_name]
-            assigned_usis: Set[str] = {
-                u for u, proj in zip(usis, projects)
-                if str(proj).strip() in assigned_projects
-            }
+            assigned_usis: Set[str] = {u for u, proj in zip(usis, projects, strict=False) if str(proj).strip() in assigned_projects}
             per_split_filters[split_name] = assigned_usis
-            logger.info(
-                f"  model-{split_name}: {len(assigned_usis):,} unique USIs from "
-                f"{len(assigned_projects)} assigned projects"
-            )
+            logger.info(f"  model-{split_name}: {len(assigned_usis):,} unique USIs from {len(assigned_projects)} assigned projects")
 
         return per_split_filters, per_split_max_samples
 
@@ -1022,10 +1012,11 @@ class EmbeddingEvaluator:
         ``_precompute_project_filter`` so the downstream machinery is unchanged.
         """
         import polars as pl
+
         from instanovo_fm.utils.modifications import (
-            PHOSPHO_UNIMOD_IDS,
-            GLYCO_UNIMOD_IDS,
             GLYCO_ID_FAMILY,
+            GLYCO_UNIMOD_IDS,
+            PHOSPHO_UNIMOD_IDS,
         )
 
         dataset_config = self.config.get("dataset", {})
@@ -1042,13 +1033,12 @@ class EmbeddingEvaluator:
         def _keyed(path: str) -> "pl.LazyFrame":
             lf = pl.scan_parquet(path)
             if spectrum_key == "spectrum_id":
-                key = (pl.col("experiment_name").cast(pl.Utf8) + ":"
-                       + pl.col("scan").cast(pl.Utf8)).alias("_key")
+                key = (pl.col("experiment_name").cast(pl.Utf8) + ":" + pl.col("scan").cast(pl.Utf8)).alias("_key")
             else:
                 key = pl.col(spectrum_key).alias("_key")
             return lf.select([key, pl.col("sequence")])
 
-        def _head_usis_ml(lf: "pl.LazyFrame", mask, cap: int) -> Set[str]:
+        def _head_usis_ml(lf: "pl.LazyFrame", mask: Any, cap: int) -> Set[str]:
             df = lf.filter(mask).select("_key").drop_nulls().head(cap).collect()
             return set(df["_key"].to_list())
 
@@ -1059,30 +1049,24 @@ class EmbeddingEvaluator:
             fam_ids: Dict[str, list] = {}
             for gid, fam in GLYCO_ID_FAMILY.items():
                 fam_ids.setdefault(fam, []).append(gid)
-            fam_re = {
-                fam: rf"(?i)unimod:(?:{'|'.join(str(i) for i in sorted(ids))})[^0-9]"
-                for fam, ids in fam_ids.items()
-            }
-            per_split_filters = {}
-            per_split_max_samples = {}
+            fam_re = {fam: rf"(?i)unimod:(?:{'|'.join(str(i) for i in sorted(ids))})[^0-9]" for fam, ids in fam_ids.items()}
+            per_split_filters: dict[str, Any] = {}
+            per_split_max_samples: dict[str, Any] = {}
             for split_name in ("train", "valid", "test"):
                 key = f"{split_name}_path"
                 if key not in dataset_config:
                     continue
                 lf = _keyed(dataset_config[key])
                 selected: Set[str] = set()
-                counts = {}
+                counts: dict[str, Any] = {}
                 for fam, rx in fam_re.items():
                     usis = _head_usis_ml(lf, pl.col("sequence").str.contains(rx), pos_cap)
                     counts[fam] = len(usis)
                     selected |= usis
                 per_split_filters[split_name] = selected
                 per_split_max_samples[split_name] = len(selected)
-                logger.info(
-                    f"stratified {split_name} (glyco_class): "
-                    + ", ".join(f"{f}={counts[f]:,}" for f in sorted(counts))
-                    + f", total_usis={len(selected):,}"
-                )
+                per_family = ", ".join(f"{f}={counts[f]:,}" for f in sorted(counts))
+                logger.info(f"stratified {split_name} (glyco_class): {per_family}, total_usis={len(selected):,}")
             return per_split_filters, per_split_max_samples
 
         # Regexes over the raw peptide string. Rust regex (polars) has no
@@ -1091,17 +1075,14 @@ class EmbeddingEvaluator:
         # HexNAc textual fallback cover the non-UNIMOD encoding too.
         phos_ids = "|".join(str(i) for i in sorted(PHOSPHO_UNIMOD_IDS))
         glyco_ids = "|".join(str(i) for i in sorted(GLYCO_UNIMOD_IDS))
-        target_re = {
+        target_re: dict[str, Any] = {
             "mod_phospho": rf"(?i)unimod:(?:{phos_ids})[^0-9]|S\[167\]|T\[181\]|Y\[243\]",
             "mod_glyco": rf"(?i)unimod:(?:{glyco_ids})[^0-9]|hexnac",
             "mod_deam_n": r"(?i)N[\[(]unimod:7[\])]|N\[115(\.[0-9]+)?\]",
         }
         for t in enrich_targets:
             if t not in target_re:
-                raise ValueError(
-                    f"enrich_targets: unsupported target '{t}' "
-                    f"(supported: {list(target_re)})"
-                )
+                raise ValueError(f"enrich_targets: unsupported target '{t}' (supported: {list(target_re)})")
 
         def _head_usis(lf: pl.LazyFrame, mask: pl.Expr, cap: int) -> Set[str]:
             df = lf.filter(mask).select("_key").drop_nulls().head(cap).collect()
@@ -1115,36 +1096,32 @@ class EmbeddingEvaluator:
         paired_test_target = lp_config.get("paired_test_target")
         bb_cap = int(lp_config.get("paired_backbones_cap", 2000))
         per_state_cap = int(lp_config.get("paired_per_state_cap", 10))
-        _BB_STRIP = r"\[[^\]]*\]|\([^)]*\)"  # strip [UNIMOD:x] / [115] / (+0.98)
+        _BB_STRIP = r"\[[^\]]*\]|\([^)]*\)"  # strip [UNIMOD:x] / [115] / (+0.98)  # noqa: N806
         if paired_test_target and paired_test_target not in target_re:
-            raise ValueError(
-                f"paired_test_target '{paired_test_target}' unsupported "
-                f"(supported: {list(target_re)})"
-            )
+            raise ValueError(f"paired_test_target '{paired_test_target}' unsupported (supported: {list(target_re)})")
 
         def _paired_test_usis(lf: pl.LazyFrame) -> Tuple[Set[str], Set[str]]:
-            """USIs (both states) for capped paired backbones + the backbone set."""
-            df = lf.with_columns([
-                pl.col("sequence").str.replace_all(_BB_STRIP, "").alias("_bb"),
-                pl.col("sequence").str.contains(target_re[paired_test_target])
-                .cast(pl.Int8).alias("_pos"),
-            ]).collect()
-            agg = df.group_by("_bb").agg([
-                pl.col("_pos").min().alias("_mn"), pl.col("_pos").max().alias("_mx"),
-            ])
-            paired_bb = (
-                agg.filter((pl.col("_mn") == 0) & (pl.col("_mx") == 1))
-                .select("_bb").sort("_bb").head(bb_cap)["_bb"].to_list()
+            """Return the USIs (both states) for capped paired backbones + the backbone set."""
+            df = lf.with_columns(
+                [
+                    pl.col("sequence").str.replace_all(_BB_STRIP, "").alias("_bb"),
+                    pl.col("sequence").str.contains(target_re[paired_test_target]).cast(pl.Int8).alias("_pos"),  # type: ignore[index]
+                ]
+            ).collect()
+            agg = df.group_by("_bb").agg(
+                [
+                    pl.col("_pos").min().alias("_mn"),
+                    pl.col("_pos").max().alias("_mx"),
+                ]
             )
+            paired_bb = agg.filter((pl.col("_mn") == 0) & (pl.col("_mx") == 1)).select("_bb").sort("_bb").head(bb_cap)["_bb"].to_list()
             dfp = df.filter(pl.col("_bb").is_in(paired_bb))
-            dfp = dfp.with_columns(
-                pl.int_range(pl.len()).over(["_bb", "_pos"]).alias("_rk")
-            )
+            dfp = dfp.with_columns(pl.int_range(pl.len()).over(["_bb", "_pos"]).alias("_rk"))
             kept = dfp.filter(pl.col("_rk") < per_state_cap)
             return set(kept["_key"].drop_nulls().to_list()), set(paired_bb)
 
-        per_split_filters: Dict[str, Set[str]] = {}
-        per_split_max_samples: Dict[str, int] = {}
+        per_split_filters = {}
+        per_split_max_samples = {}
         test_paired_bb: Set[str] = set()
         for split_name in ("train", "valid", "test"):
             key = f"{split_name}_path"
@@ -1156,19 +1133,13 @@ class EmbeddingEvaluator:
                 selected, test_paired_bb = _paired_test_usis(lf)
                 per_split_filters[split_name] = selected
                 per_split_max_samples[split_name] = len(selected)
-                logger.info(
-                    f"stratified test (paired {paired_test_target}): "
-                    f"paired_backbones={len(test_paired_bb):,}, "
-                    f"total_usis={len(selected):,}"
-                )
+                logger.info(f"stratified test (paired {paired_test_target}): paired_backbones={len(test_paired_bb):,}, total_usis={len(selected):,}")
                 continue
 
-            pos_masks = {
-                t: pl.col("sequence").str.contains(target_re[t]) for t in enrich_targets
-            }
+            pos_masks = {t: pl.col("sequence").str.contains(target_re[t]) for t in enrich_targets}
 
-            selected: Set[str] = set()
-            counts: Dict[str, int] = {}
+            selected = set()
+            counts = {}
             for t in enrich_targets:
                 usis = _head_usis(lf, pos_masks[t], pos_cap)
                 counts[t] = len(usis)
@@ -1182,11 +1153,8 @@ class EmbeddingEvaluator:
 
             per_split_filters[split_name] = selected
             per_split_max_samples[split_name] = len(selected)
-            logger.info(
-                f"stratified {split_name}: "
-                + ", ".join(f"{t}+={counts[t]:,}" for t in enrich_targets)
-                + f", neg={len(neg_usis):,}, total_usis={len(selected):,}"
-            )
+            per_target = ", ".join(f"{t}+={counts[t]:,}" for t in enrich_targets)
+            logger.info(f"stratified {split_name}: {per_target}, neg={len(neg_usis):,}, total_usis={len(selected):,}")
 
         # Cross-split leakage assertion: no paired-test backbone may appear in train.
         if paired_test_target and test_paired_bb and "train_path" in dataset_config:
@@ -1194,17 +1162,15 @@ class EmbeddingEvaluator:
                 pl.scan_parquet(dataset_config["train_path"])
                 .select(pl.col("sequence").str.replace_all(_BB_STRIP, "").alias("_bb"))
                 .filter(pl.col("_bb").is_in(list(test_paired_bb)))
-                .select(pl.len()).collect().item()
+                .select(pl.len())
+                .collect()
+                .item()
             )
             if train_hits > 0:
                 raise ValueError(
-                    f"Paired-test leakage: {train_hits} train spectra share a backbone "
-                    f"with the paired test set; splits must be backbone-disjoint."
+                    f"Paired-test leakage: {train_hits} train spectra share a backbone with the paired test set; splits must be backbone-disjoint."
                 )
-            logger.info(
-                f"paired-test disjointness OK: 0 of {len(test_paired_bb):,} paired "
-                f"test backbones appear in the train split."
-            )
+            logger.info(f"paired-test disjointness OK: 0 of {len(test_paired_bb):,} paired test backbones appear in the train split.")
 
         return per_split_filters, per_split_max_samples
 
@@ -1254,25 +1220,19 @@ class EmbeddingEvaluator:
                     emb, meta, _ = self.generate_embeddings(
                         force_regenerate=force_regenerate,
                         override_max_samples=override_max,
+                        split=split_name,
                     )
                     multi_splits[split_name] = (emb, meta)
-                    logger.info(
-                        f"  model-{split_name}: {len(emb):,} embeddings generated"
-                    )
+                    logger.info(f"  model-{split_name}: {len(emb):,} embeddings generated")
                 except (ValueError, KeyError) as e:
-                    logger.warning(
-                        f"  Could not generate embeddings for model-{split_name}: {e}"
-                    )
+                    logger.warning(f"  Could not generate embeddings for model-{split_name}: {e}")
         finally:
             # Always restore original dataloader, even on unexpected exceptions
             self.dataloader = original_dataloader
 
         if len(multi_splits) < 3:
             available = list(multi_splits.keys())
-            logger.warning(
-                f"Only generated embeddings for {available} splits "
-                f"(expected train, valid, test). Multi-split tasks may fail."
-            )
+            logger.warning(f"Only generated embeddings for {available} splits (expected train, valid, test). Multi-split tasks may fail.")
 
         return multi_splits
 
@@ -1327,11 +1287,8 @@ class EmbeddingEvaluator:
             for task_name in tasks_to_run:
                 try:
                     task_class = get_task(task_name)
-                    if getattr(task_class, 'requires_multi_split', False):
-                        logger.info(
-                            f"Task '{task_name}' requires multi-split data. "
-                            f"Generating embeddings for all model splits..."
-                        )
+                    if getattr(task_class, "requires_multi_split", False):
+                        logger.info(f"Task '{task_name}' requires multi-split data. Generating embeddings for all model splits...")
                         # Extract per-split sample counts from task config
                         tc = task_configs.get(task_name, {})
                         per_split_max_samples = {
@@ -1348,10 +1305,7 @@ class EmbeddingEvaluator:
                             logger.info("Probe splits: PROJECT-ASSIGNED (use_project_split=true)")
                         else:
                             pf, pm = None, per_split_max_samples
-                            logger.info(
-                                "Probe splits: NOT project-assigned (use_project_split=false) — "
-                                "drawn from the dataset's own splits"
-                            )
+                            logger.info("Probe splits: NOT project-assigned (use_project_split=false) — drawn from the dataset's own splits")
                         multi_splits = self._generate_multi_split_embeddings(
                             force_regenerate=force_regenerate,
                             per_split_filters=pf,
@@ -1361,9 +1315,8 @@ class EmbeddingEvaluator:
                 except KeyError:
                     pass  # Task not found, will fail later with proper error
 
-
         # Run tasks
-        results = {}
+        results: dict[str, Any] = {}
         for task_name in tasks_to_run:
             try:
                 logger.info(f"Running task: {task_name}")
@@ -1398,22 +1351,13 @@ class EmbeddingEvaluator:
 
                     # Pass model, dataloader, config, and device to task
                     task_results = task.run(
-                        embeddings,
-                        metadata,
-                        faiss_index,
-                        model=self.model,
-                        dataloader=self.dataloader,
-                        config=self.model_config,
-                        device=self.device
+                        embeddings, metadata, faiss_index, model=self.model, dataloader=self.dataloader, config=self.model_config, device=self.device
                     )
                 elif task.requires_multi_split:
                     # Pass multi-split embeddings to task
                     if multi_splits is None:
-                        raise ValueError(
-                            f"Task '{task_name}' requires multi-split data but "
-                            f"multi-split embeddings were not generated."
-                        )
-                    task_results = task.run(
+                        raise ValueError(f"Task '{task_name}' requires multi-split data but multi-split embeddings were not generated.")
+                    task_results = task.run(  # type: ignore[call-arg]
                         embeddings,
                         metadata,
                         faiss_index,
@@ -1438,6 +1382,7 @@ class EmbeddingEvaluator:
             except Exception as e:
                 logger.error(f"  [FAILED] {task_name} failed: {e}")
                 import traceback
+
                 traceback.print_exc()
                 results[task_name] = {
                     "error": str(e),
@@ -1445,13 +1390,11 @@ class EmbeddingEvaluator:
                 }
 
         if results and all("error" in v for v in results.values()):
-            failed_summaries = "; ".join(
-                f"{k}: {v['error']}" for k, v in results.items()
-            )
+            failed_summaries = "; ".join(f"{k}: {v['error']}" for k, v in results.items())
             raise RuntimeError(f"All evaluation tasks failed: {failed_summaries}")
 
         return results
-    
+
     def _save_task_results(
         self,
         task_name: str,
@@ -1459,20 +1402,20 @@ class EmbeddingEvaluator:
         task_output_dir: Path,
     ) -> None:
         """Save individual task results to its own directory.
-        
+
         Args:
             task_name: Name of the task
             task_results: Results from the task
             task_output_dir: Directory to save results to
         """
         # Create task summary
-        task_summary = {
+        task_summary: dict[str, Any] = {
             "task_name": task_name,
             "timestamp": datetime.now().isoformat(),
             "execution_time": task_results.get("execution_time", 0),
             "success": task_results.get("error") is None,
         }
-        
+
         # Add key metrics via each task's get_loggable_metrics()
         if "error" not in task_results:
             try:
@@ -1488,7 +1431,7 @@ class EmbeddingEvaluator:
         summary_path = task_output_dir / "task_summary.json"
         with open(summary_path, "w") as f:
             json.dump(self._make_json_serializable(task_summary), f, indent=2)
-        
+
         # Save full task results (if not an error)
         if "error" not in task_results:
             full_results_path = task_output_dir / "task_results.json"
@@ -1496,27 +1439,27 @@ class EmbeddingEvaluator:
                 # Convert numpy arrays to lists for JSON serialization
                 serializable_results = self._make_json_serializable(task_results)
                 json.dump(serializable_results, f, indent=2)
-    
+
     def save_results(
         self,
         results: Dict[str, Any],
         embeddings_info: Dict[str, Any],
     ) -> None:
         """Print evaluation summary to console.
-        
+
         Args:
             results: Dictionary of task results
             embeddings_info: Information about embeddings (num, dim, etc.)
         """
         # Create results summary for console output
-        summary = {
+        summary: dict[str, Any] = {
             "checkpoint": self.checkpoint_path,
             "output_dir": str(self.output_dir),
             "device": str(self.device),
             "embeddings": embeddings_info,
             "tasks": {},
         }
-        
+
         # Add task results (compact summary)
         for task_name, task_results in results.items():
             # Create compact summary for each task
@@ -1524,7 +1467,7 @@ class EmbeddingEvaluator:
                 "success": task_results.get("error") is None,
                 "execution_time": task_results.get("execution_time", 0),
             }
-            
+
             # Add key metrics via each task's get_loggable_metrics()
             if "error" not in task_results:
                 try:
@@ -1535,9 +1478,9 @@ class EmbeddingEvaluator:
                     pass  # Task not found or no loggable metrics
             else:
                 task_summary["error"] = task_results["error"]
-            
+
             summary["tasks"][task_name] = task_summary
-        
+
         # Print summary to console
         self._print_summary(summary)
 
@@ -1552,7 +1495,7 @@ class EmbeddingEvaluator:
         if not S3FileHandler._aichor_enabled():
             return
 
-        logger.info(f"Uploading evaluation results to S3...")
+        logger.info("Uploading evaluation results to S3...")
 
         # Get all files in output directory recursively
         output_files = list(self.output_dir.rglob("*"))
@@ -1583,21 +1526,22 @@ class EmbeddingEvaluator:
 
     def _make_json_serializable(self, obj: Any) -> Any:
         """Recursively convert numpy arrays and other non-serializable objects to JSON-compatible types.
-        
+
         Args:
             obj: Object to convert
-            
+
         Returns:
             JSON-serializable version of the object
         """
         # Handle OmegaConf types
         try:
-            from omegaconf import ListConfig, DictConfig, OmegaConf
+            from omegaconf import DictConfig, ListConfig, OmegaConf
+
             if isinstance(obj, (ListConfig, DictConfig)):
                 obj = OmegaConf.to_container(obj, resolve=True)
         except ImportError:
             pass
-        
+
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, np.integer):
@@ -1612,43 +1556,42 @@ class EmbeddingEvaluator:
             return [self._make_json_serializable(item) for item in obj]
         else:
             return obj
-    
+
     def _save_config_files(self) -> None:
         """Save evaluation and model configuration to output directory.
-        
+
         This creates two files:
         1. eval_config.yaml - The evaluation configuration used
         2. model_config.yaml - The model configuration from the checkpoint
         """
         from omegaconf import OmegaConf
-        
+
         assert self.model is not None, "Model must be loaded before saving config files"
         assert self.model_config is not None, "Model config must be loaded before saving config files"
-        
+
         # Save evaluation configuration
         eval_config_path = self.output_dir / "eval_config.yaml"
-        eval_config_dict = {
+        eval_config_dict: dict[str, Any] = {
             "checkpoint_path": str(self.checkpoint_path) if self.checkpoint_path else "provided_externally",
             "evaluation": OmegaConf.to_container(self.eval_config, resolve=True),
             "dataset": OmegaConf.to_container(self.config.get("dataset", {}), resolve=True),
             "num_workers": self.config.get("num_workers", 4),
             "device": str(self.device),
         }
-        
+
         with open(eval_config_path, "w") as f:
             OmegaConf.save(eval_config_dict, f)
-        
-        
+
         # Save model configuration
         if self.model_config is not None:
             model_config_path = self.output_dir / "model_config.yaml"
-            
+
             # Convert to container and add model metadata
             # Note: resolve=False to avoid interpolation errors when config has unresolved references
             model_config_dict = OmegaConf.to_container(self.model_config, resolve=False)
-            
+
             # Add model summary information
-            model_summary = {
+            model_summary: dict[str, Any] = {
                 "model_info": {
                     "total_parameters": sum(p.numel() for p in self.model.parameters()),
                     "trainable_parameters": sum(p.numel() for p in self.model.parameters() if p.requires_grad),
@@ -1670,15 +1613,14 @@ class EmbeddingEvaluator:
                         "max_mz": self.model.max_mz,
                         "min_mz": self.model.min_mz,
                         "max_charge": self.model.max_charge,
-                    }
+                    },
                 },
                 "full_config": model_config_dict,
             }
-            
+
             with open(model_config_path, "w") as f:
                 OmegaConf.save(model_summary, f)
-            
-    
+
     def _print_summary(self, summary: Dict[str, Any]) -> None:
         """Print evaluation summary to console.
 
@@ -1715,7 +1657,7 @@ class EmbeddingEvaluator:
                     logger.info(f"  [FAILED] {task_name}: {task_summary.get('error', 'Unknown error')}")
 
         logger.info(f"Output: {summary['output_dir']}")
-    
+
     def evaluate(
         self,
         split: str = "valid",
@@ -1739,6 +1681,7 @@ class EmbeddingEvaluator:
 
         # Suppress HuggingFace datasets progress bars (map operations produce many lines)
         import datasets
+
         datasets.disable_progress_bars()
 
         # 1. Load model
@@ -1756,13 +1699,32 @@ class EmbeddingEvaluator:
         # _generate_multi_split_embeddings handle all three splits with the correct
         # per-split sizes and project-disjoint pre-filtering.
         if self._all_tasks_require_multi_split(tasks_to_run_list):
-            logger.info(
-                "All tasks require multi-split data — skipping primary embedding generation."
-            )
+            logger.info("All tasks require multi-split data — skipping primary embedding generation.")
+
+            # Every selected task loads train/valid/test itself, so the top-level
+            # `split` setting has no effect here. Say so, rather than letting a run
+            # configured with split=test quietly report numbers it did not scope.
+            requested_split = self.eval_config.get("split", None)
+            if requested_split:
+                logger.warning(
+                    "split=%s is ignored: every selected task loads train/valid/test itself. The setting applies only to single-split tasks.",
+                    requested_split,
+                )
+
+            # Every selected task loads train/valid/test itself, so the top-level
+            # `split` setting has no effect here. Say so, rather than letting a run
+            # configured with split=test quietly report numbers it did not scope.
+            requested_split = self.eval_config.get("split", None)
+            if requested_split:
+                logger.warning(
+                    "split=%s is ignored: every selected task loads train/valid/test itself. "
+                    "The setting applies only to single-split tasks.",
+                    requested_split,
+                )
 
             # Check if multi-seed evaluation is requested
             task_configs = self.eval_config.get("task_configs", {})
-            lp_config = {}
+            lp_config: dict[str, Any] = {}
             for tn in tasks_to_run_list:
                 lp_config = task_configs.get(tn, {})
                 if lp_config:
@@ -1772,7 +1734,10 @@ class EmbeddingEvaluator:
             if random_states and len(random_states) > 1:
                 # Multi-seed evaluation: run probe with different splits per seed
                 all_results = self._evaluate_multi_seed(
-                    tasks_to_run_list, random_states, force_regenerate, lp_config,
+                    tasks_to_run_list,
+                    random_states,
+                    force_regenerate,
+                    lp_config,
                 )
             elif lp_config.get("enrich_targets") or lp_config.get("enrich_multiclass"):
                 # Stratified enrichment for rare modification targets (phospho/glyco/
@@ -1837,6 +1802,7 @@ class EmbeddingEvaluator:
         # Determine pooling strategies to evaluate
         requested_pooling = self.eval_config.get("embedding_pooling", "mean_pool")
         from omegaconf import ListConfig
+
         if isinstance(requested_pooling, (list, tuple, ListConfig)):
             pooling_strategies = list(requested_pooling)
         elif requested_pooling == "both":
@@ -1845,7 +1811,7 @@ class EmbeddingEvaluator:
         else:
             pooling_strategies = [requested_pooling]
 
-        all_results: Dict[str, Any] = {}
+        all_results = {}
         last_embeddings_info: Dict[str, Any] = {}
 
         for strategy in pooling_strategies:
@@ -1856,20 +1822,22 @@ class EmbeddingEvaluator:
                 logger.info("=" * 80)
 
             # Override pooling strategy for this iteration
-            from omegaconf import OmegaConf, open_dict
+            from omegaconf import open_dict
+
             with open_dict(self.eval_config):
                 self.eval_config.embedding_pooling = strategy
 
             # 4. Generate embeddings (always regenerate for second strategy)
             regen = force_regenerate or (strategy != pooling_strategies[0])
-            embeddings, metadata, faiss_index = self.generate_embeddings(
-                force_regenerate=regen
-            )
+            embeddings, metadata, faiss_index = self.generate_embeddings(force_regenerate=regen)
 
             # 5. Get embedding statistics
             embeddings_info = embedding_io.get_embedding_stats(embeddings)
             embeddings_info["embedding_pooling"] = strategy
-            logger.info(f"Embeddings ({strategy}): {embeddings_info['num_embeddings']} x {embeddings_info['embedding_dim']}, mean_norm={embeddings_info['mean_norm']:.4f}")
+            logger.info(
+                f"Embeddings ({strategy}): {embeddings_info['num_embeddings']} x "
+                f"{embeddings_info['embedding_dim']}, mean_norm={embeddings_info['mean_norm']:.4f}"
+            )
             last_embeddings_info = embeddings_info
 
             # 6. Optionally compute sequence similarity clustering (once)
@@ -1879,7 +1847,10 @@ class EmbeddingEvaluator:
             # 7. Run evaluation tasks (write to strategy-specific subdirectory)
             output_subdir = strategy if len(pooling_strategies) > 1 else None
             results = self.run_evaluation_tasks(
-                embeddings, metadata, faiss_index, output_subdir=output_subdir,
+                embeddings,
+                metadata,
+                faiss_index,
+                output_subdir=output_subdir,
             )
 
             # Tag results with strategy prefix when comparing both
@@ -1905,5 +1876,3 @@ class EmbeddingEvaluator:
         logger.info("Evaluation complete!")
 
         return all_results
-
-

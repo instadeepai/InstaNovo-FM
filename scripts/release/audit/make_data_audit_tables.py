@@ -1,3 +1,4 @@
+# ruff: noqa: T201 - a CLI generator: the emitted LaTeX goes to stdout
 r"""Emit the data-audit supplementary tables as LaTeX.
 
 The manuscript has many supplementary tables; this generates only those that describe

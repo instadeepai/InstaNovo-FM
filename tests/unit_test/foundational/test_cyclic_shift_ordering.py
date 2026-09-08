@@ -76,5 +76,3 @@ def test_process_row_cyclic_shift_rolls_spectra_and_input(monkeypatch):
     assert torch.allclose(spectra_gt, torch.tensor(spec_expected, dtype=torch.float32), atol=1e-6)
     # With mask_portion=0.0, spectra equals spectra_gt
     assert torch.allclose(spectra_in, spectra_gt)
-
-

@@ -10,7 +10,7 @@ embedding_pooling:
 confidence_temperature: 1.0     # Softmax temperature for confidence pooling (lower = sharper, higher = smoother)
 batch_size: 128
 device: cuda  # "auto", "cuda", or "cpu"
-output_dir: "instanovo/foundational/eval/embed_eval_results"  # Where to save results (automatically uploaded to S3 on Aichor)
+output_dir: "instanovo_fm/eval/embed_eval_results"  # Where to save results (automatically uploaded to S3 on Aichor)
 max_samples: 20_000  # Maximum number of samples to use (null = use all data)
 save_embeddings: False  # Save embeddings to disk (default: False for speed and space savings)
 force_regenerate_embeddings: False  # Set to True to regenerate cached embeddings (only relevant if save_embeddings=True)
@@ -23,7 +23,7 @@ theoretical_spectrum:
   ppm_tol: 20.0                     # PPM tolerance for theoretical matching
   cid_da_tol: 0.2                   # Da tolerance for CID (ion-trap) spectra; null = always use ppm_tol
   ion_types: ["a", "b", "y"]        # Fragment ion types (null = auto-detect from fragmentation type)
-  
+
   # Conditional annotation (two-pass strategy) - RECOMMENDED
   use_conditional_annotation: True  # Use improved two-pass conditional annotation (reduces false positives)
   add_losses: True                  # Include neutral losses (H2O, NH3) - only for matched base ions
@@ -32,11 +32,11 @@ theoretical_spectrum:
   isotope_intensity_threshold: 0.02 # Minimum relative intensity for isotope checking (2% of base peak)
   max_isotope: 4                    # Maximum isotope number (+1, +2, +3, +4)
   add_precursor: True               # Include precursor ion (with isotopes if matched)
-  
+
   # Custom ions (diagnostic, reporter, immonium, etc.) - NEW
   add_custom_ions: True             # Include custom ion detection (immonium, glycan, phospho, reporter ions)
   custom_ions: null                 # Custom ion library (null = use DEFAULT_CUSTOM_IONS from theoretical_spectra.py)
-  
+
   # Quality gate defaults (backbone coverage, aligned with data analysis framework)
   # Tasks can override these per-task; set to 0 to disable quality gating
   min_backbone_coverage: 0.33       # Minimum backbone cleavage coverage (0-1)

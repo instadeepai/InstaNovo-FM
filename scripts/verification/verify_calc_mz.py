@@ -1,24 +1,29 @@
 r"""Verify if peptide_calc_mz matches our calculation from the sequence column.
 
+Run after sequences are written (and optionally after labelling
+carbamidomethylation, TMT, or iTRAQ) to detect implicit modifications and
+other sequence vs mass mismatches.
+
 PURPOSE:
 ========
 This script checks whether the `peptide_calc_mz` column in the data matches
 what we calculate from the `sequence` column. It tests both:
 1. The sequence as-is
-2. The sequence with carbamidomethylated cysteines (C -> C[UNIMOD:4])
+2. The sequence with carbamidomethylated cysteines (unmodified cysteine -> ``C[UNIMOD:4]``)
 
 Optional search-data mode (``--search-data``) additionally checks whether TMT or iTRAQ
-lysine labeling is implicit in ``peptide_calc_mz`` but missing from the sequence string:
-bare ``K`` → ``K[UNIMOD:737]``, ``K[UNIMOD:2016]``, or ``K[UNIMOD:214]`` after carb on C,
-using the same plain-AA + bare-K subset as the cysteine story. **DIA** files are excluded
+lysine labelling is implicit in ``peptide_calc_mz`` but missing from the sequence string:
+unmodified lysine → ``K[UNIMOD:737]``, ``K[UNIMOD:2016]``, or ``K[UNIMOD:214]`` after
+carbamidomethylation on cysteine, using the same plain-amino-acid + unmodified-lysine
+subset as the cysteine check. Data-independent acquisition (DIA) files are excluded
 from TMT/iTRAQ checks (mixed projects). It is a **fatal error** if a non-DIA row has
 ``quant`` indicating TMT and ``modifications`` containing iTRAQ. N-terminal-only isobaric
-labels (no bare K in the sequence column) are not detected by this K-only rule.
+labels (no unmodified lysine in the sequence column) are not detected by this lysine-only rule.
 
 This helps identify whether:
-- The labeling software calculated mass correctly from its internal sequence
+- The labelling software calculated mass correctly from its internal sequence
 - The sequence column is missing carbamidomethylation that was used in calc_mz
-- TMT/iTRAQ on lysine is implicit in calc_mz but not written on K
+- TMT/iTRAQ on lysine is implicit in calc_mz but not written on lysine
 - There are other discrepancies between sequence and calculated mass
 
 OUTPUT COLUMNS:
@@ -26,46 +31,55 @@ OUTPUT COLUMNS:
 - project: Project identifier
 - total_rows: Total rows in scope (before unknown-token skips). Rows with null or non-positive
   ``precursor_charge`` are excluded (typical DIA); they are not scored against ``peptide_calc_mz``.
-- rows_with_unmodified_cysteine: Rows with bare C (candidates for implicit carb in calc_mz)
+- rows_with_unmodified_cysteine: Rows with unmodified cysteine (candidates for implicit
+  carbamidomethylation in calc_mz)
 - calc_mz_matches_as_is / calc_mz_match_rate_as_is_pct: Match vs sequence as written (denominator: processed rows)
 - calc_mz_matches_after_carb_all_rows / calc_mz_match_rate_after_carb_pct: Match vs sequence after
-  applying carbamidomethylation to unmodified C on every row; unchanged if no bare C (same denominator)
-- calc_mz_matches_after_carb_unmod_c_rows / calc_mz_match_rate_after_carb_unmod_c_rows_pct: After-carb match
-  count and rate among rows with bare C **and** a plain-AA sequence only (no [mod] / non-letter symbols), so
-  other modification label noise does not dilute the C/carb signal (denominator: rows_entirely_unmodified_seq_with_bare_c)
-- avg_error_*_ppm: Mean PPM vs peptide_calc_mz for as-is, after-carb (all rows), after-carb (unmod C rows only)
+  applying carbamidomethylation to unmodified cysteine on every row; unchanged if no unmodified
+  cysteine (same denominator)
+- calc_mz_matches_after_carb_unmod_c_rows / calc_mz_match_rate_after_carb_unmod_c_rows_pct: Match
+  after carbamidomethylation among rows with unmodified cysteine **and** a plain-amino-acid
+  sequence only (no [mod] / non-letter symbols), so other modification-label noise does not dilute
+  the cysteine/carbamidomethylation signal (denominator: rows_entirely_unmodified_seq_with_bare_c)
+- avg_error_*_ppm: Mean PPM vs peptide_calc_mz for as-is, after carbamidomethylation (all rows),
+  after carbamidomethylation (unmodified-cysteine rows only)
 - suggest_explicit_carbamidomethylation_project: True when the same gate as
   ``apply_carbamido_from_calc_mz_report.select_projects_for_carb`` would select this project
 - TMT / iTRAQ columns (null when ``--search-data`` not passed): per-project aggregates and flags for
-  implicit lysine labeling vs sequence. Plain-seq bare-K subset: as-is, label-only (no carb on C),
-  carb + label (see column names in CSV)
+  implicit lysine labelling vs sequence. Plain-sequence unmodified-lysine subset: as-is, label-only
+  (no carbamidomethylation on cysteine), carbamidomethylation + label (see column names in CSV)
 
-READING THE RATES (1) = as-is %, (2) = after-carb over all processed, (3) = after-carb % among plain-AA rows with bare C only:
+READING THE RATES (1) = as-is %, (2) = after carbamidomethylation over all processed,
+(3) = after carbamidomethylation % among plain-amino-acid rows with unmodified cysteine only:
 ===============================================================================================================
 - (1) = 100%: Sequence string and peptide_calc_mz align; nothing to fix for this check.
-- (2) > (1): Some bare-C rows match calc_mz only after implicit carbamidomethylation — typical when the table
-  omits C[UNIMOD:4] but the search used alkylated mass.
-- If (3) = 100% but (2) < 100%: Every bare-C **plain-sequence** row is explained by carb; rows that still fail (2) have no bare C
-  (or C is already annotated), so the carb transform does not change their mass. Remaining gaps point to
-  other peptide-label or mass-calculation mismatches vs peptide_calc_mz (other mods, charge, tokenization,
-  sequence vs what the pipeline used, etc.) — not missing C alkylation on the written sequence.
-- If (3) < 100%: Some plain-sequence bare-C rows still disagree after carb — look beyond “add carb on C”
-  (wrong mod dictionary, etc.) for that subset.
+- (2) > (1): Some unmodified-cysteine rows match calc_mz only after implicit
+  carbamidomethylation — typical when the table omits ``C[UNIMOD:4]`` but the search used
+  carbamidomethylated mass.
+- If (3) = 100% but (2) < 100%: Every unmodified-cysteine **plain-sequence** row is explained by
+  carbamidomethylation; rows that still fail (2) have no unmodified cysteine (or cysteine is
+  already annotated), so the carbamidomethylation transform does not change their mass. Remaining
+  gaps point to other peptide-label or mass-calculation mismatches vs peptide_calc_mz (other
+  modifications, charge, tokenisation, sequence vs what the pipeline used, etc.) — not missing
+  cysteine carbamidomethylation on the written sequence.
+- If (3) < 100%: Some plain-sequence unmodified-cysteine rows still disagree after
+  carbamidomethylation — look beyond adding ``C[UNIMOD:4]`` (wrong modification dictionary, etc.)
+  for that subset.
 
-USAGE:
-======
-python verify_calc_mz.py \
-    --input-dir <data-root>/lcfm/ \
-    --output-csv calc_mz_verification.csv \
-    --tolerance 10 \
-    --verbose
+CLI::
 
-python verify_calc_mz.py \
-    --input-dir <data-root>/lcfm/ \
-    --output-csv calc_mz_verification.csv \
-    --search-data search_data_with_new_projects.xlsx \
-    --tmt-projects-yaml bad_tmt_projects.yaml \
-    --lysine-label-file-csv lysine_label_files.csv
+    uv run python -m scripts.verification.verify_calc_mz --help
+    uv run python -m scripts.verification.verify_calc_mz \
+        --input-dir <data-root>/lcfm/ \
+        --output-file calc_mz_verification.csv \
+        --tolerance 10 \
+        --verbose
+    uv run python -m scripts.verification.verify_calc_mz \
+        --input-dir <data-root>/lcfm/ \
+        --output-file calc_mz_verification.csv \
+        --search-data data/search_data.xlsx \
+        --tmt-projects-yaml assets/bad_tmt_projects.yaml \
+        --lysine-label-file-csv lysine_label_files.csv
 """
 
 import polars as pl
@@ -76,43 +90,44 @@ import logging
 import time
 from datetime import timedelta
 from dataclasses import dataclass, field
-from pathlib import Path, PureWindowsPath
 from typing import Dict, List, Optional, Set, Tuple
 import typer
 
 from instanovo.utils.residues import ResidueSet, H2O_MASS, PROTON_MASS_AMU
 
+from scripts.logging_setup import configure_script_logging
+from scripts.paths import DEFAULT_RESIDUE_MASSES, DEFAULT_TMT_PROJECTS_YAML
+from scripts.preprocessing.parquet_io import search_data_lookup_key
 
-app = typer.Typer()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+app = typer.Typer(
+    help="Verify peptide_calc_mz against sequence-derived m/z",
+    no_args_is_help=True,
+    add_completion=False,
 )
+
 logger = logging.getLogger(__name__)
 
 # Module-level constants for CLI options
 INPUT_DIR_OPTION = typer.Option(
-    "<data-root>/lcfm/",
+    ...,
     "--input-dir",
     "-i",
-    help="Input directory containing parquet files organized by project subfolders",
+    help="Input directory containing parquet files organised by project subfolders",
 )
 RESIDUE_MASSES_FILE_OPTION = typer.Option(
-    "mod_dicts/residue_masses.yaml",
+    str(DEFAULT_RESIDUE_MASSES),
     "--residue-masses-file",
-    "-r",
-    help="Path to residue masses file",
+    help="Path to residue masses YAML",
 )
 TOLERANCE_OPTION = typer.Option(
     10,
     "--tolerance",
-    "-t",
     help="PPM tolerance for m/z matching",
 )
 OUTPUT_CSV_OPTION = typer.Option(
     ...,
-    "--output-csv",
+    "--output-file",
     "-o",
     help="Path to write the output CSV report",
 )
@@ -125,12 +140,15 @@ VERBOSE_OPTION = typer.Option(
 SEARCH_DATA_OPTION = typer.Option(
     None,
     "--search-data",
-    help="Search data Excel with project, file path, acquisition, quant, modifications",
+    help=(
+        "Optional search-data Excel (project, raw-filename file path, "
+        "acquisition, quant, modifications) for TMT/iTRAQ lysine checks"
+    ),
 )
 TMT_PROJECTS_YAML_OPTION = typer.Option(
-    "bad_tmt_projects.yaml",
+    str(DEFAULT_TMT_PROJECTS_YAML),
     "--tmt-projects-yaml",
-    help="YAML mapping TMTplex groups to projects (tmt_6_8_10 / tmt_16_18)",
+    help="YAML mapping TMT multiplex groups to projects (tmt_6_8_10 / tmt_16_18)",
 )
 LYSINE_LABEL_FILE_CSV_OPTION = typer.Option(
     None,
@@ -140,25 +158,29 @@ LYSINE_LABEL_FILE_CSV_OPTION = typer.Option(
 
 
 def extract_file_name(path_str: str) -> str:
-    """Filename stem; matches search-data / parquet basename logic used elsewhere."""
-    path_obj = PureWindowsPath(path_str)
-    name = path_obj.name
-    compound_suffixes = [
-        ".mzML.ipc",
-        ".mzml.ipc",
-        ".mzML.gz",
-        ".mzml.gz",
-        ".mzml.parquet",
-        ".mzML.parquet",
-    ]
-    for suffix in compound_suffixes:
-        if name.lower().endswith(suffix.lower()):
-            return name[: -len(suffix)]
-    return Path(name).stem
+    """Join search-data and parquet paths using the same experiment stem.
+
+    Thin wrapper around ``search_data_lookup_key`` kept for call sites that
+    still use this name.
+
+    Args:
+        path_str: Raw search-data filename or on-disk data path.
+
+    Returns:
+        Filename stem used as the TMT/iTRAQ file key.
+    """
+    return search_data_lookup_key(path_str)
 
 
 def load_residue_masses(residue_masses_file: str) -> dict[str, float]:
-    """Load residue masses from a YAML file."""
+    """Load the token mass table used to recompute m/z from sequence.
+
+    Args:
+        residue_masses_file: YAML with a ``residues`` mapping (or a top-level map).
+
+    Returns:
+        Token to monoisotopic mass.
+    """
     with open(residue_masses_file, "r") as f:
         data = yaml.safe_load(f)
     residues: dict[str, float] = data.get("residues", data)
@@ -166,7 +188,14 @@ def load_residue_masses(residue_masses_file: str) -> dict[str, float]:
 
 
 def create_residue_set(residue_masses_file: str) -> ResidueSet:
-    """Create a ResidueSet with appropriate tokenizer regex."""
+    """Build a ResidueSet whose tokenizer can parse UNIMOD-style sequence tokens.
+
+    Args:
+        residue_masses_file: YAML mass dictionary path.
+
+    Returns:
+        ResidueSet used for ``calculate_mz``.
+    """
     residue_masses = load_residue_masses(residue_masses_file)
     residue_set = ResidueSet(residue_masses=residue_masses)
     residue_set.tokenizer_regex = (
@@ -186,36 +215,82 @@ def create_residue_set(residue_masses_file: str) -> ResidueSet:
 
 
 def carbamidomethylate_cysteines(sequence: str) -> str:
-    """Replace all unmodified C with C[UNIMOD:4]."""
+    """Simulate implicit carbamidomethylation so calc_mz can be compared after adding ``C[UNIMOD:4]``.
+
+    Args:
+        sequence: Peptide string that may contain unmodified cysteine.
+
+    Returns:
+        Sequence with every unmodified cysteine rewritten as ``C[UNIMOD:4]``.
+    """
     return re.sub(r"C(?!\[)", "C[UNIMOD:4]", sequence)
 
 
 def label_unmodified_lysines(sequence: str, unimod_id: str) -> str:
-    """Replace every unmodified K with K[UNIMOD:<id>]."""
+    """Simulate implicit TMT/iTRAQ on lysine so calc_mz can be compared after labelling.
+
+    Args:
+        sequence: Peptide string that may contain unmodified lysine.
+        unimod_id: UniMod accession to write on unmodified lysine.
+
+    Returns:
+        Sequence with every unmodified lysine rewritten as ``K[UNIMOD:id]``.
+    """
     return re.sub(r"K(?!\[)", f"K[UNIMOD:{unimod_id}]", sequence)
 
 
 def is_tmt_quant(quant: object) -> bool:
-    """True if search-data quant value indicates TMT."""
+    """Treat only an exact ``TMT`` quant cell as TMT (case-insensitive, stripped).
+
+    Args:
+        quant: Search-data quant cell.
+
+    Returns:
+        True when the value is exactly ``tmt`` after strip and casefold.
+    """
     if quant is None:
         return False
     return str(quant).strip().casefold() == "tmt"
 
 
 def modifications_contains_itraq(modifications: object) -> bool:
-    """True if modifications string mentions iTRAQ (substring, case-insensitive)."""
+    """Detect iTRAQ mentions in modifications so TMT+iTRAQ conflicts can be fatal.
+
+    Args:
+        modifications: Search-data modifications cell.
+
+    Returns:
+        True when ``itraq`` appears as a case-insensitive substring.
+    """
     if modifications is None:
         return False
     return "itraq" in str(modifications).casefold()
 
 
 def has_bare_lysine(sequence: str) -> bool:
-    """True if sequence has lysine not already written as K[...]."""
+    """Select the plain-sequence subset used for implicit lysine-label detection (lysine-only rule).
+
+    Args:
+        sequence: Peptide string.
+
+    Returns:
+        True when unmodified lysine (``K`` not followed by ``[``) is present.
+    """
     return "K" in sequence and not re.search(r"K\[", sequence)
 
 
 def load_tmt_unimod_by_project(tmt_projects_yaml: str) -> Dict[str, str]:
-    """Map project id -> UNIMOD id string for TMT on K (737 or 2016)."""
+    """Map TMT multiplex groups to UniMod 737 vs 2016 so lysine checks use the correct mass.
+
+    Args:
+        tmt_projects_yaml: YAML with ``tmt_6_8_10`` and ``tmt_16_18`` project lists.
+
+    Returns:
+        Project id to UniMod id string.
+
+    Raises:
+        ValueError: When a project appears twice or in both multiplex groups.
+    """
     with open(tmt_projects_yaml, "r") as f:
         data = yaml.safe_load(f)
     out: Dict[str, str] = {}
@@ -237,7 +312,18 @@ def load_tmt_unimod_by_project(tmt_projects_yaml: str) -> Dict[str, str]:
 
 
 def assert_no_tmt_quant_and_itraq_modifications_conflict(df: pl.DataFrame) -> None:
-    """Raise ValueError if any non-DIA row has TMT quant and iTRAQ in modifications."""
+    """Fail the run if a non-DIA row claims both TMT quant and iTRAQ modifications.
+
+    Data-independent acquisition rows are skipped. N-terminal-only isobaric labels
+    are out of scope for the lysine-only check, but mixed TMT+iTRAQ metadata is
+    still treated as fatal.
+
+    Args:
+        df: Search-data table.
+
+    Raises:
+        ValueError: When any non-DIA row combines TMT quant with iTRAQ in modifications.
+    """
     bad: List[str] = []
     for row in df.iter_rows(named=True):
         acq = row.get("acquisition")
@@ -258,6 +344,7 @@ def assert_no_tmt_quant_and_itraq_modifications_conflict(df: pl.DataFrame) -> No
 
 
 def _require_search_excel_columns(df: pl.DataFrame) -> None:
+    """Refuse search Excel that cannot support TMT/iTRAQ file selection."""
     required = ["project", "file path", "acquisition", "quant", "modifications"]
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -269,6 +356,7 @@ def _require_search_excel_columns(df: pl.DataFrame) -> None:
 def _accumulate_tmt_itraq_from_search_rows(
     df: pl.DataFrame, project_to_unimod: Dict[str, str]
 ) -> Tuple[Dict[Tuple[str, str], str], Set[Tuple[str, str]], Set[Tuple[str, str]]]:
+    """Collect TMT/iTRAQ file keys from non-DIA search rows only."""
     tmt_files: Dict[Tuple[str, str], str] = {}
     itraq_files: Set[Tuple[str, str]] = set()
     tmt_quant_missing_yaml: Set[Tuple[str, str]] = set()
@@ -301,6 +389,7 @@ def _accumulate_tmt_itraq_from_search_rows(
 def _raise_if_tmt_itraq_file_overlap(
     tmt_files: Dict[Tuple[str, str], str], itraq_files: Set[Tuple[str, str]]
 ) -> None:
+    """Refuse a file listed as both TMT (YAML) and iTRAQ so the lysine UniMod accession is unambiguous."""
     overlap = set(tmt_files.keys()) & itraq_files
     if not overlap:
         return
@@ -314,12 +403,20 @@ def load_search_data_lysine_maps(
     search_data_path: str,
     tmt_projects_yaml: str,
 ) -> Tuple[Dict[Tuple[str, str], str], Set[Tuple[str, str]], Set[Tuple[str, str]]]:
-    """Build TMT file→UNIMOD map, iTRAQ file set, and TMT-quant files missing from YAML.
+    """Build TMT/iTRAQ file maps for optional lysine checks (DIA excluded).
+
+    Args:
+        search_data_path: Excel with project, raw-filename file path, acquisition,
+            quant, and modifications.
+        tmt_projects_yaml: YAML mapping TMT multiplex groups to projects.
 
     Returns:
-        tmt_files: (project, filename) -> unimod id for TMT quant + non-DIA + project in YAML
-        itraq_files: (project, filename) with iTRAQ in modifications + non-DIA
-        tmt_quant_missing_yaml: TMT quant + non-DIA but project not listed in YAML (warn when scanning)
+        tmt_files: (project, filename) to UniMod id for TMT quant + non-DIA + project in YAML.
+        itraq_files: (project, filename) with iTRAQ in modifications + non-DIA.
+        tmt_quant_missing_yaml: TMT quant + non-DIA but project not listed in YAML (warn when scanning).
+
+    Raises:
+        ValueError: When columns are missing, TMT+iTRAQ conflict, YAML duplicates, or file overlap.
     """
     df = pl.read_excel(search_data_path)
     _require_search_excel_columns(df)
@@ -333,19 +430,42 @@ def load_search_data_lysine_maps(
 
 
 def is_entirely_unmodified_sequence(sequence: str) -> bool:
-    """True if sequence is plain one-letter amino acids only (no mods in the string)."""
+    """Restrict carbamidomethylation/lysine rates to plain-amino-acid strings so other modifications do not dilute the signal.
+
+    Args:
+        sequence: Peptide string.
+
+    Returns:
+        True when the sequence is one-letter amino acids only.
+    """
     return bool(sequence and re.fullmatch(r"[A-Z]+", sequence))
 
 
 def format_time(seconds: float) -> str:
-    """Format seconds into a human-readable time string."""
+    """Format elapsed seconds for long multi-project scans.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        A compact timedelta string for logs.
+    """
     return str(timedelta(seconds=int(seconds)))
 
 
 def calculate_mz(
     sequence: str, charge: int, residue_set: ResidueSet
 ) -> Optional[float]:
-    """Calculate m/z from a sequence and charge."""
+    """Recompute precursor m/z from the written sequence for comparison to peptide_calc_mz.
+
+    Args:
+        sequence: Tokenisable peptide string.
+        charge: Precursor charge (positive; DIA-like 0 is not scored upstream).
+        residue_set: Mass dictionary and tokenizer.
+
+    Returns:
+        Calculated m/z, or None when a token is unknown so the row can be skipped.
+    """
     try:
         tokens = residue_set.tokenize(sequence)
         total_mass = 0.0
@@ -368,14 +488,29 @@ def calculate_mz(
 
 
 def calculate_ppm_error(calc_mz: float, reference_mz: float) -> float:
-    """Calculate PPM error between two m/z values."""
+    """Score sequence vs peptide_calc_mz within the configured PPM tolerance.
+
+    Args:
+        calc_mz: m/z from the sequence.
+        reference_mz: ``peptide_calc_mz`` from the table.
+
+    Returns:
+        Absolute PPM error, or inf when the reference is zero.
+    """
     if reference_mz == 0:
         return float("inf")
     return abs(calc_mz - reference_mz) / reference_mz * 1e6
 
 
 def find_project_folders(input_dir: str) -> List[str]:
-    """Find all project subfolders containing parquet files."""
+    """Discover project subfolders that actually contain parquet files.
+
+    Args:
+        input_dir: Root directory to scan.
+
+    Returns:
+        Sorted project folder names.
+    """
     projects = []
     for entry in os.listdir(input_dir):
         project_path = os.path.join(input_dir, entry)
@@ -389,7 +524,15 @@ def find_project_folders(input_dir: str) -> List[str]:
 
 
 def find_parquet_files_in_project(input_dir: str, project: str) -> List[str]:
-    """Find all parquet files in a project folder."""
+    """List parquets under one project so every shard is scored.
+
+    Args:
+        input_dir: Root directory.
+        project: Project subfolder name.
+
+    Returns:
+        Parquet paths under that project.
+    """
     project_path = os.path.join(input_dir, project)
     parquet_files = []
     for root, _, files in os.walk(project_path):
@@ -401,7 +544,7 @@ def find_parquet_files_in_project(input_dir: str, project: str) -> List[str]:
 
 @dataclass
 class ProjectCalcMzStats:
-    """Statistics for calc_mz verification per project."""
+    """Accumulate as-is vs after-carbamidomethylation match rates for one project's CSV row."""
 
     project: str
     total_rows: int = 0
@@ -418,7 +561,7 @@ class ProjectCalcMzStats:
 
 @dataclass
 class LysineLabelFileAccumulator:
-    """Counts for one parquet under TMT or iTRAQ lysine labeling check."""
+    """Accumulate implicit lysine-label evidence for one TMT/iTRAQ parquet."""
 
     project: str
     filename: str
@@ -436,7 +579,7 @@ def _process_row(
     tolerance: float,
     stats: ProjectCalcMzStats,
 ) -> None:
-    """Process a single row and update stats."""
+    """Score one row as-is and after carbamidomethylation, isolating plain-amino-acid unmodified cysteine for rate (3)."""
     sequence = row["sequence"]
     charge = row["precursor_charge"]
     peptide_calc_mz = row["peptide_calc_mz"]
@@ -480,7 +623,7 @@ def _process_row_lysine_plain_bare_k(
     unimod_id: str,
     lys_acc: LysineLabelFileAccumulator,
 ) -> None:
-    """Update lysine accumulator for plain-AA rows with bare K."""
+    """Score implicit lysine labelling only on plain-amino-acid unmodified-lysine rows (same subset as carbamidomethylation)."""
     sequence = row["sequence"]
     charge = row["precursor_charge"]
     peptide_calc_mz = row["peptide_calc_mz"]
@@ -521,7 +664,7 @@ def _process_file(
     stats: ProjectCalcMzStats,
     lysine_acc: Optional[LysineLabelFileAccumulator] = None,
 ) -> None:
-    """Process a single parquet file."""
+    """Skip DIA-like (null/non-positive charge) and IN: tokens so rates match the documented denominators."""
     schema = pl.scan_parquet(file_path).collect_schema()
     required_cols = ["sequence", "precursor_charge", "peptide_calc_mz"]
 
@@ -556,7 +699,7 @@ def _process_file(
 
 
 def _finalize_lysine_file_row(acc: LysineLabelFileAccumulator) -> dict:
-    """Build CSV dict from accumulator; empty files still get a row when analyzed."""
+    """Turn per-file K counts into CSV fields, including empty TMT/iTRAQ files that were analysed."""
     d = acc.rows_plain_seq_bare_k
     rate_as_is = (acc.matches_as_is_plain_bare_k / d * 100) if d > 0 else 0.0
     rate_label_only = (acc.matches_label_only_plain_bare_k / d * 100) if d > 0 else 0.0
@@ -596,7 +739,21 @@ def analyze_project(
     tmt_quant_missing_yaml: Optional[Set[Tuple[str, str]]] = None,
     lysine_file_rows_out: Optional[List[dict]] = None,
 ) -> ProjectCalcMzStats:
-    """Analyze calc_mz for a project."""
+    """Score every parquet in a project for carbamidomethylation and optional TMT/iTRAQ lysine checks.
+
+    Args:
+        input_dir: Root with project subfolders.
+        project: Project folder name.
+        residue_set: Mass dictionary used for m/z.
+        tolerance: PPM tolerance vs peptide_calc_mz.
+        tmt_files: Optional (project, filename) to TMT UniMod map.
+        itraq_files: Optional iTRAQ file keys (UniMod 214).
+        tmt_quant_missing_yaml: TMT-quant files not in YAML (warned, not scored for lysine).
+        lysine_file_rows_out: Optional list that receives per-file lysine CSV rows.
+
+    Returns:
+        Project-level carbamidomethylation statistics for the main report.
+    """
     parquet_files = find_parquet_files_in_project(input_dir, project)
 
     stats = ProjectCalcMzStats(project=project)
@@ -642,7 +799,7 @@ def analyze_project(
 
 
 def _suggest_explicit_carbamidomethylation_project(stats: ProjectCalcMzStats) -> bool:
-    """Same logical gate as apply_carbamido_from_calc_mz_report.select_projects_for_carb."""
+    """Mirror the apply-carb gate so the CSV flag matches what the rewrite script would select."""
     total = stats.total_rows - stats.skipped_unknown_tokens
     if total <= 0:
         return False
@@ -659,9 +816,10 @@ def _suggest_explicit_carbamidomethylation_project(stats: ProjectCalcMzStats) ->
 
 
 def _lysine_project_columns(project: str, lysine_file_rows: List[dict]) -> dict:
-    """Aggregate per-file lysine rows into project-level TMT and iTRAQ columns."""
+    """Roll per-file TMT/iTRAQ K rates up to the project CSV columns."""
 
     def agg_for_kind(rows_subset: List[dict], prefix: str) -> dict:
+        """Reuse TMT and iTRAQ aggregation so both prefixes stay column-aligned."""
         n_files = len(rows_subset)
         plain = sum(int(r["rows_plain_seq_bare_k"]) for r in rows_subset)
         m_as_is = sum(
@@ -681,7 +839,7 @@ def _lysine_project_columns(project: str, lysine_file_rows: List[dict]) -> dict:
             bool(r["suggest_explicit_lysine_labeling"]) for r in rows_subset
         )
         return {
-            f"{prefix}_eligible_files_analyzed": n_files,
+            f"{prefix}_eligible_files_analysed": n_files,
             f"{prefix}_rows_plain_seq_bare_k": plain,
             f"{prefix}_calc_mz_matches_as_is_plain_bare_k_rows": m_as_is,
             f"{prefix}_calc_mz_matches_label_only_plain_bare_k_rows": m_label_only,
@@ -703,7 +861,7 @@ def _lysine_project_columns(project: str, lysine_file_rows: List[dict]) -> dict:
 
 
 def _null_lysine_project_columns() -> dict:
-    """Placeholder columns when --search-data is not used."""
+    """Keep TMT/iTRAQ columns present (null) when --search-data is not passed."""
     return {k: None for k in _lysine_project_columns("_", []).keys()}
 
 
@@ -711,7 +869,7 @@ def _create_output_row(
     stats: ProjectCalcMzStats,
     lysine_project_extras: Optional[dict] = None,
 ) -> dict:
-    """Create output row from project stats."""
+    """Build the documented CSV columns, including the three carbamidomethylation rates and optional lysine extras."""
     total = stats.total_rows - stats.skipped_unknown_tokens
     match_rate_as_is = (stats.calc_mz_matches_as_is / total * 100) if total > 0 else 0.0
     match_rate_after_carb_total = (
@@ -770,7 +928,7 @@ def _create_output_row(
 
 
 def _log_summary(results: List[ProjectCalcMzStats]) -> None:
-    """Log summary of results."""
+    """Print global as-is vs after-carbamidomethylation rates using the same denominators as the CSV."""
     logger.info("\n" + "=" * 60)
     logger.info("SUMMARY")
     logger.info("=" * 60)
@@ -809,15 +967,15 @@ def _log_summary(results: List[ProjectCalcMzStats]) -> None:
         f"{total_matches_as_is:,} ({match_rate_as_is:.2f}%)"
     )
     logger.info(
-        f"Our calc matches after carb on all rows (/ processed): "
+        f"Our calc matches after carbamidomethylation on all rows (/ processed): "
         f"{total_matches_after_all:,} ({match_rate_after_carb_total:.2f}%)"
     )
     logger.info(f"Rows with unmodified cysteine: {total_with_c:,}")
     logger.info(
-        f"Plain-AA rows with bare C (denom for carb / bare-C rate): {total_plain_bare_c:,}"
+        f"Plain-amino-acid rows with unmodified cysteine (denominator for carbamidomethylation rate): {total_plain_bare_c:,}"
     )
     logger.info(
-        f"Our calc matches after carb (/ plain-AA + bare-C rows): "
+        f"Our calc matches after carbamidomethylation (/ plain-amino-acid + unmodified-cysteine rows): "
         f"{total_matches_after_unmod_c:,} ({match_rate_after_carb_unmod_c:.2f}%)"
     )
     logger.info("=" * 60)
@@ -843,6 +1001,7 @@ def _load_optional_search_maps(
     Optional[Set[Tuple[str, str]]],
     Optional[Set[Tuple[str, str]]],
 ]:
+    """Load lysine maps only when --search-data is given so carbamidomethylation-only runs stay lightweight."""
     if not search_data:
         return None, None, None
     logger.info("Loading search data: %s", search_data)
@@ -869,6 +1028,7 @@ def _analyze_all_projects(
     lysine_file_rows: List[dict],
     search_data: Optional[str],
 ) -> List[ProjectCalcMzStats]:
+    """Walk every project, logging progress so long labelled trees remain auditable."""
     results: List[ProjectCalcMzStats] = []
     start_time = time.time()
     lysine_out = lysine_file_rows if search_data else None
@@ -900,6 +1060,7 @@ def _verification_output_rows(
     lysine_file_rows: List[dict],
     search_data: Optional[str],
 ) -> List[dict]:
+    """Attach lysine extras only when search-data mode was enabled."""
     rows_out: List[dict] = []
     for r in results:
         extras = (
@@ -912,6 +1073,7 @@ def _verification_output_rows(
 
 
 def _write_lysine_label_file_csv(path: str, lysine_file_rows: List[dict]) -> None:
+    """Write the optional per-file TMT/iTRAQ report, including an empty schema when nothing matched."""
     if lysine_file_rows:
         pl.DataFrame(lysine_file_rows).select(LYSINE_FILE_REPORT_COLS).write_csv(path)
     else:
@@ -926,12 +1088,25 @@ def run_verification(
     output_csv: str,
     verbose: bool = False,
     search_data: Optional[str] = None,
-    tmt_projects_yaml: str = "bad_tmt_projects.yaml",
+    tmt_projects_yaml: str = str(DEFAULT_TMT_PROJECTS_YAML),
     lysine_label_file_csv: Optional[str] = None,
 ) -> None:
-    """Run the calc_mz verification."""
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    """Run the full carbamidomethylation (and optional TMT/iTRAQ) calc_mz report over a parquet tree.
+
+    Args:
+        input_dir: Root with project parquet subfolders.
+        residue_masses_file: YAML residue masses used to recompute m/z.
+        tolerance: PPM tolerance for a match.
+        output_csv: Destination for the per-project report.
+        verbose: Enable debug logging.
+        search_data: Optional Excel enabling TMT/iTRAQ lysine checks.
+        tmt_projects_yaml: YAML mapping TMT multiplex groups to projects.
+        lysine_label_file_csv: Optional per-file lysine CSV (requires search_data).
+
+    Raises:
+        ValueError: When ``lysine_label_file_csv`` is set without ``search_data``.
+    """
+    configure_script_logging(verbose=verbose)
 
     logger.info(f"Input directory: {input_dir}")
     logger.info(f"Tolerance: {tolerance} ppm")
@@ -945,7 +1120,7 @@ def run_verification(
         search_data, tmt_projects_yaml
     )
 
-    logger.info("Initializing residue set...")
+    logger.info("Initialising residue set...")
     residue_set = create_residue_set(residue_masses_file)
 
     logger.info("Finding projects...")
@@ -956,7 +1131,7 @@ def run_verification(
         logger.warning("No projects found!")
         return
 
-    logger.info("Analyzing projects...")
+    logger.info("Analysing projects...")
     results = _analyze_all_projects(
         input_dir,
         projects,
@@ -991,7 +1166,19 @@ def main(
     tmt_projects_yaml: str = TMT_PROJECTS_YAML_OPTION,
     lysine_label_file_csv: Optional[str] = LYSINE_LABEL_FILE_CSV_OPTION,
 ) -> None:
-    """Verify if peptide_calc_mz matches our calculation from sequence."""
+    """Compare peptide_calc_mz to sequence-derived m/z to find implicit carbamidomethylation and optional TMT/iTRAQ.
+
+    Args:
+        input_dir: Input directory containing parquet files organised by project subfolders.
+        residue_masses_file: Path to residue masses file.
+        tolerance: PPM tolerance for m/z matching.
+        output_csv: Path to write the output CSV report.
+        verbose: Enable verbose logging.
+        search_data: Optional search-data Excel with project, raw-filename file path,
+            acquisition, quant, and modifications.
+        tmt_projects_yaml: YAML mapping TMT multiplex groups to projects (tmt_6_8_10 / tmt_16_18).
+        lysine_label_file_csv: Optional per-file TMT/iTRAQ lysine report (requires --search-data).
+    """
     run_verification(
         input_dir=input_dir,
         residue_masses_file=residue_masses_file,

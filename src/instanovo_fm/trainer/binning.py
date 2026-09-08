@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import torch
 
-from instanovo.utils.colorlogging import ColorLog
 from instanovo.__init__ import console
+from instanovo.utils.colorlogging import ColorLog
 
 logger = ColorLog(console, __name__).logger
 
@@ -34,7 +34,7 @@ class BinningStrategy(ABC):
     - Serialization for checkpoints
     """
 
-    def __init__(self, min_mz: float, max_mz: float, bin_group_size: int):
+    def __init__(self, min_mz: float, max_mz: float, bin_group_size: int) -> None:
         """Initialize binning strategy.
 
         Args:
@@ -122,9 +122,7 @@ class BinningStrategy(ABC):
         right = edges[bin_indices + 1]
         return (left + right) / 2.0
 
-    def mz_to_bin_groups(
-        self, mz_values: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def mz_to_bin_groups(self, mz_values: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Map m/z values to hierarchical (group, offset) indices.
 
         Args:
@@ -138,9 +136,7 @@ class BinningStrategy(ABC):
         offset_indices = bin_indices % self.bin_group_size
         return group_indices, offset_indices
 
-    def bin_groups_to_mz(
-        self, group_indices: torch.Tensor, offset_indices: torch.Tensor
-    ) -> torch.Tensor:
+    def bin_groups_to_mz(self, group_indices: torch.Tensor, offset_indices: torch.Tensor) -> torch.Tensor:
         """Map hierarchical (group, offset) indices to m/z centers.
 
         Args:
@@ -163,10 +159,7 @@ class BinningStrategy(ABC):
         }
 
     def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}(min_mz={self.min_mz}, max_mz={self.max_mz}, "
-            f"n_bins={self.n_bins}, n_groups={self.n_groups})"
-        )
+        return f"{self.__class__.__name__}(min_mz={self.min_mz}, max_mz={self.max_mz}, n_bins={self.n_bins}, n_groups={self.n_groups})"
 
 
 class FixedDaBinning(BinningStrategy):
@@ -182,9 +175,7 @@ class FixedDaBinning(BinningStrategy):
         At m/z=2000: ~10 PPM resolution
     """
 
-    def __init__(
-        self, min_mz: float, max_mz: float, bin_size: float, bin_group_size: int
-    ):
+    def __init__(self, min_mz: float, max_mz: float, bin_size: float, bin_group_size: int) -> None:
         """Initialize fixed Da binning.
 
         Args:
@@ -235,9 +226,7 @@ class FixedPpmBinning(BinningStrategy):
         At m/z=2000: bin width ≈ 0.020 Da
     """
 
-    def __init__(
-        self, min_mz: float, max_mz: float, ppm_target: float, bin_group_size: int
-    ):
+    def __init__(self, min_mz: float, max_mz: float, ppm_target: float, bin_group_size: int) -> None:
         """Initialize fixed PPM binning.
 
         Args:
@@ -323,7 +312,7 @@ class AdaptiveBinning(BinningStrategy):
         min_da: float = 0.005,
         max_da: float = 0.12,
         bin_group_size: int = 100,
-    ):
+    ) -> None:
         """Initialize adaptive binning.
 
         Args:
@@ -342,10 +331,7 @@ class AdaptiveBinning(BinningStrategy):
         super().__init__(min_mz, max_mz, bin_group_size)
 
         if function not in self.SUPPORTED_FUNCTIONS:
-            raise ValueError(
-                f"Unknown function '{function}'. "
-                f"Supported: {', '.join(self.SUPPORTED_FUNCTIONS)}"
-            )
+            raise ValueError(f"Unknown function '{function}'. Supported: {', '.join(self.SUPPORTED_FUNCTIONS)}")
 
         if min_da <= 0:
             raise ValueError(f"min_da ({min_da}) must be > 0")
@@ -388,11 +374,9 @@ class AdaptiveBinning(BinningStrategy):
             Bin width in Da (before safety clamping)
         """
         if self.function == "hyperbolic":
-            return math.sqrt(
-                self.da_floor**2 + (mz * self.ppm_asymptote / 1e6) ** 2
-            )
+            return math.sqrt(self.da_floor**2 + (mz * self.ppm_asymptote / 1e6) ** 2)
         elif self.function == "power_law":
-            return self.scale * mz**self.exponent
+            return float(self.scale * mz**self.exponent)
         elif self.function == "linear":
             return self.da_floor + mz * self.ppm_slope / 1e6
         else:
@@ -418,10 +402,7 @@ class AdaptiveBinning(BinningStrategy):
             edges.append(current)
 
             if len(edges) > max_bins:
-                raise RuntimeError(
-                    f"Exceeded maximum bin count ({max_bins}). "
-                    f"Check parameters: function={self.function}, min_da={self.min_da}"
-                )
+                raise RuntimeError(f"Exceeded maximum bin count ({max_bins}). Check parameters: function={self.function}, min_da={self.min_da}")
 
             width = self._get_bin_width_da(current)
             # Apply Da safety bounds; use 1.0001 epsilon for strict monotonicity
@@ -484,9 +465,7 @@ class AdaptiveBinning(BinningStrategy):
         )
 
 
-def create_binning_strategy(
-    config: Dict[str, Any], min_mz: float, max_mz: float
-) -> BinningStrategy:
+def create_binning_strategy(config: Dict[str, Any], min_mz: float, max_mz: float) -> BinningStrategy:
     """Factory for creating binning strategies from config.
 
     Expects nested config format:
@@ -515,10 +494,7 @@ def create_binning_strategy(
     binning_cfg = mz_head_cfg.get("binning", {})
 
     if not binning_cfg:
-        raise ValueError(
-            "Missing mz_head.binning config. If loading an old checkpoint, "
-            "ensure FoundationModel.load() migrates the config first."
-        )
+        raise ValueError("Missing mz_head.binning config. If loading an old checkpoint, ensure FoundationModel.load() migrates the config first.")
 
     strategy = binning_cfg.get("strategy", "fixed_da")
     bin_group_size = mz_head_cfg.get("bin_group_size", 50)
@@ -528,10 +504,7 @@ def create_binning_strategy(
         if bin_size is None:
             raise ValueError("fixed_da strategy requires 'bin_size' parameter")
 
-        logger.info(
-            f"Creating FixedDaBinning: bin_size={bin_size} Da, "
-            f"range=[{min_mz}, {max_mz}] Da"
-        )
+        logger.info(f"Creating FixedDaBinning: bin_size={bin_size} Da, range=[{min_mz}, {max_mz}] Da")
         return FixedDaBinning(min_mz, max_mz, bin_size, bin_group_size)
 
     elif strategy == "fixed_ppm":
@@ -539,10 +512,7 @@ def create_binning_strategy(
         if ppm_target is None:
             raise ValueError("fixed_ppm strategy requires 'ppm_target' parameter")
 
-        logger.info(
-            f"Creating FixedPpmBinning: ppm_target={ppm_target} PPM, "
-            f"range=[{min_mz}, {max_mz}] Da"
-        )
+        logger.info(f"Creating FixedPpmBinning: ppm_target={ppm_target} PPM, range=[{min_mz}, {max_mz}] Da")
         return FixedPpmBinning(min_mz, max_mz, ppm_target, bin_group_size)
 
     elif strategy == "adaptive":
@@ -582,7 +552,4 @@ def create_binning_strategy(
         )
 
     else:
-        raise ValueError(
-            f"Unknown binning strategy: {strategy}. "
-            f"Supported strategies: fixed_da, fixed_ppm, adaptive"
-        )
+        raise ValueError(f"Unknown binning strategy: {strategy}. Supported strategies: fixed_da, fixed_ppm, adaptive")

@@ -75,16 +75,10 @@ def project_disjoint_split(
     if n_dropped > 0:
         total = sum(len(emb) for emb, _ in splits.values())
         pct = 100.0 * n_dropped / total if total > 0 else 0
-        logger.warning(
-            f"Dropped {n_dropped} samples ({pct:.1f}%) with missing/invalid "
-            f"'{project_key}' metadata."
-        )
+        logger.warning(f"Dropped {n_dropped} samples ({pct:.1f}%) with missing/invalid '{project_key}' metadata.")
 
     if len(project_info) == 0:
-        raise ValueError(
-            f"No projects with >= {min_project_samples} samples found. "
-            f"Cannot perform project-disjoint splitting."
-        )
+        raise ValueError(f"No projects with >= {min_project_samples} samples found. Cannot perform project-disjoint splitting.")
 
     # Train-priority assignment
     assignment = _train_priority_assignment(
@@ -114,15 +108,10 @@ def project_disjoint_split(
 
         # Gather indices for assigned projects from the corresponding model split
         emb, meta = splits[split_name]
-        indices = _gather_project_indices(
-            meta, project_key, assigned_projects
-        )
+        indices = _gather_project_indices(meta, project_key, assigned_projects)
 
         if len(indices) == 0:
-            logger.warning(
-                f"Projects assigned to probe-{split_name} have no samples "
-                f"in model-{split_name}."
-            )
+            logger.warning(f"Projects assigned to probe-{split_name} have no samples in model-{split_name}.")
             result[split_name] = {
                 "embeddings": np.empty((0, emb.shape[1])),
                 "metadata": {},
@@ -157,12 +146,8 @@ def project_disjoint_split(
     # Summary info
     result["assignment_info"] = {
         "n_projects_total": len(project_info),
-        "n_projects_per_split": {
-            s: len(assignment[s]) for s in ("train", "val", "test")
-        },
-        "n_samples_per_split": {
-            s: len(result[s]["embeddings"]) for s in ("train", "val", "test")
-        },
+        "n_projects_per_split": {s: len(assignment[s]) for s in ("train", "val", "test")},
+        "n_samples_per_split": {s: len(result[s]["embeddings"]) for s in ("train", "val", "test")},
         "n_samples_dropped_invalid_project": n_dropped,
         "targets": targets,
     }
@@ -174,10 +159,7 @@ def project_disjoint_split(
         target = targets[s]
         n_proj = info["n_projects_per_split"][s]
         status = "OK" if actual >= target else "BELOW TARGET"
-        logger.info(
-            f"Probe-{s}: {actual:,} samples from {n_proj} projects "
-            f"(target: {target:,}) [{status}]"
-        )
+        logger.info(f"Probe-{s}: {actual:,} samples from {n_proj} projects (target: {target:,}) [{status}]")
 
     return result
 
@@ -196,10 +178,7 @@ def _normalise_split_keys(
         ValueError: If both 'val' and 'valid' are present (ambiguous).
     """
     if "val" in splits and "valid" in splits:
-        raise ValueError(
-            "Both 'val' and 'valid' keys are present in splits. "
-            "Use one or the other — they are aliases for the same split."
-        )
+        raise ValueError("Both 'val' and 'valid' keys are present in splits. Use one or the other — they are aliases for the same split.")
     normalised = {}
     for key, value in splits.items():
         norm_key = "val" if key == "valid" else key
@@ -214,13 +193,10 @@ def _validate_project_key(
     """Check that project_key exists in at least one split's metadata."""
     found = any(project_key in meta for _, meta in splits.values())
     if not found:
-        available_keys = set()
+        available_keys: set[Any] = set()
         for _, meta in splits.values():
             available_keys.update(meta.keys())
-        raise ValueError(
-            f"Project key '{project_key}' not found in any split's metadata. "
-            f"Available keys: {sorted(available_keys)}"
-        )
+        raise ValueError(f"Project key '{project_key}' not found in any split's metadata. Available keys: {sorted(available_keys)}")
 
 
 def _is_valid_project(value: Any) -> bool:
@@ -262,9 +238,7 @@ def _build_project_index(
 
         projects = meta[project_key]
         # Vectorised validity check and string normalisation
-        str_projects = np.array(
-            [str(p).strip() if p is not None else "" for p in projects], dtype=object
-        )
+        str_projects = np.array([str(p).strip() if p is not None else "" for p in projects], dtype=object)
         valid_mask = np.array([_is_valid_project(p) for p in projects], dtype=bool)
         n_dropped += int((~valid_mask).sum())
 
@@ -274,7 +248,7 @@ def _build_project_index(
 
         # Count per project using np.unique (O(n log n) vs O(n * k))
         unique_projs, counts = np.unique(valid_projs, return_counts=True)
-        for proj, count in zip(unique_projs, counts):
+        for proj, count in zip(unique_projs, counts, strict=False):
             proj = str(proj)
             if proj not in project_info:
                 project_info[proj] = {"train": 0, "val": 0, "test": 0}
@@ -289,10 +263,7 @@ def _build_project_index(
 
     n_filtered_out = len(project_info) - len(filtered)
     if n_filtered_out > 0:
-        logger.info(
-            f"Filtered out {n_filtered_out} projects with < {min_project_samples} "
-            f"total samples."
-        )
+        logger.info(f"Filtered out {n_filtered_out} projects with < {min_project_samples} total samples.")
 
     return filtered, n_dropped
 
@@ -327,7 +298,7 @@ def _train_priority_assignment(
     rng = np.random.RandomState(random_state)
 
     # Build the ordered list of fracs to try, always ending at 1.0
-    fracs_to_try = sorted(set([max_per_project_frac, 0.5, 1.0]))
+    fracs_to_try = sorted({max_per_project_frac, 0.5, 1.0})
 
     best_assignment: Dict[str, list] = {"train": [], "val": [], "test": []}
     best_val_achieved = 0
@@ -392,25 +363,15 @@ def _train_priority_assignment(
             break  # All targets met — no need to escalate further
 
     if chosen_frac > max_per_project_frac:
-        logger.info(
-            f"Escalated max_per_project_frac from {max_per_project_frac} to {chosen_frac} "
-            f"to meet sample targets"
-        )
+        logger.info(f"Escalated max_per_project_frac from {max_per_project_frac} to {chosen_frac} to meet sample targets")
 
     if best_val_achieved < val_target:
-        logger.warning(
-            f"Could only assign {best_val_achieved:,} val samples "
-            f"(target: {val_target:,}). Not enough projects with val data."
-        )
+        logger.warning(f"Could only assign {best_val_achieved:,} val samples (target: {val_target:,}). Not enough projects with val data.")
     if best_test_achieved < test_target:
-        logger.warning(
-            f"Could only assign {best_test_achieved:,} test samples "
-            f"(target: {test_target:,}). Not enough projects with test data."
-        )
+        logger.warning(f"Could only assign {best_test_achieved:,} test samples (target: {test_target:,}). Not enough projects with test data.")
     if train_target > 0 and best_train_achieved < train_target:
         logger.warning(
-            f"Could only assign {best_train_achieved:,} train samples "
-            f"(target: {train_target:,}). Not enough projects with train-only data."
+            f"Could only assign {best_train_achieved:,} train samples (target: {train_target:,}). Not enough projects with train-only data."
         )
 
     # Shuffle within each split for consistency
@@ -441,9 +402,7 @@ def _gather_project_indices(
 
     projects = meta[project_key]
     # Normalise to string array; invalid projects map to ""
-    str_projects = np.array(
-        [str(p).strip() if _is_valid_project(p) else "" for p in projects], dtype=object
-    )
+    str_projects = np.array([str(p).strip() if _is_valid_project(p) else "" for p in projects], dtype=object)
     assigned_arr = np.array(list(assigned_projects), dtype=object)
     mask = np.isin(str_projects, assigned_arr)
     return np.where(mask)[0]
@@ -492,10 +451,7 @@ def flat_project_disjoint_split(
         ValueError: If project_key is missing from metadata or no valid projects found.
     """
     if project_key not in metadata:
-        raise ValueError(
-            f"Project key '{project_key}' not found in metadata. "
-            f"Available keys: {sorted(metadata.keys())}"
-        )
+        raise ValueError(f"Project key '{project_key}' not found in metadata. Available keys: {sorted(metadata.keys())}")
 
     projects = metadata[project_key]
     n = len(embeddings)
@@ -504,14 +460,9 @@ def flat_project_disjoint_split(
     n_dropped = int((~valid_mask).sum())
     if n_dropped > 0:
         pct = 100.0 * n_dropped / n if n > 0 else 0.0
-        logger.warning(
-            f"Dropped {n_dropped:,} samples ({pct:.1f}%) with missing/invalid "
-            f"'{project_key}' metadata."
-        )
+        logger.warning(f"Dropped {n_dropped:,} samples ({pct:.1f}%) with missing/invalid '{project_key}' metadata.")
 
-    str_projects = np.array(
-        [str(p).strip() if p is not None else "" for p in projects], dtype=object
-    )
+    str_projects = np.array([str(p).strip() if p is not None else "" for p in projects], dtype=object)
     valid_indices = np.where(valid_mask)[0]
     valid_str_projs = str_projects[valid_mask]
 
@@ -527,16 +478,12 @@ def flat_project_disjoint_split(
     counts = counts[keep_mask]
 
     if len(unique_projs) == 0:
-        raise ValueError(
-            f"No projects with >= {min_project_samples} samples found. "
-            f"Cannot perform project-disjoint splitting."
-        )
+        raise ValueError(f"No projects with >= {min_project_samples} samples found. Cannot perform project-disjoint splitting.")
 
     # Replicate total counts across all three split slots so
     # _train_priority_assignment can fill val/test from total-count budgets.
     project_info: Dict[str, Dict[str, int]] = {
-        str(proj): {"train": int(count), "val": int(count), "test": int(count)}
-        for proj, count in zip(unique_projs, counts)
+        str(proj): {"train": int(count), "val": int(count), "test": int(count)} for proj, count in zip(unique_projs, counts, strict=False)
     }
 
     assignment = _train_priority_assignment(
@@ -616,10 +563,7 @@ def flat_project_disjoint_split(
         target = targets[s]
         n_proj = info["n_projects_per_split"][s]
         status = "OK" if actual >= target else "BELOW TARGET"
-        logger.info(
-            f"Flat probe-{s}: {actual:,} samples from {n_proj} projects "
-            f"(target: {target:,}) [{status}]"
-        )
+        logger.info(f"Flat probe-{s}: {actual:,} samples from {n_proj} projects (target: {target:,}) [{status}]")
 
     return result
 
@@ -648,10 +592,7 @@ def _project_capped_sample(
     if len(indices) <= target_n:
         # Not enough data — use everything
         if len(indices) < target_n:
-            logger.info(
-                f"Pool has {len(indices):,} samples, below target {target_n:,}. "
-                f"Using all available."
-            )
+            logger.info(f"Pool has {len(indices):,} samples, below target {target_n:,}. Using all available.")
         return indices
 
     projects = meta[project_key]

@@ -29,6 +29,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from matplotlib.axes import Axes
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -71,7 +72,7 @@ class LinearClassifier(nn.Module):
     which allows us to leverage GPU acceleration.
     """
 
-    def __init__(self, input_dim: int, num_classes: int):
+    def __init__(self, input_dim: int, num_classes: int) -> None:
         """Initialize the linear classifier.
 
         Args:
@@ -155,8 +156,8 @@ class PeakTypeClassificationTask(BaseTask):
         fragment_umap_detectors: Optional[List[str]] = None,  # Filter to these detectors (e.g., ["Orbitrap"])
         fragment_umap_instruments: Optional[List[str]] = None,  # Filter to these instruments (e.g., ["Q Exactive HF"])
         enable_chemistry_probes: bool = True,  # Enable chemistry understanding probes
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize the peak type classification task.
 
         Args:
@@ -227,7 +228,7 @@ class PeakTypeClassificationTask(BaseTask):
 
         # No verbose __init__ logging — config is visible in the eval config dump
 
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:
+    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:  # type: ignore[override]  # base class run() signature differs across tasks
         """Run peak type classification evaluation.
 
         Args:
@@ -260,8 +261,8 @@ class PeakTypeClassificationTask(BaseTask):
         if peak_data is None:
             return {"error": "Failed to extract peak data", "success": False}
 
-        X = peak_data["embeddings"]
-        binary_labels = peak_data["binary_labels"]
+        X = peak_data["embeddings"]  # noqa: N806
+        peak_data["binary_labels"]
         multiclass_labels = peak_data["multiclass_labels"]
 
         # Classification (linear probe) — can be disabled to only run UMAP
@@ -300,14 +301,14 @@ class PeakTypeClassificationTask(BaseTask):
             logger.info("Classification disabled (enable_classification=false) — skipping linear probes")
 
         # Create peak-level UMAP visualizations
-        umap_paths = []
-        umap_diagnostics = {}
+        umap_paths: list[Any] = []
+        umap_diagnostics: dict[str, Any] = {}
         if self.create_plots and PLOTTING_AVAILABLE and self.enable_peak_umap:
             umap_paths, umap_diagnostics = self._create_peak_umap_visualizations(peak_data)
 
         # Pairwise similarity + structural consistency analysis
-        pairwise_results = {}
-        structural_results = {}
+        pairwise_results: dict[str, Any] = {}
+        structural_results: dict[str, Any] = {}
         if self.enable_pairwise_similarity:
             pairwise_results, structural_results = self._run_pairwise_similarity_analysis(peak_data)
 
@@ -377,7 +378,7 @@ class PeakTypeClassificationTask(BaseTask):
 
         execution_time = time.time() - start_time
 
-        results = {
+        results: dict[str, Any] = {
             "task_name": self.name,
             "num_spectra": int(len(meta["peak_embeddings"])),
             "num_peaks": int(len(X)),
@@ -614,14 +615,14 @@ class PeakTypeClassificationTask(BaseTask):
             all_search_instruments.extend([inst_val] * n_valid)
 
         # Concatenate all peaks
-        X = np.concatenate(all_peak_embeddings, axis=0)
+        X = np.concatenate(all_peak_embeddings, axis=0)  # noqa: N806
         binary_labels = np.array(all_binary_labels, dtype=np.int32)
         multiclass_labels = np.array(all_multiclass_labels, dtype=object)
 
         # Pre-transformer embeddings (if available)
-        X_pre = None
+        X_pre = None  # noqa: N806
         if all_peak_embeddings_pre and len(all_peak_embeddings_pre) == len(all_peak_embeddings):
-            X_pre = np.concatenate(all_peak_embeddings_pre, axis=0)
+            X_pre = np.concatenate(all_peak_embeddings_pre, axis=0)  # noqa: N806
 
         # Compact summary
         n_kept = n_spectra - n_filtered
@@ -741,7 +742,7 @@ class PeakTypeClassificationTask(BaseTask):
         Returns:
             Dictionary with baseline results
         """
-        results = {}
+        results: dict[str, Any] = {}
         spectrum_groups = peak_data["spectrum_indices_per_peak"]
 
         # Check if we need to subsample for baselines (subsample at spectrum level)
@@ -895,11 +896,11 @@ class PeakTypeClassificationTask(BaseTask):
             all_features.append(features)
 
         # Concatenate all features
-        X_raw = np.concatenate(all_features, axis=0)
+        X_raw = np.concatenate(all_features, axis=0)  # noqa: N806
 
         # Apply subsampling if requested
         if subsample_mask is not None:
-            X_raw = X_raw[subsample_mask]
+            X_raw = X_raw[subsample_mask]  # noqa: N806
 
         return X_raw
 
@@ -935,9 +936,9 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _train_pytorch_classifier(
         self,
-        X_train: np.ndarray,
+        X_train: np.ndarray,  # noqa: N803
         y_train: np.ndarray,
-        X_val: np.ndarray,
+        X_val: np.ndarray,  # noqa: N803
         y_val: np.ndarray,
         num_classes: int,
         l2_reg: float,
@@ -972,9 +973,9 @@ class PeakTypeClassificationTask(BaseTask):
             torch.set_num_threads(1)
         use_pin_memory = device.type == "cuda"
         # Convert to PyTorch tensors
-        X_train_t = torch.from_numpy(X_train).float()
+        X_train_t = torch.from_numpy(X_train).float()  # noqa: N806
         y_train_t = torch.from_numpy(y_train).long()
-        X_val_t = torch.from_numpy(X_val).float()
+        X_val_t = torch.from_numpy(X_val).float()  # noqa: N806
         y_val_t = torch.from_numpy(y_val).long()
 
         # Create data loaders (data is already in-memory tensors, so num_workers=0
@@ -1009,7 +1010,7 @@ class PeakTypeClassificationTask(BaseTask):
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=l2_reg)
 
         # Training history
-        history = {
+        history: dict[str, Any] = {
             "train_loss": [],
             "val_loss": [],
             "val_f1_macro": [],
@@ -1020,14 +1021,14 @@ class PeakTypeClassificationTask(BaseTask):
         patience_counter = 0
 
         # Training loop
-        for epoch in range(self.max_epochs):
+        for _epoch in range(self.max_epochs):
             # Training
             model.train()
             train_loss = 0.0
             train_samples = 0
 
-            for batch_X, batch_y in train_loader:
-                batch_X = batch_X.to(device, non_blocking=True)
+            for batch_X, batch_y in train_loader:  # noqa: N806
+                batch_X = batch_X.to(device, non_blocking=True)  # noqa: N806
                 batch_y = batch_y.to(device, non_blocking=True)
 
                 optimizer.zero_grad(set_to_none=True)
@@ -1049,8 +1050,8 @@ class PeakTypeClassificationTask(BaseTask):
             all_val_labels = []
 
             with torch.no_grad():
-                for batch_X, batch_y in val_loader:
-                    batch_X = batch_X.to(device, non_blocking=True)
+                for batch_X, batch_y in val_loader:  # noqa: N806
+                    batch_X = batch_X.to(device, non_blocking=True)  # noqa: N806
                     batch_y = batch_y.to(device, non_blocking=True)
 
                     val_outputs = model(batch_X)
@@ -1145,7 +1146,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _split_by_spectrum(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         y: np.ndarray,
         groups: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -1201,7 +1202,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _run_binary_classification(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         y: np.ndarray,
         spectrum_groups: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
@@ -1218,19 +1219,19 @@ class PeakTypeClassificationTask(BaseTask):
         """
         # Split data at the spectrum level to prevent information leakage
         if spectrum_groups is not None:
-            X_train, y_train, X_val, y_val, X_test, y_test, _ = self._split_by_spectrum(X, y, spectrum_groups)
+            X_train, y_train, X_val, y_val, X_test, y_test, _ = self._split_by_spectrum(X, y, spectrum_groups)  # noqa: N806
         else:
             logger.warning("No spectrum groups provided — falling back to peak-level split (risk of leakage)")
-            X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=self.test_size, random_state=self.random_state, stratify=y)
-            X_train, X_val, y_train, y_val = train_test_split(
+            X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=self.test_size, random_state=self.random_state, stratify=y)  # noqa: N806
+            X_train, X_val, y_train, y_val = train_test_split(  # noqa: N806
                 X_train_val, y_train_val, test_size=0.2, random_state=self.random_state, stratify=y_train_val
             )
 
         # Standardize features
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_val_scaled = scaler.transform(X_val)
-        X_test_scaled = scaler.transform(X_test)
+        X_train_scaled = scaler.fit_transform(X_train)  # noqa: N806
+        X_val_scaled = scaler.transform(X_val)  # noqa: N806
+        X_test_scaled = scaler.transform(X_test)  # noqa: N806
 
         # Binary classification has 2 classes
         num_classes = 2
@@ -1278,9 +1279,11 @@ class PeakTypeClassificationTask(BaseTask):
             )
 
         # Evaluate on test set
+        assert best_model is not None, "no model selected during the L2 sweep"
+        assert best_l2_reg is not None
         best_model.eval()
         with torch.no_grad():
-            X_test_t = torch.from_numpy(X_test_scaled).float().to(self.device)
+            X_test_t = torch.from_numpy(X_test_scaled).float().to(self.device)  # noqa: N806
             test_outputs = best_model(X_test_t)
             y_pred = torch.argmax(test_outputs, dim=1).cpu().numpy()
 
@@ -1314,7 +1317,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _run_multiclass_classification(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         y: np.ndarray,
         spectrum_groups: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
@@ -1337,7 +1340,7 @@ class PeakTypeClassificationTask(BaseTask):
 
         # Split data at the spectrum level to prevent information leakage
         if spectrum_groups is not None:
-            X_train, y_train, X_val, y_val, X_test, y_test, test_peak_indices = self._split_by_spectrum(X, y_encoded, spectrum_groups)
+            X_train, y_train, X_val, y_val, X_test, y_test, test_peak_indices = self._split_by_spectrum(X, y_encoded, spectrum_groups)  # noqa: N806
         else:
             logger.warning("No spectrum groups provided — falling back to peak-level split (risk of leakage)")
             indices = np.arange(len(X))
@@ -1347,15 +1350,15 @@ class PeakTypeClassificationTask(BaseTask):
             train_idx, val_idx, y_train, y_val = train_test_split(
                 train_val_idx, y_train_val, test_size=0.2, random_state=self.random_state, stratify=y_train_val
             )
-            X_train = X[train_idx]
-            X_val = X[val_idx]
-            X_test = X[test_peak_indices]
+            X_train = X[train_idx]  # noqa: N806
+            X_val = X[val_idx]  # noqa: N806
+            X_test = X[test_peak_indices]  # noqa: N806
 
         # Standardize features
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_val_scaled = scaler.transform(X_val)
-        X_test_scaled = scaler.transform(X_test)
+        X_train_scaled = scaler.fit_transform(X_train)  # noqa: N806
+        X_val_scaled = scaler.transform(X_val)  # noqa: N806
+        X_test_scaled = scaler.transform(X_test)  # noqa: N806
 
         # Compute class weights for balanced training
         class_counts = np.bincount(y_train, minlength=num_classes)
@@ -1402,9 +1405,11 @@ class PeakTypeClassificationTask(BaseTask):
             )
 
         # Evaluate on test set
+        assert best_model is not None, "no model selected during the L2 sweep"
+        assert best_l2_reg is not None
         best_model.eval()
         with torch.no_grad():
-            X_test_t = torch.from_numpy(X_test_scaled).float().to(self.device)
+            X_test_t = torch.from_numpy(X_test_scaled).float().to(self.device)  # noqa: N806
             test_outputs = best_model(X_test_t)
             y_pred = torch.argmax(test_outputs, dim=1).cpu().numpy()
             y_proba = torch.softmax(test_outputs, dim=1).cpu().numpy()
@@ -1521,7 +1526,7 @@ class PeakTypeClassificationTask(BaseTask):
             transform=ax.transAxes,
             ha="right",
             va="top",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor="lightyellow", alpha=0.8),
+            bbox={"boxstyle": "round,pad=0.5", "facecolor": "lightyellow", "alpha": 0.8},
             fontsize=10,
             fontweight="bold",
         )
@@ -1577,7 +1582,7 @@ class PeakTypeClassificationTask(BaseTask):
             transform=ax.transAxes,
             ha="right",
             va="top",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor="lightyellow", alpha=0.8),
+            bbox={"boxstyle": "round,pad=0.5", "facecolor": "lightyellow", "alpha": 0.8},
             fontsize=10,
             fontweight="bold",
         )
@@ -1702,7 +1707,7 @@ class PeakTypeClassificationTask(BaseTask):
         ax.vlines(mz, 0, intensity, color="lightgray", alpha=0.4, linewidth=1.0, zorder=1)
 
         # Color mapping for labels (4-class taxonomy)
-        label_colors = {
+        label_colors: dict[str, Any] = {
             "b-ion": "tab:blue",
             "y-ion": "tab:orange",
             "precursor": "tab:brown",
@@ -1798,7 +1803,7 @@ class PeakTypeClassificationTask(BaseTask):
         """
         output_path = self.output_dir / "peak_type_classification_results.json"
 
-        def _default(obj):
+        def _default(obj: Any) -> Any:
             if isinstance(obj, (np.floating, np.integer)):
                 return float(obj)
             if isinstance(obj, np.ndarray):
@@ -1812,7 +1817,7 @@ class PeakTypeClassificationTask(BaseTask):
     # Peak-level UMAP visualizations
     # ------------------------------------------------------------------
 
-    def _create_peak_umap_visualizations(self, peak_data: Dict[str, np.ndarray]) -> List[str]:
+    def _create_peak_umap_visualizations(self, peak_data: Dict[str, np.ndarray]) -> Tuple[List[str], Dict[str, float]]:
         """Create peak-level UMAP visualizations.
 
         Produces three UMAP variants:
@@ -1847,7 +1852,7 @@ class PeakTypeClassificationTask(BaseTask):
         paths: List[str] = []
 
         # Plot functions for all-peak UMAPs
-        all_peak_plots = [
+        all_peak_plots: list[tuple[Any, str]] = [
             (self._plot_umap_binary, "binary"),
             (self._plot_umap_ion_categories, "ion_categories"),
             (self._plot_umap_fragment_ladder, "fragment_ladder"),
@@ -1860,7 +1865,7 @@ class PeakTypeClassificationTask(BaseTask):
         ]
 
         # Plot functions for fragment-only UMAPs (no binary — all are annotated)
-        fragment_plots = [
+        fragment_plots: list[tuple[Any, str]] = [
             (self._plot_umap_ion_categories, "ion_categories"),
             (self._plot_umap_fragment_ladder, "fragment_ladder"),
             (self._plot_umap_mz_position, "mz_position"),
@@ -2024,10 +2029,9 @@ class PeakTypeClassificationTask(BaseTask):
         return np.where(mask)[0]
 
     def _save_umap_coords(self, umap_2d: np.ndarray, sampled: Dict[str, np.ndarray], tag: str, out_dir: Path) -> None:
-        """Persist the 2D UMAP coords + per-peak colour labels so the scatter can be
-        re-rendered downstream (e.g. paper-style SVG) without recomputing embeddings.
+        """Persist the 2D UMAP coords + per-peak colour labels so the scatter can be re-rendered downstream (e.g.
 
-        Defensive: only writes 1-D label arrays that match the coord length; never raises.
+        paper-style SVG) without recomputing embeddings. Defensive: only writes 1-D label arrays that match the coord length; never raises.
         """
         try:
             import pandas as pd
@@ -2106,7 +2110,7 @@ class PeakTypeClassificationTask(BaseTask):
         rho2, _ = spearmanr(umap_2d[valid, 1], mz[valid])
         best_rho = rho1 if abs(rho1) >= abs(rho2) else rho2
         abs_rho = abs(best_rho)
-        return abs_rho
+        return float(abs_rho)
 
     def _plot_umap_mz_position(
         self,
@@ -2500,10 +2504,10 @@ class PeakTypeClassificationTask(BaseTask):
     ) -> Optional[str]:
         """UMAP colored by ion origin category."""
         labels = sampled["multiclass_labels"]
-        annotations = sampled.get("matched_annotations", np.array([None] * len(labels)))
+        sampled.get("matched_annotations", np.array([None] * len(labels)))
 
         # Map 4-class labels to display categories
-        label_to_cat = {
+        label_to_cat: dict[str, Any] = {
             "unannotated": "Unannotated",
             "b-ion": "b-series",
             "y-ion": "y-series",
@@ -2513,7 +2517,7 @@ class PeakTypeClassificationTask(BaseTask):
         categories = np.array([label_to_cat.get(str(labels[i]), "Unannotated") for i in range(n)], dtype=object)
 
         # Color map
-        cat_colors = {
+        cat_colors: dict[str, Any] = {
             "Unannotated": "#E0E0E0",
             "b-series": "#1976D2",
             "y-series": "#D32F2F",
@@ -2657,15 +2661,15 @@ class PeakTypeClassificationTask(BaseTask):
         cmap_b = plt.cm.winter  # cyan-blue → green
         cmap_y = plt.cm.YlOrRd  # yellow → orange → red
 
-        def _pos_to_color(series: str, pos: int):
+        def _pos_to_color(series: str, pos: int) -> Any:
             t = norm(pos)
             # Map to 0.2–0.9 range to avoid extremes (too light or too dark)
             mapped = 0.2 + t * 0.7
             return cmap_b(mapped) if series == "b" else cmap_y(mapped)
 
         # Marker map
-        marker_map = {"base": "o", "loss": "v", "isotope": "D"}
-        size_map = {
+        marker_map: dict[str, Any] = {"base": "o", "loss": "v", "isotope": "D"}
+        size_map: dict[str, Any] = {
             "base": self.umap_point_size * 1.2,
             "loss": self.umap_point_size * 1.2,
             "isotope": self.umap_point_size,
@@ -2840,7 +2844,7 @@ class PeakTypeClassificationTask(BaseTask):
         total = conf.sum()
         accuracy = (tp_unann + tp_ann) / total if total > 0 else 0.0
 
-        def _prf(tp, fp, fn):
+        def _prf(tp: Any, fp: Any, fn: Any) -> Any:
             p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
             r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
             f = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
@@ -3098,7 +3102,7 @@ class PeakTypeClassificationTask(BaseTask):
         for pidx, cidx, _ in all_pairs:
             child_to_parents[cidx].append(pidx)
 
-        recoveries = {k: [] for k in k_values}
+        recoveries: dict[int, list[float]] = {k: [] for k in k_values}
 
         for cidx, parent_idxs in child_to_parents.items():
             spec_id = spec_indices[cidx]
@@ -3124,7 +3128,7 @@ class PeakTypeClassificationTask(BaseTask):
                 hit = 1.0 if top_k & parent_set else 0.0
                 recoveries[k].append(hit)
 
-        result = {"n_children": int(len(child_to_parents))}
+        result: dict[str, Any] = {"n_children": int(len(child_to_parents))}
         for k in k_values:
             vals = recoveries[k]
             result[f"top{k}"] = float(np.mean(vals)) if vals else None
@@ -3140,18 +3144,15 @@ class PeakTypeClassificationTask(BaseTask):
             Tuple of (pairwise_results, structural_results).
         """
         np.random.seed(self.random_state)
-        X = peak_data["embeddings"]
+        X = peak_data["embeddings"]  # noqa: N806
         # L2-normalize
         norms = np.linalg.norm(X, axis=1, keepdims=True)
         norms = np.maximum(norms, 1e-8)
-        X_norm = X / norms
+        X_norm = X / norms  # noqa: N806
 
         binary_labels = peak_data["binary_labels"]
-        multiclass_labels = peak_data["multiclass_labels"]
+        peak_data["multiclass_labels"]
         spec_indices = peak_data["spectrum_indices_per_peak"]
-
-        annotated_mask = binary_labels == 1
-        unannotated_mask = binary_labels == 0
 
         # --- Within-spectrum baseline ---
         relation_groups: Dict[str, Dict[str, Any]] = {}
@@ -3200,11 +3201,11 @@ class PeakTypeClassificationTask(BaseTask):
         if self.create_plots and PLOTTING_AVAILABLE:
             pairwise_plot = self._plot_pairwise_similarity(relation_groups, structural)
 
-        pairwise_results = {
+        pairwise_results: dict[str, Any] = {
             "relation_groups": relation_groups,
             "plot_path": pairwise_plot,
         }
-        structural_results = {
+        structural_results: dict[str, Any] = {
             **structural,
             "plot_path": pairwise_plot,  # shared plot
         }
@@ -3232,14 +3233,14 @@ class PeakTypeClassificationTask(BaseTask):
             "cross_charge",
             "random_within_spectrum",
         ]
-        within_labels = {
+        within_labels: dict[str, Any] = {
             "isotope_parent": "Isotope → parent",
             "loss_parent": "Neutral loss → parent",
             "complementary_by": "Complementary b/y pair",
             "cross_charge": "Same fragment, different charge",
             "random_within_spectrum": "Random (within-spectrum)",
         }
-        within_colors = {
+        within_colors: dict[str, Any] = {
             "isotope_parent": "#4CAF50",
             "loss_parent": "#66BB6A",
             "complementary_by": "#7E57C2",
@@ -3256,12 +3257,12 @@ class PeakTypeClassificationTask(BaseTask):
 
         # Bottom panel: cross-spectrum identity
         cross_order = ["same_ion_cross_spectrum", "different_ion_similar_mz", "random_cross_spectrum"]
-        cross_labels = {
+        cross_labels: dict[str, Any] = {
             "same_ion_cross_spectrum": "Same ion (cross-spectrum)",
             "different_ion_similar_mz": "Different ion, similar m/z",
             "random_cross_spectrum": "Random (cross-spectrum)",
         }
-        cross_colors = {
+        cross_colors: dict[str, Any] = {
             "same_ion_cross_spectrum": "#2196F3",
             "different_ion_similar_mz": "#EF5350",
             "random_cross_spectrum": "#9E9E9E",
@@ -3294,7 +3295,7 @@ class PeakTypeClassificationTask(BaseTask):
         )
         axes = axes.flatten()
 
-        def _draw_panel(ax, groups, labels, colors, title):
+        def _draw_panel(ax: Axes, groups: Any, labels: Any, colors: Any, title: str) -> None:
             names = [k for k, _ in groups]
             stats_list = [s for _, s in groups]
             y_pos = np.arange(len(names))
@@ -3362,7 +3363,7 @@ class PeakTypeClassificationTask(BaseTask):
         Falls back to position-only grouping (ion_type, position, charge) when
         fewer than 100 peptide-level groups have replicates.
         """
-        X = peak_data["embeddings"]
+        X = peak_data["embeddings"]  # noqa: N806
         spec_per_peak = peak_data["spectrum_indices_per_peak"]
         feature_types = peak_data["feature_types"]
         annotations = peak_data["matched_annotations"]
@@ -3371,7 +3372,7 @@ class PeakTypeClassificationTask(BaseTask):
         # L2-normalize embeddings in-place to avoid a full copy (~3GB for 1M×768)
         norms = np.linalg.norm(X, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
-        X_norm = np.empty_like(X)
+        X_norm = np.empty_like(X)  # noqa: N806
         # Normalize in chunks to limit peak memory
         chunk = 50_000
         for start in range(0, len(X), chunk):
@@ -3432,12 +3433,12 @@ class PeakTypeClassificationTask(BaseTask):
         # Filter to groups with ≥2 observations from ≥2 distinct spectra
         cross_spectrum_groups: Dict[tuple, List[int]] = {}
         for key, indices in ion_groups.items():
-            spec_ids = set(int(spec_per_peak[i]) for i in indices)
+            spec_ids = {int(spec_per_peak[i]) for i in indices}
             if len(spec_ids) >= 2 and len(indices) >= 2:
                 cross_spectrum_groups[key] = indices
 
         n_ion_groups = len(cross_spectrum_groups)
-        n_peptides = len(set(k[0] for k in cross_spectrum_groups))
+        n_peptides = len({k[0] for k in cross_spectrum_groups})
 
         if n_ion_groups == 0:
             logger.warning("  No cross-spectrum ion replicates found — skipping analysis")
@@ -3575,7 +3576,7 @@ class PeakTypeClassificationTask(BaseTask):
         self,
         cross_spectrum_groups: Dict[tuple, List[int]],
         spec_per_peak: np.ndarray,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
     ) -> np.ndarray:
         """Sample cosine similarities between same-ion peaks from different spectra."""
         rng = np.random.RandomState(self.random_state)
@@ -3614,7 +3615,7 @@ class PeakTypeClassificationTask(BaseTask):
         base_mask: np.ndarray,
         mz_values: np.ndarray,
         spec_per_peak: np.ndarray,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
     ) -> np.ndarray:
         """Sample cosine similarities between different ions at similar m/z across spectra."""
         rng = np.random.RandomState(self.random_state + 1)
@@ -3664,7 +3665,7 @@ class PeakTypeClassificationTask(BaseTask):
         self,
         base_mask: np.ndarray,
         spec_per_peak: np.ndarray,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
     ) -> np.ndarray:
         """Sample random cross-spectrum base-ion pairs as baseline."""
         rng = np.random.RandomState(self.random_state + 2)
@@ -3693,7 +3694,7 @@ class PeakTypeClassificationTask(BaseTask):
         spec_per_peak: np.ndarray,
         mz_values: np.ndarray,
         base_mask: np.ndarray,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
     ) -> Dict[str, Any]:
         """Fallback: group by (ion_type, position, charge) ignoring peptide identity.
 
@@ -3710,7 +3711,7 @@ class PeakTypeClassificationTask(BaseTask):
         # Filter to groups with ≥2 observations from ≥2 spectra
         cross_pos_groups: Dict[tuple, List[int]] = {}
         for key, indices in pos_groups.items():
-            spec_ids = set(int(spec_per_peak[i]) for i in indices)
+            spec_ids = {int(spec_per_peak[i]) for i in indices}
             if len(spec_ids) >= 2 and len(indices) >= 2:
                 cross_pos_groups[key] = indices
 
@@ -3732,7 +3733,7 @@ class PeakTypeClassificationTask(BaseTask):
         ion_keys: Dict[int, tuple],
         charge_arr: np.ndarray,
         spec_per_peak: np.ndarray,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
     ) -> Dict[str, Any]:
         """Test whether the same fragment at different charge states gets similar embeddings.
 
@@ -3751,7 +3752,7 @@ class PeakTypeClassificationTask(BaseTask):
         # Find groups with ≥2 distinct charge states
         multi_charge_groups: Dict[tuple, List[int]] = {}
         for key, indices in charge_agnostic_groups.items():
-            charges = set(int(charge_arr[i]) for i in indices)
+            charges = {int(charge_arr[i]) for i in indices}
             if len(charges) >= 2:
                 multi_charge_groups[key] = indices
 
@@ -3763,7 +3764,7 @@ class PeakTypeClassificationTask(BaseTask):
                 "cross_charge_similarity": self._compute_group_stats(np.array([])),
             }
 
-        rng = np.random.RandomState(self.random_state + 3)
+        np.random.RandomState(self.random_state + 3)
         cross_charge_sims: List[float] = []
         budget = self.cross_spectrum_max_pairs
 
@@ -3812,7 +3813,7 @@ class PeakTypeClassificationTask(BaseTask):
         Returns:
             Dict with pre-transformer results and deltas, or {} if unavailable.
         """
-        X_pre = peak_data.get("embeddings_pretransformer")
+        X_pre = peak_data.get("embeddings_pretransformer")  # noqa: N806
         if X_pre is None:
             logger.warning("Pre-transformer embeddings not available — skipping probe")
             return {}
@@ -3874,7 +3875,7 @@ class PeakTypeClassificationTask(BaseTask):
             Dict with per-class diagnostics, annotated-vs-unannotated comparison,
             and optional plot path.
         """
-        X = peak_data["embeddings"]
+        X = peak_data["embeddings"]  # noqa: N806
         binary_labels = peak_data["binary_labels"]
         multiclass_labels = peak_data["multiclass_labels"]
 
@@ -3883,11 +3884,11 @@ class PeakTypeClassificationTask(BaseTask):
 
         # L2-normalize in-place to avoid a ~1.5 GB copy
         norms_safe = np.maximum(l2_norms, 1e-8)
-        X_norm = X.copy()  # We need a copy since we modify in-place, but only one
-        X_norm /= norms_safe[:, np.newaxis]
+        X_norm = X.copy()  # We need a copy since we modify in-place, but only one  # noqa: N806
+        X_norm /= norms_safe[:, np.newaxis]  # noqa: N806
 
         # Split for centroid computation (train centroids, measure all)
-        X_train, y_train, X_val, y_val, X_test, y_test, test_indices = self._split_by_spectrum(X_norm, multiclass_labels, split_groups)
+        X_train, y_train, X_val, y_val, X_test, y_test, test_indices = self._split_by_spectrum(X_norm, multiclass_labels, split_groups)  # noqa: N806
         # Encode labels
         le = LabelEncoder()
         le.fit(multiclass_labels)
@@ -3929,16 +3930,16 @@ class PeakTypeClassificationTask(BaseTask):
         y_te_raw = np.array([], dtype=object)
 
         if self.enable_diagnostics_classifier:
-            X_tr_raw, y_tr_raw, X_v_raw, y_v_raw, X_te_raw, y_te_raw, test_idxs = self._split_by_spectrum(
+            X_tr_raw, y_tr_raw, X_v_raw, y_v_raw, X_te_raw, y_te_raw, test_idxs = self._split_by_spectrum(  # noqa: N806
                 peak_data["embeddings"], multiclass_labels, split_groups
             )
             y_tr_enc = le.transform(y_tr_raw)
             y_v_enc = le.transform(y_v_raw)
 
             scaler = StandardScaler()
-            X_tr_s = scaler.fit_transform(X_tr_raw)
-            X_v_s = scaler.transform(X_v_raw)
-            X_te_s = scaler.transform(X_te_raw)
+            X_tr_s = scaler.fit_transform(X_tr_raw)  # noqa: N806
+            X_v_s = scaler.transform(X_v_raw)  # noqa: N806
+            X_te_s = scaler.transform(X_te_raw)  # noqa: N806
 
             class_counts = np.bincount(y_tr_enc, minlength=num_classes)
             cw = np.zeros(num_classes, dtype=np.float32)
@@ -3959,7 +3960,7 @@ class PeakTypeClassificationTask(BaseTask):
 
             model.eval()
             with torch.no_grad():
-                X_te_t = torch.from_numpy(X_te_s).float().to(self.device)
+                X_te_t = torch.from_numpy(X_te_s).float().to(self.device)  # noqa: N806
                 logits = model(X_te_t)
                 proba = torch.softmax(logits, dim=1).cpu().numpy()
 
@@ -4076,7 +4077,7 @@ class PeakTypeClassificationTask(BaseTask):
             axes = np.array([axes])
         axes = axes.flatten()
 
-        for ax_idx, (key, title, values, y_enc, n_total) in enumerate(metric_configs):
+        for ax_idx, (_key, title, values, y_enc, _n_total) in enumerate(metric_configs):
             ax = axes[ax_idx]
             # Group values by class
             box_data = []
@@ -4147,7 +4148,7 @@ class PeakTypeClassificationTask(BaseTask):
         """
         results: Dict[str, Any] = {}
 
-        X = peak_data["embeddings"]
+        X = peak_data["embeddings"]  # noqa: N806
         annotations = peak_data["matched_annotations"]
         parent_anns = peak_data["parent_annotations"]
         feature_types = peak_data["feature_types"]
@@ -4165,7 +4166,7 @@ class PeakTypeClassificationTask(BaseTask):
         try:
             norms = np.linalg.norm(X, axis=1, keepdims=True)
             norms = np.maximum(norms, 1e-8)
-            X_norm = X / norms
+            X_norm = X / norms  # noqa: N806
             results["complementary_by_pairs"] = self._probe_complementary_pairs(X_norm, annotations, parent_anns, feature_types, spec_indices, meta)
             del X_norm  # Free ~1.2 GB
         except Exception as e:
@@ -4191,7 +4192,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _probe_fragment_position(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         annotations: np.ndarray,
         parent_anns: np.ndarray,
         feature_types: np.ndarray,
@@ -4228,7 +4229,7 @@ class PeakTypeClassificationTask(BaseTask):
         if n_valid < 100:
             return {"skipped": True, "n_valid": n_valid}
 
-        X_pos = X[valid]
+        X_pos = X[valid]  # noqa: N806
         y_pos = positions[valid].astype(np.float32)
 
         # Split (spectrum-aware if available)
@@ -4249,15 +4250,15 @@ class PeakTypeClassificationTask(BaseTask):
             test_mask[perm[:n_test]] = True
             train_mask = ~test_mask
 
-        X_train, y_train = X_pos[train_mask], y_pos[train_mask]
-        X_test, y_test = X_pos[test_mask], y_pos[test_mask]
+        X_train, y_train = X_pos[train_mask], y_pos[train_mask]  # noqa: N806
+        X_test, y_test = X_pos[test_mask], y_pos[test_mask]  # noqa: N806
 
         if len(X_train) < 50 or len(X_test) < 20:
             return {"skipped": True, "n_train": len(X_train), "n_test": len(X_test)}
 
         scaler = StandardScaler()
-        X_train_s = scaler.fit_transform(X_train)
-        X_test_s = scaler.transform(X_test)
+        X_train_s = scaler.fit_transform(X_train)  # noqa: N806
+        X_test_s = scaler.transform(X_test)  # noqa: N806
 
         model = Ridge(alpha=1.0)
         model.fit(X_train_s, y_train)
@@ -4290,7 +4291,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _probe_complementary_pairs(
         self,
-        X_norm: np.ndarray,
+        X_norm: np.ndarray,  # noqa: N803
         annotations: np.ndarray,
         parent_anns: np.ndarray,
         feature_types: np.ndarray,
@@ -4405,7 +4406,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _probe_neutral_loss_type(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         annotations: np.ndarray,
         feature_types: np.ndarray,
         split_groups: Optional[np.ndarray],
@@ -4455,7 +4456,7 @@ class PeakTypeClassificationTask(BaseTask):
         if n_h2o < 50 or n_nh3 < 50:
             return {"skipped": True, "n_h2o": n_h2o, "n_nh3": n_nh3}
 
-        X_loss = X[loss_mask]
+        X_loss = X[loss_mask]  # noqa: N806
         y_loss = loss_labels[loss_mask]
         parent_types = parent_ion_types[loss_mask]
         mz_loss = None
@@ -4484,15 +4485,15 @@ class PeakTypeClassificationTask(BaseTask):
         le = LabelEncoder()
         y_enc = le.fit_transform(y_loss)
 
-        X_train, y_train = X_loss[train_mask], y_enc[train_mask]
-        X_test, y_test = X_loss[test_mask], y_enc[test_mask]
+        X_train, y_train = X_loss[train_mask], y_enc[train_mask]  # noqa: N806
+        X_test, y_test = X_loss[test_mask], y_enc[test_mask]  # noqa: N806
 
         if len(X_train) < 30 or len(X_test) < 10:
             return {"skipped": True}
 
         scaler = StandardScaler()
-        X_train_s = scaler.fit_transform(X_train)
-        X_test_s = scaler.transform(X_test)
+        X_train_s = scaler.fit_transform(X_train)  # noqa: N806
+        X_test_s = scaler.transform(X_test)  # noqa: N806
 
         # --- Main classifier: full embeddings ---
         clf = LogisticRegression(C=1.0, max_iter=500, class_weight="balanced", solver="lbfgs")
@@ -4543,9 +4544,7 @@ class PeakTypeClassificationTask(BaseTask):
         # How much of the discrimination is explained by knowing the parent is
         # a b-ion vs y-ion?  H₂O losses are predominantly from b-ions, NH₃
         # from y-ions.  Quantify this confound.
-        parent_test = parent_types[test_mask]
-        b_mask_test = parent_test == "b"
-        y_mask_test = parent_test == "y"
+        parent_types[test_mask]
 
         # Cross-tabulation: loss type vs parent ion type
         n_b_h2o = int(((parent_types == "b") & (y_loss == "H2O")).sum())
@@ -4571,7 +4570,7 @@ class PeakTypeClassificationTask(BaseTask):
             if n_h2o_pt < 30 or n_nh3_pt < 30:
                 continue
 
-            X_pt = X_loss[pt_mask]
+            X_pt = X_loss[pt_mask]  # noqa: N806
             y_pt = y_enc[pt_mask]
             train_pt = train_mask[pt_mask]
             test_pt = test_mask[pt_mask]
@@ -4580,8 +4579,8 @@ class PeakTypeClassificationTask(BaseTask):
                 continue
 
             scaler_pt = StandardScaler()
-            X_pt_train = scaler_pt.fit_transform(X_pt[train_pt])
-            X_pt_test = scaler_pt.transform(X_pt[test_pt])
+            X_pt_train = scaler_pt.fit_transform(X_pt[train_pt])  # noqa: N806
+            X_pt_test = scaler_pt.transform(X_pt[test_pt])  # noqa: N806
             y_pt_train = y_pt[train_pt]
             y_pt_test = y_pt[test_pt]
 
@@ -4600,7 +4599,7 @@ class PeakTypeClassificationTask(BaseTask):
 
     def _probe_charge_state(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         annotations: np.ndarray,
         feature_types: np.ndarray,
         split_groups: Optional[np.ndarray],
@@ -4643,7 +4642,7 @@ class PeakTypeClassificationTask(BaseTask):
         if n_z1 < 50 or n_z2 < 50:
             return {"skipped": True, "n_z1": n_z1, "n_z2": n_z2}
 
-        X_chrg = X[valid]
+        X_chrg = X[valid]  # noqa: N806
         y_chrg = charge_labels[valid]
 
         # Split
@@ -4667,15 +4666,15 @@ class PeakTypeClassificationTask(BaseTask):
         le = LabelEncoder()
         y_enc = le.fit_transform(y_chrg)
 
-        X_train, y_train = X_chrg[train_mask], y_enc[train_mask]
-        X_test, y_test = X_chrg[test_mask], y_enc[test_mask]
+        X_train, y_train = X_chrg[train_mask], y_enc[train_mask]  # noqa: N806
+        X_test, y_test = X_chrg[test_mask], y_enc[test_mask]  # noqa: N806
 
         if len(X_train) < 30 or len(X_test) < 10:
             return {"skipped": True}
 
         scaler = StandardScaler()
-        X_train_s = scaler.fit_transform(X_train)
-        X_test_s = scaler.transform(X_test)
+        X_train_s = scaler.fit_transform(X_train)  # noqa: N806
+        X_test_s = scaler.transform(X_test)  # noqa: N806
 
         from sklearn.linear_model import LogisticRegression
 
@@ -4693,7 +4692,7 @@ class PeakTypeClassificationTask(BaseTask):
         class_names = le.classes_.tolist()
         logger.info(f"  Charge state AUROC={f'{auroc:.4f}' if auroc is not None else 'N/A'}")
 
-        result = {
+        result: dict[str, Any] = {
             "accuracy": accuracy,
             "f1": f1,
             "auroc": auroc,
@@ -4711,7 +4710,7 @@ class PeakTypeClassificationTask(BaseTask):
             mz_train_c = mz_chrg[train_mask].reshape(-1, 1)
             mz_test_c = mz_chrg[test_mask].reshape(-1, 1)
             if not np.any(np.isnan(mz_train_c)) and not np.any(np.isnan(mz_test_c)):
-                from sklearn.linear_model import LogisticRegression as LR
+                from sklearn.linear_model import LogisticRegression as LR  # noqa: N817
 
                 scaler_mz = StandardScaler()
                 mz_train_cs = scaler_mz.fit_transform(mz_train_c)

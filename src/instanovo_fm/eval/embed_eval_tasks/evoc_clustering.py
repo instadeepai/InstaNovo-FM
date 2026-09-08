@@ -44,6 +44,7 @@ class EVoCClusteringTask(BaseTask):
     requires_model = False
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
         self.max_samples: int = kwargs.get("max_samples", 20000)
         self.random_state: int = kwargs.get("random_state", 42)
@@ -55,12 +56,8 @@ class EVoCClusteringTask(BaseTask):
         self.evoc_params: Dict[str, Any] = kwargs.get("evoc_params", {})
 
         # Enrichment fields
-        self.categorical_fields: List[str] = kwargs.get(
-            "categorical_fields", cc.DEFAULT_CATEGORICAL_FIELDS
-        )
-        self.numeric_fields: List[str] = kwargs.get(
-            "numeric_fields", cc.DEFAULT_NUMERIC_FIELDS
-        )
+        self.categorical_fields: List[str] = kwargs.get("categorical_fields", cc.DEFAULT_CATEGORICAL_FIELDS)
+        self.numeric_fields: List[str] = kwargs.get("numeric_fields", cc.DEFAULT_NUMERIC_FIELDS)
 
         # Hierarchical zoom
         self.enable_zoom_cascade: bool = kwargs.get("enable_zoom_cascade", True)
@@ -137,8 +134,11 @@ class EVoCClusteringTask(BaseTask):
             logger.warning("umap-learn not installed — skipping EVōC 2-D figures")
             return None
         reducer = umap.UMAP(
-            n_neighbors=30, min_dist=0.1, metric="cosine",
-            random_state=self.random_state, low_memory=True,
+            n_neighbors=30,
+            min_dist=0.1,
+            metric="cosine",
+            random_state=self.random_state,
+            low_memory=True,
         )
         return np.asarray(reducer.fit_transform(emb))
 
@@ -154,6 +154,7 @@ class EVoCClusteringTask(BaseTask):
             return metrics
         try:
             from sklearn.metrics import silhouette_score
+
             idx = np.where(mask)[0]
             if len(idx) > self.silhouette_max_samples:
                 rng = np.random.default_rng(self.random_state)
@@ -161,9 +162,7 @@ class EVoCClusteringTask(BaseTask):
             sub_emb = emb[idx]
             sub_lab = labels[idx]
             if len(np.unique(sub_lab)) >= 2:
-                metrics["silhouette"] = float(
-                    silhouette_score(sub_emb, sub_lab, metric="cosine")
-                )
+                metrics["silhouette"] = float(silhouette_score(sub_emb, sub_lab, metric="cosine"))
         except Exception as e:
             logger.warning("Silhouette computation failed: %s", e)
         return metrics
@@ -177,16 +176,15 @@ class EVoCClusteringTask(BaseTask):
         fig, ax = plt.subplots(figsize=(10, 8))
         noise = labels < 0
         if noise.any():
-            ax.scatter(umap_2d[noise, 0], umap_2d[noise, 1], c="lightgray",
-                       s=self.point_size, alpha=0.4, edgecolors="none", label="noise")
+            ax.scatter(umap_2d[noise, 0], umap_2d[noise, 1], c="lightgray", s=self.point_size, alpha=0.4, edgecolors="none", label="noise")
         uniq = [c for c in np.unique(labels) if c >= 0]
-        cmap = plt.cm.get_cmap("tab20", max(len(uniq), 1))
+        cmap = plt.get_cmap("tab20").resampled(max(len(uniq), 1))
         for i, c in enumerate(uniq):
             m = labels == c
-            ax.scatter(umap_2d[m, 0], umap_2d[m, 1], c=[cmap(i % cmap.N)],
-                       s=self.point_size, alpha=self.alpha, edgecolors="none")
-        ax.set_title(f"EVōC clusters (n={len(uniq)}, noise={100*noise.mean():.0f}%)")
-        ax.set_xlabel("UMAP-1"); ax.set_ylabel("UMAP-2")
+            ax.scatter(umap_2d[m, 0], umap_2d[m, 1], c=[cmap(i % cmap.N)], s=self.point_size, alpha=self.alpha, edgecolors="none")
+        ax.set_title(f"EVōC clusters (n={len(uniq)}, noise={100 * noise.mean():.0f}%)")
+        ax.set_xlabel("UMAP-1")
+        ax.set_ylabel("UMAP-2")
         path = save_dir / "evoc_clusters_umap.png"
         fig.savefig(path, dpi=self.dpi, bbox_inches="tight")
         plt.close(fig)
@@ -224,17 +222,16 @@ class EVoCClusteringTask(BaseTask):
             lay = np.asarray(lay)
             noise = lay < 0
             if noise.any():
-                ax.scatter(umap_2d[noise, 0], umap_2d[noise, 1], c="lightgray",
-                           s=self.point_size, alpha=0.3, edgecolors="none")
+                ax.scatter(umap_2d[noise, 0], umap_2d[noise, 1], c="lightgray", s=self.point_size, alpha=0.3, edgecolors="none")
             uniq = [c for c in np.unique(lay) if c >= 0]
-            cmap = plt.cm.get_cmap("tab20", max(len(uniq), 1))
+            cmap = plt.get_cmap("tab20").resampled(max(len(uniq), 1))
             for i, c in enumerate(uniq):
                 m = lay == c
-                ax.scatter(umap_2d[m, 0], umap_2d[m, 1], c=[cmap(i % cmap.N)],
-                           s=self.point_size, alpha=self.alpha, edgecolors="none")
+                ax.scatter(umap_2d[m, 0], umap_2d[m, 1], c=[cmap(i % cmap.N)], s=self.point_size, alpha=self.alpha, edgecolors="none")
             layer_idx = len(layers) - 1 - k
             ax.set_title(f"Layer {layer_idx} ({len(uniq)} clusters)")
-            ax.set_xticks([]); ax.set_yticks([])
+            ax.set_xticks([])
+            ax.set_yticks([])
         fig.suptitle("EVōC multi-resolution layers (coarse → fine)", fontsize=13)
         fig.tight_layout()
         path = save_dir / "evoc_layer_panel.png"
@@ -287,14 +284,17 @@ class EVoCClusteringTask(BaseTask):
             if int(valid.sum()) < 2 or len(np.unique(child_idx[valid])) < 2:
                 break
             sub_meta = self._slice_meta(meta, members, n)
-            sel = cc.select_discriminative_field(
-                child_idx[members], sub_meta, self.zoom_candidate_fields
-            )
+            sel = cc.select_discriminative_field(child_idx[members], sub_meta, self.zoom_candidate_fields)
             nxt = cc.largest_child(node, tree, layers, n)
-            steps.append({
-                "node": node, "members": members, "children": children,
-                "selected": sel, "next": nxt,
-            })
+            steps.append(
+                {
+                    "node": node,
+                    "members": members,
+                    "children": children,
+                    "selected": sel,
+                    "next": nxt,
+                }
+            )
             if nxt is None:
                 break
             node = nxt
@@ -316,48 +316,48 @@ class EVoCClusteringTask(BaseTask):
             colored = False
             if field is not None:
                 sub_meta = self._slice_meta(meta, members, n)
-                cd, clabel, is_cat, labels_, bg = self._viz._get_coloring_data(
-                    sub_meta, field, field
-                )
+                cd, clabel, is_cat, labels_, bg = self._viz._get_coloring_data(sub_meta, field, field)
                 if cd is not None and is_cat and labels_ is not None:
                     self._viz._plot_categorical(ax, coords, cd, labels_, "tab10", bg)
                     colored = True
                 elif cd is not None:
-                    ax.scatter(coords[:, 0], coords[:, 1], c=cd, cmap="viridis",
-                               s=self.point_size, alpha=self.alpha, edgecolors="none")
+                    ax.scatter(coords[:, 0], coords[:, 1], c=cd, cmap="viridis", s=self.point_size, alpha=self.alpha, edgecolors="none")
                     colored = True
             if not colored:
-                ax.scatter(coords[:, 0], coords[:, 1], c="steelblue",
-                           s=self.point_size, alpha=self.alpha, edgecolors="none")
+                ax.scatter(coords[:, 0], coords[:, 1], c="steelblue", s=self.point_size, alpha=self.alpha, edgecolors="none")
 
             # Crop to this node's bounding box with padding.
             if len(coords) > 0:
-                xmin, ymin = coords.min(0); xmax, ymax = coords.max(0)
+                xmin, ymin = coords.min(0)
+                xmax, ymax = coords.max(0)
                 px, py = 0.05 * (xmax - xmin + 1e-6), 0.05 * (ymax - ymin + 1e-6)
-                ax.set_xlim(xmin - px, xmax + px); ax.set_ylim(ymin - py, ymax + py)
+                ax.set_xlim(xmin - px, xmax + px)
+                ax.set_ylim(ymin - py, ymax + py)
 
             # Draw a box around the next node we descend into.
             if step["next"] is not None:
                 nxt_mask = cc.node_member_mask(step["next"], layers, n) & members
                 if nxt_mask.any():
                     nc = umap_2d[nxt_mask]
-                    nx0, ny0 = nc.min(0); nx1, ny1 = nc.max(0)
-                    ax.add_patch(Rectangle((nx0, ny0), nx1 - nx0, ny1 - ny0,
-                                           fill=False, edgecolor="red", lw=1.5, ls="--"))
+                    nx0, ny0 = nc.min(0)
+                    nx1, ny1 = nc.max(0)
+                    ax.add_patch(Rectangle((nx0, ny0), nx1 - nx0, ny1 - ny0, fill=False, edgecolor="red", lw=1.5, ls="--"))
 
             score = sel["score"] if sel else 0.0
             ftxt = field if field else "(no separating field)"
-            ax.set_title(f"Level {k}: split by {ftxt}\n(NMI={score:.2f}, n={int(members.sum())})",
-                         fontsize=9)
-            ax.set_xticks([]); ax.set_yticks([])
-            story.append({
-                "level": k,
-                "node": list(step["node"]) if isinstance(step["node"], (tuple, list)) else step["node"],
-                "n_members": int(members.sum()),
-                "selected_field": field,
-                "nmi": score,
-                "per_child_dominant": sel["per_child_dominant"] if sel else None,
-            })
+            ax.set_title(f"Level {k}: split by {ftxt}\n(NMI={score:.2f}, n={int(members.sum())})", fontsize=9)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            story.append(
+                {
+                    "level": k,
+                    "node": list(step["node"]) if isinstance(step["node"], (tuple, list)) else step["node"],
+                    "n_members": int(members.sum()),
+                    "selected_field": field,
+                    "nmi": score,
+                    "per_child_dominant": sel["per_child_dominant"] if sel else None,
+                }
+            )
 
         fig.suptitle("EVōC hierarchical zoom (data-driven level labels)", fontsize=13)
         fig.tight_layout()
@@ -422,13 +422,11 @@ class EVoCClusteringTask(BaseTask):
                 cd, _clabel, is_cat, labels_, bg = self._viz._get_coloring_data(sub, field, field)
                 if cd is None:
                     ax.scatter(coords[:, 0], coords[:, 1], c="lightgray", s=3, alpha=0.4, edgecolors="none")
-                    ax.text(0.5, 0.5, f"{field}\n(no data)", transform=ax.transAxes,
-                            ha="center", va="center", fontsize=7, color="gray")
+                    ax.text(0.5, 0.5, f"{field}\n(no data)", transform=ax.transAxes, ha="center", va="center", fontsize=7, color="gray")
                 elif is_cat and labels_ is not None:
                     self._viz._plot_categorical(ax, coords, cd, labels_, "tab10", bg)
                 else:
-                    sc = ax.scatter(coords[:, 0], coords[:, 1], c=cd, cmap="viridis",
-                                    s=4, alpha=0.6, edgecolors="none")
+                    sc = ax.scatter(coords[:, 0], coords[:, 1], c=cd, cmap="viridis", s=4, alpha=0.6, edgecolors="none")
                     fig.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
                 ax.set_xlim(xmin - px, xmax + px)
                 ax.set_ylim(ymin - py, ymax + py)
@@ -450,7 +448,8 @@ class EVoCClusteringTask(BaseTask):
     # Main entry point
     # ------------------------------------------------------------------
 
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:
+    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None) -> Dict[str, Any]:  # type: ignore[override]  # base class run() signature differs across tasks
+        """Run."""
         start = time.time()
         rng = np.random.default_rng(self.random_state)
 
@@ -462,21 +461,16 @@ class EVoCClusteringTask(BaseTask):
 
         # 2. Cluster in high-D.
         try:
-            result = cc.run_evoc(
-                emb_s, normalize=self.normalize, random_state=self.random_state, **self.evoc_params
-            )
+            result = cc.run_evoc(emb_s, normalize=self.normalize, random_state=self.random_state, **self.evoc_params)
         except ImportError:
             logger.warning("evoc not installed — skipping EVoCClusteringTask")
             return {"task_name": self.name, "skipped": True, "reason": "evoc not installed"}
 
         labels = result.labels
-        logger.info("EVōC: %d clusters, noise=%.1f%%, %d layers",
-                    result.n_clusters, 100 * result.noise_fraction, len(result.cluster_layers))
+        logger.info("EVōC: %d clusters, noise=%.1f%%, %d layers", result.n_clusters, 100 * result.noise_fraction, len(result.cluster_layers))
 
         # 3. Enrichment + quality.
-        enrichment = cc.compute_cluster_enrichment(
-            labels, meta_s, self.categorical_fields, self.numeric_fields
-        )
+        enrichment = cc.compute_cluster_enrichment(labels, meta_s, self.categorical_fields, self.numeric_fields)
         quality = self._cluster_quality(emb_s, labels)
 
         # 4. Figures.
@@ -515,9 +509,10 @@ class EVoCClusteringTask(BaseTask):
         try:
             with open(save_dir / "evoc_enrichment.json", "w") as f:
                 json.dump(
-                    {"enrichment": enrichment,
-                     "zoom_story": zoom_result["story"] if zoom_result else None},
-                    f, indent=2, default=str,
+                    {"enrichment": enrichment, "zoom_story": zoom_result["story"] if zoom_result else None},
+                    f,
+                    indent=2,
+                    default=str,
                 )
         except Exception as e:
             logger.warning("Failed to dump enrichment JSON: %s", e)
@@ -553,6 +548,7 @@ class EVoCClusteringTask(BaseTask):
     # ------------------------------------------------------------------
 
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
+        """Return loggable metrics."""
         if task_results.get("skipped"):
             return {}
         metrics: Dict[str, float] = {

@@ -28,7 +28,7 @@ Example Usage:
         annotate_dataframe,
         detect_custom_ions
     )
-    
+
     # Generate theoretical spectrum
     mz, annotations = generate_theoretical_spectrum(
         peptide="PEPTIDE",
@@ -37,7 +37,7 @@ Example Usage:
         add_isotopes=True,
         isotope_model="fine"
     )
-    
+
     # Annotate experimental data
     annotated_df = annotate_dataframe(
         df,
@@ -49,6 +49,7 @@ Example Usage:
     )
     ```
 """
+
 from __future__ import annotations
 
 import warnings
@@ -69,14 +70,13 @@ import polars as pl
 try:
     from pyopenms import AASequence, MSSpectrum, Param, TheoreticalSpectrumGenerator
 except ImportError as e:
-    raise ImportError(
-        "PyOpenMS is required. Install with: pip install pyopenms>=3.4.0"
-    ) from e
+    raise ImportError("PyOpenMS is required. Install with: pip install pyopenms>=3.4.0") from e
 
 # Lazy import for rustyms (optional dependency)
 RUSTYMS_AVAILABLE = False
 try:
     import rustyms
+
     RUSTYMS_AVAILABLE = True
 except ImportError:
     rustyms = None
@@ -129,41 +129,41 @@ DEFAULT_CUSTOM_IONS: Dict[str, List[float]] = {
     # --- Immonium-related diagnostic ions (Falick et al. 1993) ---
     # Secondary fragments from amino acid side chains, commonly observed
     # in the low-mass region of HCD spectra alongside primary immonium ions.
-    "related_V_41": [41.039],          # C3H5+ allyl cation
-    "related_V_55": [55.055],          # C4H7+
-    "related_V_69": [69.070],          # C5H9+
-    "related_IL_44": [44.050],         # CO-NH2=CH2+ (Leu/Ile shared)
-    "related_IL_72": [72.081],         # immonium - CO (Leu/Ile shared)
-    "related_N_70": [70.029],          # Asn immonium - NH3
-    "related_D_70": [70.029],          # Asp immonium - H2O
-    "related_Q_56": [56.050],          # Gln-related
-    "related_Q_84": [84.045],          # Gln immonium - NH3
-    "related_Q_129": [129.066],        # Gln immonium + CO
-    "related_K_70": [70.066],          # Lys-related
-    "related_K_84": [84.081],          # Lys immonium - NH3
-    "related_K_112": [112.076],        # Lys-related
-    "related_K_129": [129.102],        # Lys immonium + CO
-    "related_M_61": [61.011],          # Met immonium - CH2S
-    "related_H_82": [82.053],          # His immonium - CO
-    "related_H_121": [121.076],        # His-related
-    "related_H_123": [123.055],        # His-related
-    "related_H_138": [138.066],        # His immonium + CO
-    "related_H_166": [166.061],        # His-related
-    "related_F_91": [91.054],          # Tropylium C7H7+ (Phe)
-    "related_Y_91": [91.054],          # Tropylium C7H7+ (Tyr, same mass as Phe)
-    "related_Y_107": [107.049],        # Hydroxytropylium C7H7O+
-    "related_R_59": [59.048],          # Arg-related
-    "related_R_70": [70.066],          # Arg-related
-    "related_R_73": [73.064],          # Arg-related
-    "related_R_87": [87.056],          # Arg-related
-    "related_R_100": [100.087],        # Arg-related
-    "related_R_112": [112.087],        # Arg-related
-    "related_W_77": [77.039],          # Phenyl cation C6H5+
-    "related_W_117": [117.058],        # Indolium C8H7N+
-    "related_W_130": [130.066],        # 3-methylindolium C9H8N+
-    "related_W_132": [132.081],        # Trp-related
-    "related_W_170": [170.060],        # Trp-related
-    "related_W_171": [171.092],        # Trp-related
+    "related_V_41": [41.039],  # C3H5+ allyl cation
+    "related_V_55": [55.055],  # C4H7+
+    "related_V_69": [69.070],  # C5H9+
+    "related_IL_44": [44.050],  # CO-NH2=CH2+ (Leu/Ile shared)
+    "related_IL_72": [72.081],  # immonium - CO (Leu/Ile shared)
+    "related_N_70": [70.029],  # Asn immonium - NH3
+    "related_D_70": [70.029],  # Asp immonium - H2O
+    "related_Q_56": [56.050],  # Gln-related
+    "related_Q_84": [84.045],  # Gln immonium - NH3
+    "related_Q_129": [129.066],  # Gln immonium + CO
+    "related_K_70": [70.066],  # Lys-related
+    "related_K_84": [84.081],  # Lys immonium - NH3
+    "related_K_112": [112.076],  # Lys-related
+    "related_K_129": [129.102],  # Lys immonium + CO
+    "related_M_61": [61.011],  # Met immonium - CH2S
+    "related_H_82": [82.053],  # His immonium - CO
+    "related_H_121": [121.076],  # His-related
+    "related_H_123": [123.055],  # His-related
+    "related_H_138": [138.066],  # His immonium + CO
+    "related_H_166": [166.061],  # His-related
+    "related_F_91": [91.054],  # Tropylium C7H7+ (Phe)
+    "related_Y_91": [91.054],  # Tropylium C7H7+ (Tyr, same mass as Phe)
+    "related_Y_107": [107.049],  # Hydroxytropylium C7H7O+
+    "related_R_59": [59.048],  # Arg-related
+    "related_R_70": [70.066],  # Arg-related
+    "related_R_73": [73.064],  # Arg-related
+    "related_R_87": [87.056],  # Arg-related
+    "related_R_100": [100.087],  # Arg-related
+    "related_R_112": [112.087],  # Arg-related
+    "related_W_77": [77.039],  # Phenyl cation C6H5+
+    "related_W_117": [117.058],  # Indolium C8H7N+
+    "related_W_130": [130.066],  # 3-methylindolium C9H8N+
+    "related_W_132": [132.081],  # Trp-related
+    "related_W_170": [170.060],  # Trp-related
+    "related_W_171": [171.092],  # Trp-related
     # --- TMT 11-plex reporter ions ---
     "TMT_126": [126.1277],
     "TMT_127N": [127.1248],
@@ -223,14 +223,14 @@ def compute_theoretical_precursor_mz(peptide: str, charge: int) -> float:
     charge : int
         Precursor charge state.
 
-    Returns
+    Returns:
     -------
     float
         Theoretical precursor m/z value.
     """
     aa_seq = AASequence.fromString(peptide)
     neutral_mass = aa_seq.getMonoWeight()
-    return (neutral_mass + charge * PROTON_MASS) / charge
+    return float((neutral_mass + charge * PROTON_MASS) / charge)
 
 
 def _ppm_window(mz: float, ppm: float) -> Tuple[float, float]:
@@ -243,7 +243,7 @@ def _ppm_window(mz: float, ppm: float) -> Tuple[float, float]:
     ppm : float
         Tolerance in parts per million
 
-    Returns
+    Returns:
     -------
     Tuple[float, float]
         (lower_bound, upper_bound)
@@ -262,7 +262,7 @@ def _da_window(mz: float, da: float) -> Tuple[float, float]:
     da : float
         Tolerance in Daltons
 
-    Returns
+    Returns:
     -------
     Tuple[float, float]
         (lower_bound, upper_bound)
@@ -284,6 +284,7 @@ def _da_tol_for_fragmentation(
         frag_type: Fragmentation type string from data (e.g. "CID", "HCD").
         cid_da_tol: Da tolerance to use for CID.  Callers can pass None to
                     disable auto-selection entirely.
+
     Returns:
         cid_da_tol if frag_type is CID, else None.
     """
@@ -296,18 +297,18 @@ def _da_tol_for_fragmentation(
 
 def _validate_peptide_sequence(peptide: str) -> str:
     """Validate and clean peptide sequence.
-    
+
     Parameters
     ----------
     peptide : str
         Peptide sequence
-        
-    Returns
+
+    Returns:
     -------
     str
         Cleaned peptide sequence
-        
-    Raises
+
+    Raises:
     ------
     ValueError
         If sequence is invalid
@@ -315,29 +316,27 @@ def _validate_peptide_sequence(peptide: str) -> str:
     peptide = peptide.strip()
     if not peptide:
         raise ValueError("Peptide sequence must be non-empty.")
-    
+
     # Try parsing with PyOpenMS to validate
     try:
         AASequence.fromString(peptide)
     except Exception as e:
         raise ValueError(f"Invalid peptide sequence '{peptide}': {e}") from e
-    
+
     return peptide
 
 
-def _ensure_sorted(
-    mz: np.ndarray, intensity: Optional[np.ndarray] = None
-) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def _ensure_sorted(mz: np.ndarray, intensity: Optional[np.ndarray] = None) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """Ensure m/z array is sorted, optionally with intensities.
-    
+
     Parameters
     ----------
     mz : np.ndarray
         m/z values
     intensity : Optional[np.ndarray], optional
         Intensity values, by default None
-        
-    Returns
+
+    Returns:
     -------
     Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]
         Sorted m/z array, or (mz, intensity) tuple if intensity provided
@@ -348,7 +347,7 @@ def _ensure_sorted(
         if intensity is not None:
             intensity = intensity[order]
             return mz, intensity
-    
+
     if intensity is not None:
         return mz, intensity
     return mz
@@ -361,35 +360,34 @@ def _ensure_sorted(
 
 def _check_rustyms_available(engine: str) -> None:
     """Check if rustyms is available when annotator engine is selected.
-    
+
     Args:
         engine: Engine name ("pyopenms" or "annotator")
-        
+
     Raises:
         ImportError: If rustyms engine is selected but rustyms is not installed
     """
     if engine in ("annotator", "rustyms") and not RUSTYMS_AVAILABLE:
         raise ImportError(
-            "rustyms engine selected but rustyms is not installed. "
-            "Please install rustyms (pip install rustyms>=0.10.0) or switch engine to pyopenms."
+            "rustyms engine selected but rustyms is not installed. Please install rustyms (pip install rustyms>=0.10.0) or switch engine to pyopenms."
         )
 
 
 def _map_fragmentation_type_to_rustyms(frag_type: Optional[str], acquisition: Optional[str] = None) -> str:
     """Map fragmentation type and acquisition mode to rustyms fragmentation model.
-    
+
     Args:
         frag_type: Fragmentation type (e.g., "HCD", "CID", "ETD")
         acquisition: Acquisition mode (e.g., "DIA", "DDA")
-        
+
     Returns:
         rustyms fragmentation model name
     """
     if not frag_type:
         return "hcd"  # Default to HCD
-    
+
     frag_type_upper = str(frag_type).strip().upper()
-    
+
     # Map common fragmentation types
     if frag_type_upper in ("HCD", "HCID"):
         return "hcd"
@@ -406,10 +404,10 @@ def _map_fragmentation_type_to_rustyms(frag_type: Optional[str], acquisition: Op
 
 def _ion_types_to_rustyms(ion_types: Sequence[str]) -> List[str]:
     """Convert ion type sequence to rustyms-compatible format.
-    
+
     Args:
         ion_types: Sequence of ion types (e.g., ["b", "y"])
-        
+
     Returns:
         List of rustyms-compatible ion type strings
     """
@@ -421,12 +419,12 @@ def _ion_types_to_rustyms(ion_types: Sequence[str]) -> List[str]:
     return rustyms_ion_types if rustyms_ion_types else ["b", "y"]  # Default
 
 
-def _extract_rustyms_fragment_info(fragment) -> Dict[str, Any]:
+def _extract_rustyms_fragment_info(fragment: Any) -> Dict[str, Any]:
     """Extract detailed information from a rustyms Fragment object.
-    
+
     Args:
         fragment: rustyms Fragment object
-        
+
     Returns:
         Dictionary with fragment information:
         - mz: Calculated m/z value
@@ -437,13 +435,13 @@ def _extract_rustyms_fragment_info(fragment) -> Dict[str, Any]:
         - annotation: Formatted annotation string
         - formula: Molecular formula string (if available)
     """
-    PROTON_MASS_RUSTYMS = 1.007276466812
-    
+    PROTON_MASS_RUSTYMS = 1.007276466812  # noqa: N806
+
     # Calculate m/z
     mass = fragment.formula.monoisotopic_mass() if fragment.formula else 0.0
     charge = fragment.charge
     mz = (mass + charge * PROTON_MASS_RUSTYMS) / charge if charge > 0 else 0.0
-    
+
     # Extract ion type from repr
     frag_repr = repr(fragment)
     ion_str = ""
@@ -452,10 +450,10 @@ def _extract_rustyms_fragment_info(fragment) -> Dict[str, Any]:
         end = frag_repr.find("'", start)
         if end > start:
             ion_str = frag_repr[start:end]
-    
+
     # Extract neutral loss
     neutral_loss_str = ""
-    if hasattr(fragment, 'neutral_loss'):
+    if hasattr(fragment, "neutral_loss"):
         try:
             nl_repr = repr(fragment.neutral_loss)
             if '["-' in nl_repr:
@@ -463,31 +461,31 @@ def _extract_rustyms_fragment_info(fragment) -> Dict[str, Any]:
                 loss_end = nl_repr.find('"]', loss_start)
                 if loss_end > loss_start:
                     neutral_loss_str = nl_repr[loss_start:loss_end]
-        except:
+        except Exception:
             pass
-    
+
     # Fallback to repr parsing
     if not neutral_loss_str and "neutral_loss=" in frag_repr and '["-' in frag_repr:
         loss_start = frag_repr.find('["-') + 3
         loss_end = frag_repr.find('"]', loss_start)
         if loss_end > loss_start:
             neutral_loss_str = frag_repr[loss_start:loss_end]
-    
+
     # Format annotation
     charge_str = "+" * charge
     if neutral_loss_str:
         annotation = f"{ion_str}-{neutral_loss_str}{charge_str}"
     else:
         annotation = f"{ion_str}{charge_str}" if ion_str else f"frag{charge_str}"
-    
+
     # Get formula string
     formula_str = ""
     if fragment.formula:
         try:
             formula_str = str(fragment.formula)
-        except:
+        except Exception:
             pass
-    
+
     return {
         "mz": float(mz),
         "mass": float(mass),
@@ -575,29 +573,29 @@ def generate_theoretical_spectrum(
         Engine to use: "pyopenms" or "annotator"/"rustyms"
     fragmentation_type : Optional[str], default=None
         Fragmentation type (e.g., "HCD", "CID", "ETD") - used by rustyms engine
-        
-    Returns
+
+    Returns:
     -------
     Tuple[np.ndarray, List[str]]
         (mz_array, annotations)
         - mz_array: 1D array of theoretical m/z values
         - annotations: List of ion annotations (e.g., "b3+", "y5++")
-        
-    Raises
+
+    Raises:
     ------
     ValueError
         If peptide sequence is invalid or ion_types contain unknown values
     ImportError
         If rustyms engine is selected but rustyms is not installed
-        
-    Examples
+
+    Examples:
     --------
     >>> mz, ann = generate_theoretical_spectrum("PEPTIDE", precursor_charge=2)
     >>> mz[:3]
     array([97.0284, 226.0710, 325.1394])
     >>> ann[:3]
     ['b1+', 'b2+', 'b3+']
-    
+
     >>> # With modifications
     >>> mz, ann = generate_theoretical_spectrum(
     ...     "PEPTIDEM(Oxidation)K",
@@ -625,22 +623,22 @@ def generate_theoretical_spectrum(
         pass  # Continue with existing code
     else:
         raise ValueError(f"Unknown engine: {engine}. Must be 'pyopenms' or 'annotator'")
-    
+
     peptide = _validate_peptide_sequence(peptide)
-    
+
     if max_charge is None:
         max_charge = precursor_charge
-    
+
     # Parse peptide with PyOpenMS
     aa_seq = AASequence.fromString(peptide)
-    
+
     # Configure theoretical spectrum generator
     tsg = TheoreticalSpectrumGenerator()
     params = Param()
     params.setValue("add_metainfo", "true")
-    
+
     # Disable all ion types, then enable requested ones
-    ion_type_keys = {
+    ion_type_keys: dict[str, Any] = {
         "a": "add_a_ions",
         "b": "add_b_ions",
         "c": "add_c_ions",
@@ -648,31 +646,27 @@ def generate_theoretical_spectrum(
         "y": "add_y_ions",
         "z": "add_z_ions",
     }
-    
+
     for key in ion_type_keys.values():
         params.setValue(key, "false")
     params.setValue("add_losses", "false")
-    
+
     # Enable requested ion types
     for ion in ion_types:
         ion_lower = ion.lower()
         if ion_lower not in ion_type_keys:
-            raise ValueError(
-                f"Unknown ion type '{ion}'. Valid options: {list(ion_type_keys.keys())}"
-            )
+            raise ValueError(f"Unknown ion type '{ion}'. Valid options: {list(ion_type_keys.keys())}")
         params.setValue(ion_type_keys[ion_lower], "true")
-    
+
     # Neutral losses
     if add_losses:
         params.setValue("add_losses", "true")
-    
+
     # Isotope configuration (OpenMS 3.x)
     if add_isotopes:
         if isotope_model not in ("coarse", "fine"):
-            raise ValueError(
-                f"isotope_model must be 'coarse' or 'fine', got '{isotope_model}'"
-            )
-        
+            raise ValueError(f"isotope_model must be 'coarse' or 'fine', got '{isotope_model}'")
+
         params.setValue("isotope_model", isotope_model)
         if isotope_model == "coarse":
             if max_isotope < 1:
@@ -680,45 +674,43 @@ def generate_theoretical_spectrum(
             params.setValue("max_isotope", int(max_isotope))
         elif isotope_model == "fine":
             if not (0 < max_isotope_probability <= 1):
-                raise ValueError(
-                    f"max_isotope_probability must be in (0, 1] for fine model, got {max_isotope_probability}"
-                )
+                raise ValueError(f"max_isotope_probability must be in (0, 1] for fine model, got {max_isotope_probability}")
             params.setValue("max_isotope_probability", float(max_isotope_probability))
     else:
         params.setValue("isotope_model", "none")
-    
+
     tsg.setParameters(params)
-    
+
     # Generate spectrum
     spec = MSSpectrum()
     tsg.getSpectrum(spec, aa_seq, 1, max_charge)
-    
+
     # Extract m/z and annotations
     mz = np.asarray(spec.get_peaks()[0], dtype=np.float64)
-    
+
     # Look for "IonName" or "IonNames" string data array (PyOpenMS uses "IonNames")
     annotations = []
     ion_name_array = None
-    
+
     for string_array in spec.getStringDataArrays():
         if string_array.getName() in ("IonName", "IonNames"):
             ion_name_array = string_array
             break
-    
+
     # Get charge array if available (needed for isotope detection)
     charge_array = None
     for int_array in spec.getIntegerDataArrays():
         if int_array.getName() == "Charges":
             charge_array = int_array
             break
-    
+
     if ion_name_array is not None:
         # PyOpenMS returns bytes, need to decode properly
         raw_annotations = ion_name_array
-        for i, s in enumerate(raw_annotations):
+        for _i, s in enumerate(raw_annotations):
             if isinstance(s, bytes):
                 # Decode bytes to string
-                annotation = s.decode('utf-8')
+                annotation = s.decode("utf-8")
             elif isinstance(s, str):
                 # If already string but looks like "b'y1+'" (repr of bytes), clean it
                 if s.startswith("b'") and s.endswith("'"):
@@ -727,7 +719,7 @@ def generate_theoretical_spectrum(
                     annotation = s
             else:
                 annotation = str(s)
-            
+
             annotations.append(annotation)
     else:
         # Fallback: use first string array if available, otherwise generate names
@@ -735,7 +727,7 @@ def generate_theoretical_spectrum(
             raw_annotations = spec.getStringDataArrays()[0]
             for s in raw_annotations:
                 if isinstance(s, bytes):
-                    annotations.append(s.decode('utf-8'))
+                    annotations.append(s.decode("utf-8"))
                 elif isinstance(s, str):
                     if s.startswith("b'") and s.endswith("'"):
                         annotations.append(s[2:-1])
@@ -745,42 +737,42 @@ def generate_theoretical_spectrum(
                     annotations.append(str(s))
         else:
             annotations = [f"frag_{i}" for i in range(len(mz))]
-    
+
     # Detect and annotate isotopes if isotopes were enabled
     # PyOpenMS doesn't distinguish isotopes in IonName, so we detect by m/z spacing
     if add_isotopes and len(mz) > 1:
         # Isotope spacing: ~1.003355 Da per charge (13C-12C mass difference)
-        ISOTOPE_MASS_DIFF = 1.003355
-        TOLERANCE = 0.01  # Tolerance for isotope detection
-        
+        ISOTOPE_MASS_DIFF = 1.003355  # noqa: N806
+        TOLERANCE = 0.01  # Tolerance for isotope detection  # noqa: N806
+
         # Create enhanced annotations with isotope notation
         enhanced_annotations = []
         # Track isotope numbers for each base annotation
-        isotope_counts = {}  # Maps base_annotation -> current isotope number
-        
+        isotope_counts: dict[str, Any] = {}  # Maps base_annotation -> current isotope number
+
         for i in range(len(mz)):
             base_annotation = annotations[i]
-            
+
             # Determine charge for this peak
             charge = 1
             if charge_array is not None and i < charge_array.size():
                 charge = charge_array[i]
-            
+
             # Check if this is an isotope peak (m/z difference ~1.003/charge from previous peak)
             isotope_num = 0
             if i > 0:
-                mz_diff = mz[i] - mz[i-1]
+                mz_diff = mz[i] - mz[i - 1]
                 expected_isotope_spacing = ISOTOPE_MASS_DIFF / charge
-                
+
                 # Check if m/z difference matches isotope spacing
                 # and if base annotation matches previous peak (same ion type)
                 if abs(mz_diff - expected_isotope_spacing) < TOLERANCE:
                     # Check if previous peak has the same base annotation
-                    prev_base = annotations[i-1]
+                    prev_base = annotations[i - 1]
                     # Remove any existing isotope notation from previous
-                    if '[' in prev_base:
-                        prev_base = prev_base.split('[')[0]
-                    
+                    if "[" in prev_base:
+                        prev_base = prev_base.split("[")[0]
+
                     if base_annotation == prev_base:
                         # This is an isotope of the previous peak
                         # Increment isotope number for this base annotation
@@ -798,7 +790,7 @@ def generate_theoretical_spectrum(
                     # Not an isotope - reset counter for this base annotation
                     if base_annotation in isotope_counts:
                         del isotope_counts[base_annotation]
-            
+
             # Add isotope notation if detected
             if isotope_num > 0 and isotope_num <= max_isotope:
                 enhanced_annotations.append(f"{base_annotation}[+{isotope_num}]")
@@ -807,9 +799,9 @@ def generate_theoretical_spectrum(
                 # Reset counter if this is not an isotope
                 if base_annotation in isotope_counts:
                     del isotope_counts[base_annotation]
-        
+
         annotations = enhanced_annotations
-    
+
     # Add precursor ion(s) if requested — PSI mzPAF format
     if add_precursor:
         prec_mz_list, prec_ann_list = _generate_precursor_ions(
@@ -822,29 +814,29 @@ def generate_theoretical_spectrum(
         )
         mz = np.concatenate([mz, np.asarray(prec_mz_list, dtype=np.float64)])
         annotations = annotations + prec_ann_list
-    
+
     # Add custom ions if requested
     if add_custom_ions:
         if custom_ions is None:
             custom_ions = DEFAULT_CUSTOM_IONS
-        
+
         custom_mz = []
         custom_ann = []
         for ion_name, mz_values in custom_ions.items():
             for mz_val in mz_values:
                 custom_mz.append(float(mz_val))
                 custom_ann.append(f"custom:{ion_name}@{float(mz_val):.4f}")
-        
+
         if custom_mz:
             mz = np.concatenate([mz, np.asarray(custom_mz, dtype=np.float64)])
             annotations = annotations + custom_ann
-    
+
     # Sort by m/z if requested
     if sort_by_mz:
         order = np.argsort(mz)
         mz = mz[order]
         annotations = [annotations[i] for i in order]
-    
+
     return mz, annotations
 
 
@@ -859,10 +851,10 @@ def generate_theoretical_spectrum_rustyms(
     sort_by_mz: bool = True,
 ) -> Tuple[np.ndarray, List[str]]:
     """Generate theoretical fragment ion spectrum using rustyms/annotator.
-    
+
     This is the rustyms-based implementation of theoretical spectrum generation.
     Uses rustyms to generate theoretical fragments.
-    
+
     Parameters
     ----------
     peptide : str
@@ -881,73 +873,72 @@ def generate_theoretical_spectrum_rustyms(
         Include isotopic peaks - handled by rustyms automatically
     sort_by_mz : bool, default=True
         Sort output by m/z value
-        
-    Returns
+
+    Returns:
     -------
     Tuple[np.ndarray, List[str]]
         (mz_array, annotations)
     """
     _check_rustyms_available("annotator")
-    
+
     if max_charge is None:
         max_charge = precursor_charge
-    
+
     try:
         # Parse peptide with rustyms (supports ProForma format)
         peptidoform = rustyms.Peptidoform(peptide)
-        
+
         # Map fragmentation type to rustyms model
         frag_model_name = _map_fragmentation_type_to_rustyms(fragmentation_type)
-        frag_model_map = {
+        frag_model_map: dict[str, Any] = {
             "hcd": rustyms.FragmentationModel.CidHcd,
             "cid": rustyms.FragmentationModel.CidHcd,
             "etd": rustyms.FragmentationModel.Etd,
             "uvpd": rustyms.FragmentationModel.Uvpd,
         }
         frag_model = frag_model_map.get(frag_model_name, rustyms.FragmentationModel.CidHcd)
-        
+
         # Generate theoretical fragments
         fragments = peptidoform.generate_theoretical_fragments(max_charge=max_charge, model=frag_model)
-        
+
         if fragments is None or len(fragments) == 0:
             return np.array([], dtype=np.float64), []
-        
+
         # Extract m/z and annotations from fragments
         mz_values = []
         annotations = []
-        
+
         # Map ion types to filter (rustyms generates all types, we filter)
         requested_ion_types = set(ion_types)
-        
+
         # PROTON_MASS constant for m/z calculation
-        PROTON_MASS_RUSTYMS = 1.007276466812
-        
+
         for fragment in fragments:
             # Extract fragment information using helper function
             frag_info = _extract_rustyms_fragment_info(fragment)
-            
+
             # Skip if invalid
             if frag_info["mz"] == 0.0 or frag_info["charge"] == 0:
                 continue
-            
+
             # Filter by requested ion types if specified
             ion_type_char = frag_info["ion_type"][0].lower() if frag_info["ion_type"] else ""
             if requested_ion_types and ion_type_char not in requested_ion_types:
                 continue
-            
+
             mz_values.append(frag_info["mz"])
             annotations.append(frag_info["annotation"])
-        
+
         mz_array = np.array(mz_values, dtype=np.float64)
-        
+
         # Sort by m/z if requested
         if sort_by_mz and len(mz_array) > 0:
             order = np.argsort(mz_array)
             mz_array = mz_array[order]
             annotations = [annotations[i] for i in order]
-        
+
         return mz_array, annotations
-        
+
     except Exception as e:
         raise ValueError(f"rustyms failed to generate theoretical spectrum for '{peptide}': {e}") from e
 
@@ -999,8 +990,8 @@ def match_theoretical_to_experimental(
     theo_annotations : Optional[List[str]], default=None
         Fragment ion annotations (e.g., ["b1+", "y2+", "b3-H2O"])
         Must have same length as theo_mz
-        
-    Returns
+
+    Returns:
     -------
     Dict[str, Any]
         Dictionary containing:
@@ -1014,14 +1005,14 @@ def match_theoretical_to_experimental(
             - "frac_intensity": fraction of total intensity explained
             - "median_abs_ppm": median absolute ppm error
             - "mean_ppm_bias": mean signed ppm error (indicates systematic mass bias)
-            
-    Notes
+
+    Notes:
     -----
     - Arrays are automatically sorted if needed
     - Greedy matching: each experimental peak matched to at most one theoretical ion
     - For overlapping windows, most intense (or closest) peak is selected
-    
-    Examples
+
+    Examples:
     --------
     >>> exp_mz = np.array([100.1, 200.2, 300.3])
     >>> exp_int = np.array([1000, 2000, 500])
@@ -1036,10 +1027,8 @@ def match_theoretical_to_experimental(
     """
     # Validate input arrays
     if exp_mz.shape != exp_intensity.shape:
-        raise ValueError(
-            f"exp_mz shape {exp_mz.shape} must match exp_intensity shape {exp_intensity.shape}"
-        )
-    
+        raise ValueError(f"exp_mz shape {exp_mz.shape} must match exp_intensity shape {exp_intensity.shape}")
+
     # Check for non-finite values
     if not np.all(np.isfinite(exp_mz)):
         raise ValueError("exp_mz contains non-finite values (NaN or inf)")
@@ -1047,17 +1036,14 @@ def match_theoretical_to_experimental(
         raise ValueError("exp_intensity contains non-finite values (NaN or inf)")
     if not np.all(np.isfinite(theo_mz)):
         raise ValueError("theo_mz contains non-finite values (NaN or inf)")
-    
+
     # Validate annotations if provided
     if theo_annotations is not None and len(theo_annotations) != len(theo_mz):
-        raise ValueError(
-            f"theo_annotations length ({len(theo_annotations)}) must match "
-            f"theo_mz length ({len(theo_mz)})"
-        )
-    
+        raise ValueError(f"theo_annotations length ({len(theo_annotations)}) must match theo_mz length ({len(theo_mz)})")
+
     # Handle empty arrays
     if exp_mz.size == 0 or theo_mz.size == 0:
-        N = exp_mz.size
+        N = exp_mz.size  # noqa: N806
         return {
             "mask": np.zeros(N, dtype=bool),
             "match_idx": np.full(N, -1, dtype=np.int32),
@@ -1071,7 +1057,7 @@ def match_theoretical_to_experimental(
                 "mean_ppm_bias": np.nan,
             },
         }
-    
+
     # Ensure arrays are sorted
     exp_mz, exp_intensity = _ensure_sorted(exp_mz, exp_intensity)
     theo_mz_result = _ensure_sorted(theo_mz)
@@ -1079,7 +1065,7 @@ def match_theoretical_to_experimental(
         theo_mz = theo_mz_result[0]
     else:
         theo_mz = theo_mz_result
-    
+
     # Calculate tolerance windows for each theoretical ion.
     # Da mode uses a fixed-width window; ppm mode scales with m/z.
     if da_tol is not None:
@@ -1096,24 +1082,25 @@ def match_theoretical_to_experimental(
                 "For low-resolution CID data consider using da_tol instead "
                 "(e.g. da_tol=0.5).",
                 UserWarning,
+                stacklevel=2,
             )
     lo_bounds = np.searchsorted(exp_mz, theo_mz - tol_da, side="left")
     hi_bounds = np.searchsorted(exp_mz, theo_mz + tol_da, side="right")
-    
+
     # Initialize output arrays
-    N = exp_mz.size
+    N = exp_mz.size  # noqa: N806
     mask = np.zeros(N, dtype=bool)
     match_idx = np.full(N, -1, dtype=np.int32)
     ppm_error = np.full(N, np.nan, dtype=np.float64)
     matched_annotation = [None] * N
     matched_theo_mz = np.full(N, np.nan, dtype=np.float64)
-    
+
     # Build all candidate matches within tolerance
     candidates = []
-    for j, (lo, hi, mz_theo) in enumerate(zip(lo_bounds, hi_bounds, theo_mz)):
+    for j, (lo, hi, mz_theo) in enumerate(zip(lo_bounds, hi_bounds, theo_mz, strict=False)):
         if lo >= hi:
             continue  # No peaks in window
-        
+
         for i in range(lo, hi):
             ppm_err = (exp_mz[i] - mz_theo) / mz_theo * 1e6
             # Verify candidate is within tolerance (defense against fp precision)
@@ -1123,19 +1110,19 @@ def match_theoretical_to_experimental(
             else:
                 if abs(ppm_err) > ppm_tol * 1.01:
                     continue
-            
+
             if use_closest:
                 # Use absolute ppm error as priority
                 priority = abs(ppm_err)
             else:
                 # Use negative intensity as priority (higher intensity = lower priority value)
                 priority = -exp_intensity[i]
-            
+
             candidates.append((i, j, priority, ppm_err))
-    
+
     # Sort candidates by priority (closest ppm error or highest intensity)
     candidates.sort(key=lambda x: x[2])
-    
+
     # Greedily assign matches (one-to-one)
     used_exp = set()
     used_theo = set()
@@ -1146,21 +1133,19 @@ def match_theoretical_to_experimental(
             ppm_error[i] = ppm_err
             matched_theo_mz[i] = theo_mz[j]
             if theo_annotations is not None:
-                matched_annotation[i] = theo_annotations[j]
+                matched_annotation[i] = theo_annotations[j]  # type: ignore[call-overload]
             used_exp.add(i)
             used_theo.add(j)
-    
+
     # Compute summary metrics
     matched_intensity = exp_intensity[mask].sum()
     total_intensity = exp_intensity.sum()
-    frac_intensity = (
-        float(matched_intensity / total_intensity) if total_intensity > 0 else 0.0
-    )
-    
+    frac_intensity = float(matched_intensity / total_intensity) if total_intensity > 0 else 0.0
+
     valid_errors = ppm_error[~np.isnan(ppm_error)]
     median_abs_ppm = float(np.median(np.abs(valid_errors))) if valid_errors.size > 0 else np.nan
     mean_ppm_bias = float(np.mean(valid_errors)) if valid_errors.size > 0 else np.nan
-    
+
     return {
         "mask": mask,
         "match_idx": match_idx,
@@ -1189,11 +1174,11 @@ def match_theoretical_to_experimental_rustyms(
     use_direct_annotation: bool = False,
 ) -> Dict[str, Any]:
     """Match experimental spectrum to theoretical using rustyms/annotator.
-    
+
     This function uses rustyms to generate theoretical fragments and then matches
     them using the standard matching algorithm. Optionally attempts to use rustyms'
     built-in annotation if MatchingParameters can be constructed.
-    
+
     Parameters
     ----------
     exp_mz : np.ndarray
@@ -1218,19 +1203,19 @@ def match_theoretical_to_experimental_rustyms(
         If True, attempt to use rustyms' RawSpectrum.annotate() directly.
         Currently not fully supported as MatchingParameters is not accessible
         from Python bindings.
-        
-    Returns
+
+    Returns:
     -------
     Dict[str, Any]
         Same structure as match_theoretical_to_experimental() output
     """
     _check_rustyms_available("annotator")
-    
+
     # Attempt direct annotation if requested (currently not fully supported)
     if use_direct_annotation:
         try:
             # Create RawSpectrum
-            raw_spectrum = rustyms.RawSpectrum(
+            rustyms.RawSpectrum(
                 title="annotation",
                 num_scans=1,
                 mz_array=exp_mz.tolist(),
@@ -1238,10 +1223,10 @@ def match_theoretical_to_experimental_rustyms(
                 precursor_charge=precursor_charge,
                 precursor_mass=(precursor_mz - PROTON_MASS) * precursor_charge,
             )
-            
+
             # Create peptidoform
-            peptidoform = rustyms.CompoundPeptidoformIon(sequence)
-            
+            rustyms.CompoundPeptidoformIon(sequence)
+
             # Map fragmentation model
             frag_model_name = _map_fragmentation_type_to_rustyms(fragmentation_type)
             frag_model_map = {
@@ -1250,19 +1235,19 @@ def match_theoretical_to_experimental_rustyms(
                 "etd": rustyms.FragmentationModel.Etd,
                 "uvpd": rustyms.FragmentationModel.Uvpd,
             }
-            frag_model = frag_model_map.get(frag_model_name, rustyms.FragmentationModel.CidHcd)
-            
+            frag_model_map.get(frag_model_name, rustyms.FragmentationModel.CidHcd)
+
             # Try to annotate (requires MatchingParameters - not accessible from Python)
             # This will fail, but we catch and fall back to manual matching
             # TODO: If MatchingParameters becomes accessible, implement direct annotation
             warnings.warn(
-                "Direct rustyms annotation not yet available. MatchingParameters "
-                "is not accessible from Python bindings. Using manual matching."
+                "Direct rustyms annotation not yet available. MatchingParameters is not accessible from Python bindings. Using manual matching.",
+                stacklevel=2,
             )
         except Exception:
             # Direct annotation failed, fall back to manual matching
             pass
-    
+
     # Generate theoretical spectrum using rustyms
     theo_mz, theo_annotations = generate_theoretical_spectrum_rustyms(
         peptide=sequence,
@@ -1271,7 +1256,7 @@ def match_theoretical_to_experimental_rustyms(
         max_charge=max_charge,
         fragmentation_type=fragmentation_type,
     )
-    
+
     # Use standard matching function (works with any theoretical spectrum)
     return match_theoretical_to_experimental(
         exp_mz=exp_mz,
@@ -1288,7 +1273,10 @@ def match_theoretical_to_experimental_rustyms(
 
 
 def _extract_charge_from_annotation(annotation: str) -> int:
-    """Extract charge state from annotation, handling both formats:
+    """Extract the charge state from an annotation.
+
+    Extract the charge state from an annotation, handling both formats.
+
 
     - Fragment ions: ``'b3+'`` → 1, ``'y5++'`` → 2 (count ``+`` symbols)
     - Precursor ions (PSI mzPAF): ``'p^2'`` → 2, ``'p-H2O^3'`` → 3 (parse ``^z``)
@@ -1298,16 +1286,16 @@ def _extract_charge_from_annotation(annotation: str) -> int:
     annotation : str
         Ion annotation string.
 
-    Returns
+    Returns:
     -------
     int
         Charge state (≥ 1).
     """
     # PSI mzPAF '^z' notation — precursor ions
-    caret_idx = annotation.rfind('^')
+    caret_idx = annotation.rfind("^")
     if caret_idx != -1:
-        charge_str = ''
-        for ch in annotation[caret_idx + 1:]:
+        charge_str = ""
+        for ch in annotation[caret_idx + 1 :]:
             if ch.isdigit():
                 charge_str += ch
             else:
@@ -1315,7 +1303,7 @@ def _extract_charge_from_annotation(annotation: str) -> int:
         if charge_str:
             return int(charge_str)
     # Fragment ion format — count '+' symbols
-    count = annotation.count('+')
+    count = annotation.count("+")
     return max(1, count)
 
 
@@ -1326,7 +1314,7 @@ def _generate_neutral_loss_variants(
     loss_types: Sequence[str] = ("H2O", "NH3"),
 ) -> Tuple[List[float], List[str]]:
     """Generate neutral loss variants for a matched fragment ion.
-    
+
     Parameters
     ----------
     mz : float
@@ -1337,33 +1325,33 @@ def _generate_neutral_loss_variants(
         Charge state
     loss_types : Sequence[str], default=("H2O", "NH3")
         Types of neutral losses to generate
-        
-    Returns
+
+    Returns:
     -------
     Tuple[List[float], List[str]]
         (loss_mz_values, loss_annotations)
     """
     # Neutral loss masses (Da)
-    LOSS_MASSES = {
-        "H2O": 18.01056,   # Water
-        "NH3": 17.02655,   # Ammonia
-        "CO": 27.99491,    # Carbon monoxide (for a-ions from b-ions)
-        "H3PO4": 97.97690, # Phosphoric acid (phosphorylation)
+    LOSS_MASSES: dict[str, Any] = {  # noqa: N806
+        "H2O": 18.01056,  # Water
+        "NH3": 17.02655,  # Ammonia
+        "CO": 27.99491,  # Carbon monoxide (for a-ions from b-ions)
+        "H3PO4": 97.97690,  # Phosphoric acid (phosphorylation)
     }
-    
+
     loss_mz = []
     loss_ann = []
-    
+
     for loss_name in loss_types:
         if loss_name not in LOSS_MASSES:
             warnings.warn(f"Unknown neutral loss type: {loss_name}", stacklevel=2)
             continue
-        
+
         loss_mass = LOSS_MASSES[loss_name]
         loss_mz_val = mz - (loss_mass / charge)
         loss_mz.append(loss_mz_val)
         loss_ann.append(f"{annotation}-{loss_name}")
-    
+
     return loss_mz, loss_ann
 
 
@@ -1374,7 +1362,7 @@ def _generate_isotope_variants(
     max_isotope: int = 3,
 ) -> Tuple[List[float], List[str]]:
     """Generate isotopic variants for a matched fragment ion.
-    
+
     Parameters
     ----------
     mz : float
@@ -1385,22 +1373,22 @@ def _generate_isotope_variants(
         Charge state
     max_isotope : int, default=3
         Maximum isotope number to generate (+1, +2, +3, etc.)
-        
-    Returns
+
+    Returns:
     -------
     Tuple[List[float], List[str]]
         (isotope_mz_values, isotope_annotations)
     """
-    ISOTOPE_MASS_DIFF = 1.003355  # 13C - 12C mass difference (Da)
-    
+    ISOTOPE_MASS_DIFF = 1.003355  # 13C - 12C mass difference (Da)  # noqa: N806
+
     iso_mz = []
     iso_ann = []
-    
+
     for iso_num in range(1, max_isotope + 1):
         iso_mz_val = mz + (ISOTOPE_MASS_DIFF * iso_num / charge)
         iso_mz.append(iso_mz_val)
         iso_ann.append(f"{annotation}[+{iso_num}]")
-    
+
     return iso_mz, iso_ann
 
 
@@ -1441,16 +1429,16 @@ def _generate_precursor_ions(
     max_isotope : int, default=3
         Maximum isotope offset when *add_isotopes* is True.
 
-    Returns
+    Returns:
     -------
     Tuple[List[float], List[str]]
         *(mz_values, annotations)* in PSI mzPAF format.
     """
-    PRECURSOR_LOSS_MASSES: Dict[str, float] = {
-        "H2O":   18.010565,   # water
-        "NH3":   17.026549,   # ammonia
-        "H3PO4": 97.976895,   # phosphoric acid (phosphopeptides)
-        "SO3":   79.956815,   # sulfur trioxide (sulfation)
+    PRECURSOR_LOSS_MASSES: Dict[str, float] = {  # noqa: N806
+        "H2O": 18.010565,  # water
+        "NH3": 17.026549,  # ammonia
+        "H3PO4": 97.976895,  # phosphoric acid (phosphopeptides)
+        "SO3": 79.956815,  # sulfur trioxide (sulfation)
     }
 
     z = precursor_charge
@@ -1472,10 +1460,10 @@ def _generate_precursor_ions(
 
     # Append isotopic variants for every base precursor entry
     if add_isotopes:
-        ISOTOPE_MASS_DIFF = 1.003355  # 13C - 12C mass difference (Da)
+        ISOTOPE_MASS_DIFF = 1.003355  # 13C - 12C mass difference (Da)  # noqa: N806
         base_mz = list(mz_out)  # snapshot before appending
         base_ann = list(ann_out)
-        for mz_val, ann_val in zip(base_mz, base_ann):
+        for mz_val, ann_val in zip(base_mz, base_ann, strict=False):
             for iso_num in range(1, max_isotope + 1):
                 mz_out.append(mz_val + ISOTOPE_MASS_DIFF * iso_num / z)
                 ann_out.append(f"{ann_val}[+{iso_num}]")
@@ -1564,8 +1552,8 @@ def match_with_conditional_features(
     _fast_mode : bool, default=True
         Internal parameter for optimization. When True, uses optimized matching
         that reduces overhead from multiple passes.
-        
-    Returns
+
+    Returns:
     -------
     Dict[str, Any]
         Dictionary containing:
@@ -1585,8 +1573,8 @@ def match_with_conditional_features(
             - "frac_intensity": fraction of total intensity explained
             - "median_abs_ppm": median absolute ppm error
             - "mean_ppm_bias": mean signed ppm error
-            
-    Examples
+
+    Examples:
     --------
     >>> result = match_with_conditional_features(
     ...     exp_mz, exp_intensity, "PEPTIDE",
@@ -1605,7 +1593,7 @@ def match_with_conditional_features(
     # Validate inputs
     if exp_mz.shape != exp_intensity.shape:
         raise ValueError("exp_mz and exp_intensity must have same shape")
-    
+
     if exp_mz.size == 0:
         return {
             "mask": np.array([], dtype=bool),
@@ -1626,13 +1614,13 @@ def match_with_conditional_features(
                 "mean_ppm_bias": np.nan,
             },
         }
-    
+
     # Ensure sorted
     exp_mz, exp_intensity = _ensure_sorted(exp_mz, exp_intensity)
-    
+
     # Calculate base peak intensity for isotope threshold
     base_peak_intensity = exp_intensity.max()
-    
+
     # =============================================================================
     # PASS 1: Match base fragment ions + unconditional precursor isotopes
     # =============================================================================
@@ -1663,7 +1651,7 @@ def match_with_conditional_features(
     frag_idx = np.where(~_is_precursor_theo)[0]
     prec_idx = np.where(_is_precursor_theo)[0]
 
-    N = exp_mz.size
+    N = exp_mz.size  # noqa: N806
 
     # --- Match fragment ions at normal tolerance ---
     if frag_idx.size > 0:
@@ -1731,7 +1719,7 @@ def match_with_conditional_features(
             final_matched_theo_mz[i] = prec_matches["matched_theo_mz"][i]
 
     # Mark feature types
-    feature_type = []
+    feature_type: list[Any] = []
     for i in range(N):
         if not final_mask[i]:
             feature_type.append(None)
@@ -1759,11 +1747,11 @@ def match_with_conditional_features(
     n_precursor = sum(1 for ft in feature_type if ft == "precursor")
     n_losses = 0
     n_isotopes = sum(1 for ft in feature_type if ft == "isotope")
-    
+
     # =============================================================================
     # PASS 2: For each matched base ion, check for losses and isotopes
     # =============================================================================
-    
+
     # Early exit if no losses or isotopes requested
     if not add_losses and not add_isotopes:
         _matched_int = exp_intensity[final_mask].sum()
@@ -1789,17 +1777,17 @@ def match_with_conditional_features(
                 "mean_ppm_bias": float(np.mean(_valid)) if _valid.size > 0 else np.nan,
             },
         }
-    
+
     # Build list of conditional features to check
     # Pre-allocate lists with estimated size for efficiency
-    max_conditional = n_base * (len(loss_types) if add_losses else 0 + max_isotope if add_isotopes else 0)
+    n_base * (len(loss_types) if add_losses else 0 + max_isotope if add_isotopes else 0)
     conditional_mz = []
     conditional_ann = []
     conditional_feature_types = []
     conditional_parent_ann = []
-    
+
     # Pre-compute loss masses to avoid dictionary lookups in loop
-    LOSS_MASSES = {
+    LOSS_MASSES = {  # noqa: N806
         "H2O": 18.01056,
         "NH3": 17.02655,
         "CO": 27.99491,
@@ -1807,9 +1795,9 @@ def match_with_conditional_features(
         "SO3": 79.95682,
     }
     loss_masses_list = [(name, LOSS_MASSES.get(name, 0.0)) for name in loss_types if name in LOSS_MASSES]
-    
-    ISOTOPE_MASS_DIFF = 1.003355
-    
+
+    ISOTOPE_MASS_DIFF = 1.003355  # noqa: N806
+
     for i in range(N):
         if not final_mask[i]:
             continue  # Skip unmatched peaks
@@ -1825,7 +1813,7 @@ def match_with_conditional_features(
         base_ann = theo_ann[matched_idx]
         exp_int = exp_intensity[i]
 
-        is_precursor = (ft == "precursor")
+        is_precursor = ft == "precursor"
 
         # Extract charge — delegates to the unified helper (handles both p^z and b/y++ formats)
         charge = _extract_charge_from_annotation(base_ann)
@@ -1844,9 +1832,7 @@ def match_with_conditional_features(
                     # Isotope variants of this precursor loss
                     if add_isotopes:
                         for iso_num in range(1, max_isotope + 1):
-                            conditional_mz.append(
-                                loss_mz_val + ISOTOPE_MASS_DIFF * iso_num / charge
-                            )
+                            conditional_mz.append(loss_mz_val + ISOTOPE_MASS_DIFF * iso_num / charge)
                             conditional_ann.append(f"{loss_ann}[+{iso_num}]")
                             conditional_feature_types.append("isotope")
                             conditional_parent_ann.append(loss_ann)
@@ -1870,7 +1856,7 @@ def match_with_conditional_features(
                     conditional_ann.append(f"{base_ann}[+{iso_num}]")
                     conditional_feature_types.append("isotope")
                     conditional_parent_ann.append(base_ann)
-    
+
     # Match conditional features if any were generated.
     # Split into fragment vs precursor groups so precursor-related conditionals
     # (neutral losses) use the wider 2× tolerance (same systematic offset as
@@ -1894,7 +1880,7 @@ def match_with_conditional_features(
         cond_prec_idx = np.where(_is_prec_cond)[0]
 
         # Helper to merge a set of conditional matches into the final arrays
-        def _merge_conditional(matches, c_ann, c_theo_mz, c_ftypes, c_parent, idx_map):
+        def _merge_conditional(matches: Any, c_ann: Any, c_theo_mz: Any, c_ftypes: Any, c_parent: Any, idx_map: Any) -> None:
             nonlocal n_losses, n_isotopes
             for i in range(N):
                 if matches["mask"][i] and not final_mask[i]:
@@ -1928,8 +1914,7 @@ def match_with_conditional_features(
                 use_closest=use_closest,
                 theo_annotations=frag_c_ann,
             )
-            _merge_conditional(frag_c_matches, frag_c_ann, frag_c_mz,
-                               frag_c_ft, frag_c_pa, cond_frag_idx)
+            _merge_conditional(frag_c_matches, frag_c_ann, frag_c_mz, frag_c_ft, frag_c_pa, cond_frag_idx)
 
         # Match precursor conditionals at 2× tolerance
         if cond_prec_idx.size > 0:
@@ -1946,20 +1931,17 @@ def match_with_conditional_features(
                 use_closest=use_closest,
                 theo_annotations=prec_c_ann,
             )
-            _merge_conditional(prec_c_matches, prec_c_ann, prec_c_mz,
-                               prec_c_ft, prec_c_pa, cond_prec_idx)
-    
+            _merge_conditional(prec_c_matches, prec_c_ann, prec_c_mz, prec_c_ft, prec_c_pa, cond_prec_idx)
+
     # Compute final metrics
     matched_intensity = exp_intensity[final_mask].sum()
     total_intensity = exp_intensity.sum()
-    frac_intensity = (
-        float(matched_intensity / total_intensity) if total_intensity > 0 else 0.0
-    )
-    
+    frac_intensity = float(matched_intensity / total_intensity) if total_intensity > 0 else 0.0
+
     valid_errors = final_ppm_error[~np.isnan(final_ppm_error)]
     median_abs_ppm = float(np.median(np.abs(valid_errors))) if valid_errors.size > 0 else np.nan
     mean_ppm_bias = float(np.mean(valid_errors)) if valid_errors.size > 0 else np.nan
-    
+
     return {
         "mask": final_mask,
         "match_idx": final_match_idx,
@@ -2029,7 +2011,7 @@ def detect_custom_ions(
         Minimum relative intensity (vs spectrum base peak) a monoisotopic
         match must have to trigger isotope checking.
 
-    Returns
+    Returns:
     -------
     Dict[str, Dict[str, Any]]
         For each ion group:
@@ -2042,7 +2024,7 @@ def detect_custom_ions(
         - ``isotope_matches``: list of dicts  (if *add_isotopes* and *return_details*)
           Each dict: ``{"parent_mz", "isotope_num", "matched_mz", "matched_intensity"}``
     """
-    NEUTRON_MASS = 1.003355  # 13C – 12C mass difference
+    NEUTRON_MASS = 1.003355  # 13C – 12C mass difference  # noqa: N806
 
     if custom_ions is None:
         custom_ions = DEFAULT_CUSTOM_IONS
@@ -2105,14 +2087,14 @@ def detect_custom_ions(
 
     # ── Pass 2: conditional isotope checking ────────────────────────────
     if add_isotopes:
-        for group_name, group_data in results.items():
+        for _group_name, group_data in results.items():
             isotope_matches: List[Dict[str, Any]] = []
 
             if group_data["found"]:
                 mono_mz_list = group_data.get("matched_mz", [])
                 mono_int_list = group_data.get("matched_intensity", [])
 
-                for mono_mz, mono_int in zip(mono_mz_list, mono_int_list):
+                for mono_mz, mono_int in zip(mono_mz_list, mono_int_list, strict=False):
                     # Only check isotopes for sufficiently intense detections
                     if mono_int / base_peak_int < isotope_intensity_threshold:
                         continue
@@ -2129,12 +2111,14 @@ def detect_custom_ions(
                             window_mz = exp_mz[i_lo:i_hi]
                             best_idx = int(window_int.argmax())
 
-                            isotope_matches.append({
-                                "parent_mz": mono_mz,
-                                "isotope_num": n,
-                                "matched_mz": float(window_mz[best_idx]),
-                                "matched_intensity": float(window_int[best_idx]),
-                            })
+                            isotope_matches.append(
+                                {
+                                    "parent_mz": mono_mz,
+                                    "isotope_num": n,
+                                    "matched_mz": float(window_mz[best_idx]),
+                                    "matched_intensity": float(window_int[best_idx]),
+                                }
+                            )
 
             group_data["n_isotope_matches"] = len(isotope_matches)
             if return_details:
@@ -2172,23 +2156,23 @@ def annotate_dataframe(
     isotope_intensity_threshold: float = 0.01,
 ) -> pl.DataFrame:
     """Annotate DataFrame of spectra with theoretical fragment matching results.
-    
+
     For each spectrum in the DataFrame, generates theoretical fragments and
     matches them to experimental peaks. Optionally detects custom ion types.
     Results are added as new columns.
-    
+
     **Two Annotation Modes:**
-    
+
     1. **Conditional (default, use_conditional_annotation=True)**:
        Two-pass strategy that reduces false positives:
        - Pass 1: Match base fragment ions only
        - Pass 2: For matched ions, check for neutral losses and isotopes
        This is recommended as it dramatically reduces false positives.
-    
+
     2. **Traditional (use_conditional_annotation=False)**:
        Generates all theoretical features upfront and matches them.
        May produce more false positives but is simpler.
-    
+
     Parameters
     ----------
     df : pl.DataFrame
@@ -2235,8 +2219,8 @@ def annotate_dataframe(
     isotope_intensity_threshold : float, default=0.01
         Minimum relative intensity for checking isotopes (only for conditional mode).
         Peaks below this fraction of base peak intensity won't have isotopes checked.
-        
-    Returns
+
+    Returns:
     -------
     pl.DataFrame
         Input DataFrame with added columns:
@@ -2255,18 +2239,18 @@ def annotate_dataframe(
         - "n_isotopes": number of matched isotopes (conditional mode only)
         - "custom_{group_name}_found": bool for each custom ion group (if detect_custom=True)
         - "custom_{group_name}_max_intensity": max intensity for each group (if detect_custom=True)
-        
-    Raises
+
+    Raises:
     ------
     ValueError
         If required columns are missing from DataFrame
-        
-    Notes
+
+    Notes:
     -----
     - Uses caching for theoretical spectra to avoid recomputation
     - For large datasets, consider processing in batches
-    
-    Examples
+
+    Examples:
     --------
     >>> df = pl.DataFrame({
     ...     "sequence": ["PEPTIDE", "EXAMPLE"],
@@ -2287,9 +2271,7 @@ def annotate_dataframe(
     required_cols = {"sequence", "precursor_charge", "mz_array", "intensity_array"}
     missing = required_cols - set(df.columns)
     if missing:
-        raise ValueError(
-            f"DataFrame is missing required columns: {sorted(missing)}"
-        )
+        raise ValueError(f"DataFrame is missing required columns: {sorted(missing)}")
 
     # Cache for theoretical spectra: (sequence, charge) -> (mz_array, annotations)
     theo_cache: Dict[Tuple[str, int], Tuple[np.ndarray, List[str]]] = {}
@@ -2303,14 +2285,14 @@ def annotate_dataframe(
     frac_intensities: List[float] = []
     median_abs_ppms: List[float] = []
     mean_ppm_biases: List[float] = []
-    
+
     # Conditional mode specific outputs
     feature_types: Optional[List[List[Optional[str]]]] = [] if use_conditional_annotation else None
     parent_annotations: Optional[List[List[Optional[str]]]] = [] if use_conditional_annotation else None
     n_base_list: Optional[List[int]] = [] if use_conditional_annotation else None
     n_losses_list: Optional[List[int]] = [] if use_conditional_annotation else None
     n_isotopes_list: Optional[List[int]] = [] if use_conditional_annotation else None
-    
+
     # Custom ion detection tracking
     custom_results: Dict[str, List[Any]] = {}
     if detect_custom:
@@ -2320,20 +2302,22 @@ def annotate_dataframe(
             custom_results[f"{group_name}_found"] = []
             custom_results[f"{group_name}_n_matched"] = []
             custom_results[f"{group_name}_max_intensity"] = []
-    
+
     # Build iterator
     data_iter = zip(
         df["sequence"].to_list(),
         df["precursor_charge"].to_list(),
         df["mz_array"].to_list(),
         df["intensity_array"].to_list(),
+        strict=False,
     )
-    
+
     # Add progress bar if requested
     if progress:
         try:
             from tqdm.auto import tqdm
-            data_iter = tqdm(
+
+            data_iter = tqdm(  # type: ignore[assignment]
                 data_iter,
                 total=len(df),
                 desc="Annotating spectra",
@@ -2344,13 +2328,13 @@ def annotate_dataframe(
                 "tqdm not installed. Install with 'pip install tqdm' for progress bars.",
                 stacklevel=2,
             )
-    
+
     # Process each spectrum
     for seq, charge, mz_arr, int_arr in data_iter:
         # Convert to numpy
         mz_exp = np.asarray(mz_arr, dtype=np.float64)
         int_exp = np.asarray(int_arr, dtype=np.float64)
-        
+
         # Choose annotation strategy
         if use_conditional_annotation:
             # Use two-pass conditional annotation
@@ -2399,14 +2383,14 @@ def annotate_dataframe(
                     n_losses_list.append(0)
                 if n_isotopes_list is not None:
                     n_isotopes_list.append(0)
-                
+
                 if detect_custom and custom_ions is not None:
                     for group_name in custom_ions:
                         custom_results[f"{group_name}_found"].append(False)
                         custom_results[f"{group_name}_n_matched"].append(0)
                         custom_results[f"{group_name}_max_intensity"].append(0.0)
                 continue
-            
+
             signal_masks.append(match_result["mask"].tolist())
             ppm_errors.append(match_result["ppm_error"].tolist())
             matched_annotations.append(match_result["matched_annotation"])
@@ -2425,7 +2409,7 @@ def annotate_dataframe(
                 n_losses_list.append(match_result["metrics"]["n_losses"])
             if n_isotopes_list is not None:
                 n_isotopes_list.append(match_result["metrics"]["n_isotopes"])
-            
+
         else:
             # Use traditional approach with all features generated upfront
             # Get or generate theoretical spectrum
@@ -2465,14 +2449,14 @@ def annotate_dataframe(
                     frac_intensities.append(0.0)
                     median_abs_ppms.append(np.nan)
                     mean_ppm_biases.append(np.nan)
-                    
+
                     if detect_custom and custom_ions is not None:
                         for group_name in custom_ions:
                             custom_results[f"{group_name}_found"].append(False)
                             custom_results[f"{group_name}_n_matched"].append(0)
                             custom_results[f"{group_name}_max_intensity"].append(0.0)
                     continue
-            
+
             # Match theoretical to experimental
             match_result = match_theoretical_to_experimental(
                 mz_exp,
@@ -2483,7 +2467,7 @@ def annotate_dataframe(
                 use_closest=use_closest_match,
                 theo_annotations=theo_annotations,
             )
-            
+
             signal_masks.append(match_result["mask"].tolist())
             ppm_errors.append(match_result["ppm_error"].tolist())
             matched_annotations.append(match_result["matched_annotation"])
@@ -2492,7 +2476,7 @@ def annotate_dataframe(
             frac_intensities.append(match_result["metrics"]["frac_intensity"])
             median_abs_ppms.append(match_result["metrics"]["median_abs_ppm"])
             mean_ppm_biases.append(match_result["metrics"]["mean_ppm_bias"])
-        
+
         # Detect custom ions if requested
         if detect_custom:
             custom_result = detect_custom_ions(
@@ -2504,16 +2488,10 @@ def annotate_dataframe(
             )
             if custom_ions is not None:
                 for group_name in custom_ions:
-                    custom_results[f"{group_name}_found"].append(
-                        custom_result[group_name]["found"]
-                    )
-                    custom_results[f"{group_name}_n_matched"].append(
-                        custom_result[group_name]["n_matched"]
-                    )
-                    custom_results[f"{group_name}_max_intensity"].append(
-                        custom_result[group_name]["max_intensity"]
-                    )
-    
+                    custom_results[f"{group_name}_found"].append(custom_result[group_name]["found"])
+                    custom_results[f"{group_name}_n_matched"].append(custom_result[group_name]["n_matched"])
+                    custom_results[f"{group_name}_max_intensity"].append(custom_result[group_name]["max_intensity"])
+
     # Build result columns
     result_cols = [
         pl.Series("signal_mask", signal_masks, dtype=pl.List(pl.Boolean)),
@@ -2525,17 +2503,19 @@ def annotate_dataframe(
         pl.Series("median_abs_ppm", median_abs_ppms, dtype=pl.Float64),
         pl.Series("mean_ppm_bias", mean_ppm_biases, dtype=pl.Float64),
     ]
-    
+
     # Add conditional mode specific columns
     if use_conditional_annotation:
-        result_cols.extend([
-            pl.Series("feature_type", feature_types, dtype=pl.List(pl.Utf8)),
-            pl.Series("parent_annotation", parent_annotations, dtype=pl.List(pl.Utf8)),
-            pl.Series("n_base", n_base_list, dtype=pl.UInt32),
-            pl.Series("n_losses", n_losses_list, dtype=pl.UInt32),
-            pl.Series("n_isotopes", n_isotopes_list, dtype=pl.UInt32),
-        ])
-    
+        result_cols.extend(
+            [
+                pl.Series("feature_type", feature_types, dtype=pl.List(pl.Utf8)),
+                pl.Series("parent_annotation", parent_annotations, dtype=pl.List(pl.Utf8)),
+                pl.Series("n_base", n_base_list, dtype=pl.UInt32),
+                pl.Series("n_losses", n_losses_list, dtype=pl.UInt32),
+                pl.Series("n_isotopes", n_isotopes_list, dtype=pl.UInt32),
+            ]
+        )
+
     # Add custom ion detection columns
     if detect_custom:
         for col_name, values in custom_results.items():
@@ -2545,5 +2525,5 @@ def annotate_dataframe(
                 result_cols.append(pl.Series(f"custom_{col_name}", values, dtype=pl.UInt32))
             else:  # max_intensity
                 result_cols.append(pl.Series(f"custom_{col_name}", values, dtype=pl.Float64))
-    
+
     return df.with_columns(result_cols)

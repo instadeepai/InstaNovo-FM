@@ -1,3 +1,4 @@
+# ruff: noqa: T201 - a CLI probe: the printed answer per check is the point
 """Check HuggingFace connectivity, credentials and write access before uploading.
 
 Run this first. It answers, separately, the questions a failed upload would

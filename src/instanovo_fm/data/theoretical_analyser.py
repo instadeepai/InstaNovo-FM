@@ -26,12 +26,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from omegaconf import DictConfig
 
 from instanovo.__init__ import console
-from instanovo.common import DataProcessor
+from instanovo_fm.common import DataProcessor
 from instanovo_fm.data import FoundationalDataProcessor
+from instanovo_fm.utils.modifications import extract_modification_types
 from instanovo_fm.utils.theoretical_spectra import (
     DEFAULT_CID_DA_TOL,
     DEFAULT_CUSTOM_IONS,
@@ -39,11 +41,9 @@ from instanovo_fm.utils.theoretical_spectra import (
     compute_theoretical_precursor_mz,
     detect_custom_ions,
     generate_theoretical_spectrum,
-    generate_theoretical_spectrum_rustyms,
     match_theoretical_to_experimental,
     match_with_conditional_features,
 )
-from instanovo_fm.utils.modifications import extract_modification_types
 from instanovo.utils.colorlogging import ColorLog
 
 logger = ColorLog(console, __name__).logger
@@ -105,7 +105,7 @@ def _tokenize_sequence_standalone(seq: str) -> List[str]:
                 bracket = ")" if seq[i + 1] == "(" else "]"
                 end = seq.find(bracket, i + 2)
                 if end != -1:
-                    residue = seq[i:end + 1]
+                    residue = seq[i : end + 1]
                     i = end + 1
                     residues.append(residue)
                     continue
@@ -240,16 +240,16 @@ def _process_peptide_complementary_pair(
         if best_dev is not None:
             n_pairs += 1
             spectrum_devs.append(best_dev)
-            dev_ppm = (
-                best_dev / prec_neutral * 1e6 if prec_neutral > 0 else 0.0
-            )
+            dev_ppm = best_dev / prec_neutral * 1e6 if prec_neutral > 0 else 0.0
             rel_pos = site / seq_len
-            pair_records.append({
-                "dev_da": best_dev,
-                "dev_ppm": dev_ppm,
-                "rel_pos": rel_pos,
-                "frag_type": frag_type,
-            })
+            pair_records.append(
+                {
+                    "dev_da": best_dev,
+                    "dev_ppm": dev_ppm,
+                    "rel_pos": rel_pos,
+                    "frag_type": frag_type,
+                }
+            )
 
     return {
         "pair_records": pair_records,
@@ -303,7 +303,7 @@ def _process_peptide_mass_gap(
 
     # Group by (ion_type, charge) using numpy operations
     # Build unique (ion_type, charge) pairs
-    ic_pairs = set(zip(all_ion_types.tolist(), all_charges.tolist()))
+    ic_pairs = set(zip(all_ion_types.tolist(), all_charges.tolist(), strict=False))
     for ion_type, charge in ic_pairs:
         charge = int(charge)
         if charge < 1:
@@ -332,20 +332,11 @@ def _process_peptide_mass_gap(
             best_idx = int(np.argmin(diffs))
             best_mass = float(aa_masses_sorted[best_idx])
             match_error_da = gap_da - best_mass
-            match_error_ppm = (
-                match_error_da / best_mass * 1e6 if best_mass > 0 else 0.0
-            )
+            match_error_ppm = match_error_da / best_mass * 1e6 if best_mass > 0 else 0.0
 
             is_valid = abs(match_error_ppm) <= ppm_tol
 
-            n_ambiguous = int(
-                np.sum(
-                    np.abs(aa_masses - gap_da)
-                    / np.maximum(aa_masses, 1e-9)
-                    * 1e6
-                    <= ppm_tol
-                )
-            )
+            n_ambiguous = int(np.sum(np.abs(aa_masses - gap_da) / np.maximum(aa_masses, 1e-9) * 1e6 <= ppm_tol))
 
             is_correct = False
             true_aa = ""
@@ -356,20 +347,14 @@ def _process_peptide_mass_gap(
                     true_aa = seq_residues[seq_len - pos_j]
 
                 if true_aa and len(true_aa) == 1:
-                    true_mass_idx = (
-                        aa_codes.index(true_aa) if true_aa in aa_codes else -1
-                    )
+                    true_mass_idx = aa_codes.index(true_aa) if true_aa in aa_codes else -1
                     if true_mass_idx >= 0:
                         true_mass = aa_masses[true_mass_idx]
-                        true_err_ppm = abs(
-                            (gap_da - true_mass) / true_mass * 1e6
-                        )
+                        true_err_ppm = abs((gap_da - true_mass) / true_mass * 1e6)
                         is_correct = true_err_ppm <= ppm_tol
 
             mid_mz = (mz_values[k] + mz_values[k + 1]) / 2
-            mz_range = _classify_mz_range_standalone(
-                mid_mz, mz_range_boundaries, mz_range_order
-            )
+            mz_range = _classify_mz_range_standalone(mid_mz, mz_range_boundaries, mz_range_order)
 
             n_gaps += 1
             if is_valid:
@@ -379,31 +364,29 @@ def _process_peptide_mass_gap(
             if is_correct:
                 n_correct += 1
 
-            gap_records.append({
-                "gap_da": gap_da,
-                "match_error_da": match_error_da,
-                "match_error_ppm": match_error_ppm,
-                "is_valid": is_valid,
-                "is_correct": is_correct,
-                "n_ambiguous": n_ambiguous,
-                "ion_type": ion_type,
-                "charge": charge,
-                "frag_type": frag_type,
-                "mz_range": mz_range,
-                "position_left": pos_i,
-                "true_aa": true_aa,
-            })
+            gap_records.append(
+                {
+                    "gap_da": gap_da,
+                    "match_error_da": match_error_da,
+                    "match_error_ppm": match_error_ppm,
+                    "is_valid": is_valid,
+                    "is_correct": is_correct,
+                    "n_ambiguous": n_ambiguous,
+                    "ion_type": ion_type,
+                    "charge": charge,
+                    "frag_type": frag_type,
+                    "mz_range": mz_range,
+                    "position_left": pos_i,
+                    "true_aa": true_aa,
+                }
+            )
 
     if n_gaps == 0:
         return None
 
     two_sided_positions = valid_left & valid_right
     candidate_positions = valid_left | valid_right
-    two_sided_rate = (
-        len(two_sided_positions) / len(candidate_positions)
-        if candidate_positions
-        else 0.0
-    )
+    two_sided_rate = len(two_sided_positions) / len(candidate_positions) if candidate_positions else 0.0
 
     return {
         "gap_records": gap_records,
@@ -430,7 +413,8 @@ class TheoreticalAnalyser:
        intensity weight.
     """
 
-    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None):
+    def __init__(self, config: DictConfig, output_dir: Optional[Path] = None) -> None:
+        """Initialise the input."""
         self.config = config
 
         if output_dir is None:
@@ -446,11 +430,7 @@ class TheoreticalAnalyser:
         # Analysis configuration — supports both new task_configs and legacy flat
         analysis_config = config.get("analysis", {})
         _tc_raw = analysis_config.get("task_configs", {})
-        _theo_cfg = (
-            dict(_tc_raw.get("theoretical", {}))
-            if hasattr(_tc_raw, "get")
-            else {}
-        )
+        _theo_cfg = dict(_tc_raw.get("theoretical", {})) if hasattr(_tc_raw, "get") else {}
 
         def _tc(key: str, default: Any = None) -> Any:
             """Read from task_configs.theoretical first, then flat analysis config."""
@@ -505,9 +485,7 @@ class TheoreticalAnalyser:
         self.enable_modification_analysis = _tc("enable_modification_analysis", False)
 
         # Complementary b/y pair analysis
-        self.enable_complementary_pair_analysis = _tc(
-            "enable_complementary_pair_analysis", True
-        )
+        self.enable_complementary_pair_analysis = _tc("enable_complementary_pair_analysis", True)
 
         # Mass gap validation
         self.enable_mass_gap_analysis = _tc("enable_mass_gap_analysis", True)
@@ -515,23 +493,15 @@ class TheoreticalAnalyser:
 
         # Quality gate analysis configuration
         theo_analysis_config = _tc("theoretical_analysis", {})
-        self.enable_quality_gate = theo_analysis_config.get(
-            "enable_quality_gate_analysis", True
-        )
-        self.quality_gate_seq_len_bins = list(
-            theo_analysis_config.get(
-                "quality_gate_sequence_length_bins", [7, 10, 15, 20, 25, 30]
-            )
-        )
+        self.enable_quality_gate = theo_analysis_config.get("enable_quality_gate_analysis", True)
+        self.quality_gate_seq_len_bins = list(theo_analysis_config.get("quality_gate_sequence_length_bins", [7, 10, 15, 20, 25, 30]))
         # When true, apply the gate as a hard filter before running the
         # downstream analyses (coverage, signal composition, mass error,
         # neutral loss, complementary pair, mass gap, modification matching
         # quality, stratified). When false, every analysis runs on the full
         # sequence-available population and the gate is purely diagnostic.
         # Has no effect when enable_quality_gate is False.
-        self.apply_quality_gate_filter = theo_analysis_config.get(
-            "apply_quality_gate_filter", True
-        )
+        self.apply_quality_gate_filter = theo_analysis_config.get("apply_quality_gate_filter", True)
 
         # Backbone coverage quality gate thresholds
         self.min_backbone_coverage = _tc("min_backbone_coverage", 0.15)
@@ -550,7 +520,7 @@ class TheoreticalAnalyser:
         if self.enable_theoretical:
             try:
                 from instanovo_fm.utils.theoretical_spectra import (
-                    generate_theoretical_spectrum,
+                    generate_theoretical_spectrum,  # noqa: F401
                 )
 
                 try:
@@ -562,10 +532,7 @@ class TheoreticalAnalyser:
             except ImportError:
                 self.theoretical_available = False
                 self.rustyms_available = False
-                logger.warning(
-                    "Theoretical spectra module not available. "
-                    "Skipping theoretical analysis."
-                )
+                logger.warning("Theoretical spectra module not available. Skipping theoretical analysis.")
         else:
             logger.info("Theoretical analysis disabled by configuration.")
             self.rustyms_available = False
@@ -574,25 +541,19 @@ class TheoreticalAnalyser:
         # ion_types is part of the key because _ion_types_for_mode returns
         # different sets for HCD/CID vs ETD/UVPD; reusing an (a,b,y) cache
         # entry for an ETD spectrum would silently mis-annotate c/z ions.
-        self.theoretical_cache: Dict[
-            Tuple[str, int, Tuple[str, ...]], Tuple[np.ndarray, List[str]]
-        ] = {}
+        self.theoretical_cache: Dict[Tuple[str, int, Tuple[str, ...]], Tuple[np.ndarray, List[str]]] = {}
 
         # Aggregated results (populated by aggregate_results)
         self.results: Dict[str, Any] = {}
 
-        logger.debug(
-            f"Theoretical analyzer initialized (output: {self.output_dir})"
-        )
+        logger.debug(f"Theoretical analyzer initialized (output: {self.output_dir})")
 
     # =========================================================================
     # Static Utilities
     # =========================================================================
 
     @staticmethod
-    def _extract_field(
-        data: Dict[str, Any], field_names: list[str], convert_fn=None
-    ):
+    def _extract_field(data: Dict[str, Any], field_names: list[str], convert_fn: Any = None) -> Any:
         """Extract first available field from *data*."""
         for field in field_names:
             if field in data and data[field] is not None:
@@ -616,13 +577,10 @@ class TheoreticalAnalyser:
 
     @staticmethod
     def _primary_pair_for_mode(frag_type: Optional[str]) -> tuple[str, str]:
-        """Return the canonical (N-terminal, C-terminal) base ion pair
-        for the given fragmentation method.
+        """Return the canonical (N-terminal, C-terminal) base ion pair for the given fragmentation method.
 
-        Used by per-series visualisations / CSV rows that want to show
-        one N/C complementary pair per frag_type: b/y for collisional
-        activation (HCD/HCID/CID, UVPD), c/z for electron-driven methods
-        (ETD/ECD).
+        Used by per-series visualisations / CSV rows that want to show one N/C complementary pair per frag_type: b/y for collisional activation
+        (HCD/HCID/CID, UVPD), c/z for electron-driven methods (ETD/ECD).
         """
         if not frag_type:
             return ("b", "y")
@@ -657,19 +615,14 @@ class TheoreticalAnalyser:
                     inferred_type = "precursor"
                 elif "[+" in ion_annotation:
                     inferred_type = "isotope"
-                elif "-" in ion_annotation and any(
-                    loss in ion_annotation
-                    for loss in ("H2O", "NH3", "CO", "H3PO4")
-                ):
+                elif "-" in ion_annotation and any(loss in ion_annotation for loss in ("H2O", "NH3", "CO", "H3PO4")):
                     inferred_type = "loss"
                 else:
                     inferred_type = "base"
         else:
             ion_annotation = ""
 
-        if isinstance(ion_annotation, str) and (
-            ion_annotation.startswith("p^") or ion_annotation.startswith("p-")
-        ):
+        if isinstance(ion_annotation, str) and (ion_annotation.startswith("p^") or ion_annotation.startswith("p-")):
             if inferred_type == "isotope":
                 return "precursor-isotope"
             return "precursor"
@@ -678,7 +631,7 @@ class TheoreticalAnalyser:
             return "other"
 
         ion_type_char = ion_annotation[0].lower()
-        suffix_map = {"loss": "-loss", "isotope": "-isotope"}
+        suffix_map: dict[str, Any] = {"loss": "-loss", "isotope": "-isotope"}
         if ion_type_char in ("b", "y"):
             suffix = suffix_map.get(inferred_type, "-ion")
             return f"{ion_type_char}{suffix}"
@@ -711,9 +664,7 @@ class TheoreticalAnalyser:
                 ftype = "precursor"
             elif "[+" in ann:
                 ftype = "isotope"
-            elif "-" in ann and any(
-                loss in ann for loss in ("H2O", "NH3", "CO", "H3PO4")
-            ):
+            elif "-" in ann and any(loss in ann for loss in ("H2O", "NH3", "CO", "H3PO4")):
                 ftype = "loss"
             else:
                 ftype = "base"
@@ -785,10 +736,10 @@ class TheoreticalAnalyser:
         if not annotation:
             return 1
         # PSI mzPAF '^z' notation — precursor ions
-        caret_idx = annotation.rfind('^')
+        caret_idx = annotation.rfind("^")
         if caret_idx != -1:
-            charge_str = ''
-            for ch in annotation[caret_idx + 1:]:
+            charge_str = ""
+            for ch in annotation[caret_idx + 1 :]:
                 if ch.isdigit():
                     charge_str += ch
                 else:
@@ -797,6 +748,7 @@ class TheoreticalAnalyser:
                 return int(charge_str)
         # Fragment ion format — strip isotope brackets then count '+' symbols
         import re
+
         clean_ann = re.sub(r"\[\+\d+\]", "", annotation)
         count = clean_ann.count("+")
         return max(1, count)
@@ -817,7 +769,7 @@ class TheoreticalAnalyser:
                     bracket = ")" if seq[i + 1] == "(" else "]"
                     end = seq.find(bracket, i + 2)
                     if end != -1:
-                        residue = seq[i:end + 1]
+                        residue = seq[i : end + 1]
                         i = end + 1
                     else:
                         i += 1
@@ -930,12 +882,7 @@ class TheoreticalAnalyser:
             best = None
             for ci in (idx - 1, idx):
                 if 0 <= ci < len(valid_mz):
-                    if (
-                        abs(valid_mz[ci] - mz_val)
-                        / max(mz_val, 1e-12)
-                        * 1e6
-                        < self.ppm_tol * 2
-                    ):
+                    if abs(valid_mz[ci] - mz_val) / max(mz_val, 1e-12) * 1e6 < self.ppm_tol * 2:
                         best = ci
                         break
             if best is not None and not annotated_mask[best] and best not in counted_indices:
@@ -999,83 +946,54 @@ class TheoreticalAnalyser:
         if theoretical_cache is not None:
             self.theoretical_cache.update(theoretical_cache)
 
-        sequence = self._extract_field(
-            spectrum_data, ["sequence", "modified_peptide", "peptide"]
-        )
-        precursor_charge = self._extract_field(
-            spectrum_data, ["precursor_charge", "charge"], int
-        )
+        sequence = self._extract_field(spectrum_data, ["sequence", "modified_peptide", "peptide"])
+        precursor_charge = self._extract_field(spectrum_data, ["precursor_charge", "charge"], int)
 
         mass_error_data: List[Dict] = []
         unmatched_theo_data: List[Dict] = []
         theoretical_analysis: Dict[str, Any] = {}
 
-        if (
-            sequence is not None
-            and precursor_charge is not None
-            and self.theoretical_available
-        ):
-            frag_type_raw = (
-                batch_result.get("frag_type", [None])[0]
-                if "frag_type" in batch_result
-                else None
-            )
+        if sequence is not None and precursor_charge is not None and self.theoretical_available:
+            frag_type_raw = batch_result.get("frag_type", [None])[0] if "frag_type" in batch_result else None
             frag_type = str(frag_type_raw) if frag_type_raw is not None else None
             ion_types_used = self._ion_types_for_mode(frag_type)
 
             if self.theoretical_engine == "pyopenms":
-                clean_sequence = DataProcessor.clean_peptide_for_pyopenms(
-                    sequence, keep_modifications=self.keep_modifications
-                )
+                clean_sequence = DataProcessor.clean_peptide_for_pyopenms(sequence, keep_modifications=self.keep_modifications)
             else:
                 clean_sequence = sequence
 
             if clean_sequence is not None:
                 try:
-                    theoretical_analysis, mass_error_data, unmatched_theo_data = (
-                        self._match_and_collect(
-                            clean_sequence=clean_sequence,
-                            sequence=sequence,
-                            precursor_charge=precursor_charge,
-                            ion_types_used=ion_types_used,
-                            frag_type=frag_type,
-                            valid_mz=valid_mz,
-                            valid_intensity=valid_intensity,
-                        )
+                    theoretical_analysis, mass_error_data, unmatched_theo_data = self._match_and_collect(
+                        clean_sequence=clean_sequence,
+                        sequence=sequence,
+                        precursor_charge=precursor_charge,
+                        ion_types_used=ion_types_used,
+                        frag_type=frag_type,
+                        valid_mz=valid_mz,
+                        valid_intensity=valid_intensity,
                     )
                     theoretical_analysis["modifications_stripped"] = False
                 except Exception as e:
                     # Fallback: strip modifications (PyOpenMS only)
-                    if (
-                        self.keep_modifications
-                        and self.theoretical_engine == "pyopenms"
-                    ):
-                        logger.warning(
-                            f"PyOpenMS failed with modified sequence "
-                            f"'{clean_sequence[:50]}...': {e}. "
-                            "Trying without modifications."
-                        )
-                        clean_unmod = DataProcessor.clean_peptide_for_pyopenms(
-                            sequence, keep_modifications=False
-                        )
+                    if self.keep_modifications and self.theoretical_engine == "pyopenms":
+                        logger.warning(f"PyOpenMS failed with modified sequence '{clean_sequence[:50]}...': {e}. Trying without modifications.")
+                        clean_unmod = DataProcessor.clean_peptide_for_pyopenms(sequence, keep_modifications=False)
                         if clean_unmod is not None:
                             try:
-                                theoretical_analysis, mass_error_data, unmatched_theo_data = (
-                                    self._match_and_collect(
-                                        clean_sequence=clean_unmod,
-                                        sequence=sequence,
-                                        precursor_charge=precursor_charge,
-                                        ion_types_used=ion_types_used,
-                                        frag_type=frag_type,
-                                        valid_mz=valid_mz,
-                                        valid_intensity=valid_intensity,
-                                    )
+                                theoretical_analysis, mass_error_data, unmatched_theo_data = self._match_and_collect(
+                                    clean_sequence=clean_unmod,
+                                    sequence=sequence,
+                                    precursor_charge=precursor_charge,
+                                    ion_types_used=ion_types_used,
+                                    frag_type=frag_type,
+                                    valid_mz=valid_mz,
+                                    valid_intensity=valid_intensity,
                                 )
                                 theoretical_analysis["modifications_stripped"] = True
                             except Exception as e2:
-                                logger.error(
-                                    f"Failed even without modifications: {e2}"
-                                )
+                                logger.error(f"Failed even without modifications: {e2}")
                                 theoretical_analysis = self._empty_analysis(
                                     n_peaks=len(valid_mz),
                                     sequence_available=True,
@@ -1105,14 +1023,14 @@ class TheoreticalAnalyser:
                     precursor_charge=precursor_charge,
                 )
         else:
-            theoretical_analysis = self._empty_analysis(
-                n_peaks=len(valid_mz), sequence_available=False
-            )
+            theoretical_analysis = self._empty_analysis(n_peaks=len(valid_mz), sequence_available=False)
 
         # Custom ion detection (independent of sequence availability)
         if self.enable_custom_ions:
             theoretical_analysis["custom_ion_data"] = self._detect_custom_ions_per_spectrum(
-                valid_mz, valid_intensity, theoretical_analysis,
+                valid_mz,
+                valid_intensity,
+                theoretical_analysis,
             )
 
             # Append custom ion matches to mass_error_data for binning analysis
@@ -1122,11 +1040,7 @@ class TheoreticalAnalyser:
                 ion_library = self.custom_ions or DEFAULT_CUSTOM_IONS
 
                 # Extract frag_type for custom ion entries
-                frag_type_raw = (
-                    batch_result.get("frag_type", [None])[0]
-                    if "frag_type" in batch_result
-                    else None
-                )
+                frag_type_raw = batch_result.get("frag_type", [None])[0] if "frag_type" in batch_result else None
                 frag_type_ci = str(frag_type_raw) if frag_type_raw is not None else None
 
                 for group_name, group_data in detection.items():
@@ -1137,20 +1051,10 @@ class TheoreticalAnalyser:
                         continue
                     for exp_mz_val in group_data.get("matched_mz", []):
                         # Find closest target m/z for this match
-                        closest_target = min(
-                            target_mz_list, key=lambda t: abs(t - exp_mz_val)
-                        )
+                        closest_target = min(target_mz_list, key=lambda t: abs(t - exp_mz_val))
                         delta_da = abs(exp_mz_val - closest_target)
-                        delta_ppm = (
-                            delta_da / closest_target * 1e6
-                            if closest_target > 0
-                            else 0.0
-                        )
-                        signed_ppm = (
-                            (exp_mz_val - closest_target) / closest_target * 1e6
-                            if closest_target > 0
-                            else 0.0
-                        )
+                        delta_ppm = delta_da / closest_target * 1e6 if closest_target > 0 else 0.0
+                        signed_ppm = (exp_mz_val - closest_target) / closest_target * 1e6 if closest_target > 0 else 0.0
                         mass_error_data.append(
                             {
                                 "theo_mz": float(closest_target),
@@ -1170,21 +1074,11 @@ class TheoreticalAnalyser:
                         )
 
         # Precursor mass validation (pyopenms only, requires successful match)
-        if (
-            self.theoretical_engine == "pyopenms"
-            and theoretical_analysis.get("n_matched", 0) > 0
-            and precursor_charge is not None
-        ):
-            observed_mz = (
-                float(batch_result["precursor_mz"][0])
-                if "precursor_mz" in batch_result
-                else None
-            )
+        if self.theoretical_engine == "pyopenms" and theoretical_analysis.get("n_matched", 0) > 0 and precursor_charge is not None:
+            observed_mz = float(batch_result["precursor_mz"][0]) if "precursor_mz" in batch_result else None
             if observed_mz is not None:
                 prec_validation = self._validate_precursor_mass(
-                    clean_sequence=theoretical_analysis.get(
-                        "clean_sequence", clean_sequence or ""
-                    ),
+                    clean_sequence=theoretical_analysis.get("clean_sequence", clean_sequence or ""),
                     precursor_charge=precursor_charge,
                     observed_precursor_mz=observed_mz,
                 )
@@ -1220,9 +1114,7 @@ class TheoreticalAnalyser:
         cache_key = (clean_sequence, precursor_charge, tuple(ion_types_used))
         if cache_key in self.theoretical_cache:
             theo_mz, theo_annotations = self.theoretical_cache[cache_key]
-            theo_annotations_list = (
-                theo_annotations if isinstance(theo_annotations, list) else []
-            )
+            theo_annotations_list = theo_annotations if isinstance(theo_annotations, list) else []
         else:
             theo_mz, theo_annotations = generate_theoretical_spectrum(
                 peptide=clean_sequence,
@@ -1238,17 +1130,11 @@ class TheoreticalAnalyser:
                 fragmentation_type=frag_type,
             )
             self.theoretical_cache[cache_key] = (theo_mz, theo_annotations)
-            theo_annotations_list = (
-                theo_annotations if isinstance(theo_annotations, list) else []
-            )
+            theo_annotations_list = theo_annotations if isinstance(theo_annotations, list) else []
 
         # --- Match experimental to theoretical ---
         # Auto-select Da tolerance for low-res CID; None = use ppm_tol
-        da_tol = (
-            _da_tol_for_fragmentation(frag_type, self.cid_da_tol)
-            if self.cid_da_tol is not None
-            else None
-        )
+        da_tol = _da_tol_for_fragmentation(frag_type, self.cid_da_tol) if self.cid_da_tol is not None else None
         if self.use_conditional_annotation:
             match_results = match_with_conditional_features(
                 exp_mz=valid_mz,
@@ -1291,9 +1177,7 @@ class TheoreticalAnalyser:
                 )
                 theo_mz = full_theo_mz
                 theo_annotations = full_theo_ann
-                theo_annotations_list = (
-                    full_theo_ann if isinstance(full_theo_ann, list) else []
-                )
+                theo_annotations_list = full_theo_ann if isinstance(full_theo_ann, list) else []
             match_results = match_theoretical_to_experimental(
                 exp_mz=valid_mz,
                 exp_intensity=valid_intensity,
@@ -1323,10 +1207,7 @@ class TheoreticalAnalyser:
         feature_types = match_results.get("feature_type", None)
         parent_annotations = match_results.get("parent_annotation", None)
         if not feature_types:
-            feature_types = [
-                "base" if (ann is not None and ann != "") else None
-                for ann in matched_annotations
-            ]
+            feature_types = ["base" if (ann is not None and ann != "") else None for ann in matched_annotations]
         if not parent_annotations:
             parent_annotations = [None] * len(matched_annotations)
 
@@ -1347,9 +1228,7 @@ class TheoreticalAnalyser:
         label_intensity: Dict[str, float] = {}
         for i, label in enumerate(annotation_labels):
             if i < len(valid_intensity):
-                label_intensity[label] = label_intensity.get(label, 0.0) + float(
-                    valid_intensity[i]
-                )
+                label_intensity[label] = label_intensity.get(label, 0.0) + float(valid_intensity[i])
 
         # --- Per-peak neutral loss details ---
         loss_details: List[Dict[str, Any]] = []
@@ -1371,18 +1250,10 @@ class TheoreticalAnalyser:
             parent_intensity = None
             if parent_ann:
                 for j in range(len(matched_annotations)):
-                    if (
-                        j < len(feature_types)
-                        and feature_types[j] == "base"
-                        and matched_annotations[j] == parent_ann
-                    ):
+                    if j < len(feature_types) and feature_types[j] == "base" and matched_annotations[j] == parent_ann:
                         parent_intensity = float(valid_intensity[j])
                         break
-            intensity_ratio = (
-                loss_intensity / parent_intensity
-                if parent_intensity is not None and parent_intensity > 1e-12
-                else None
-            )
+            intensity_ratio = loss_intensity / parent_intensity if parent_intensity is not None and parent_intensity > 1e-12 else None
 
             loss_details.append(
                 {
@@ -1409,8 +1280,7 @@ class TheoreticalAnalyser:
             "precursor_charge": precursor_charge,
             "n_theoretical": len(theo_mz),
             "n_matched": match_results["metrics"]["n_matched"],
-            "match_rate": match_results["metrics"]["n_matched"]
-            / max(len(theo_mz), 1),
+            "match_rate": match_results["metrics"]["n_matched"] / max(len(theo_mz), 1),
             "frac_intensity": match_results["metrics"]["frac_intensity"],
             "median_ppm": match_results["metrics"]["median_abs_ppm"],
             "mean_ppm": match_results["metrics"]["mean_ppm_bias"],
@@ -1418,10 +1288,8 @@ class TheoreticalAnalyser:
             "n_unannotated_peaks": n_unannotated,
             "annotated_fraction": n_annotated / max(len(annotated_mask), 1),
             "unannotated_fraction": n_unannotated / max(len(annotated_mask), 1),
-            "annotated_intensity_fraction": annotated_intensity
-            / max(total_intensity, 1e-12),
-            "unannotated_intensity_fraction": unannotated_intensity
-            / max(total_intensity, 1e-12),
+            "annotated_intensity_fraction": annotated_intensity / max(total_intensity, 1e-12),
+            "unannotated_intensity_fraction": unannotated_intensity / max(total_intensity, 1e-12),
             "annotated_mask": annotated_mask.tolist(),
             "theo_annotations": matched_annotations,
             "annotation_labels": annotation_labels,
@@ -1447,40 +1315,26 @@ class TheoreticalAnalyser:
         mass_error_data: List[Dict] = []
         unmatched_theo_data: List[Dict] = []
 
-        if (
-            self.enable_mass_error_analysis
-            and match_results
-            and len(match_results.get("ppm_error", [])) > 0
-        ):
+        if self.enable_mass_error_analysis and match_results and len(match_results.get("ppm_error", [])) > 0:
             ppm_errors = match_results["ppm_error"]
-            matched_theo_mz = match_results.get(
-                "matched_theo_mz", np.full(len(valid_mz), np.nan)
-            )
+            matched_theo_mz = match_results.get("matched_theo_mz", np.full(len(valid_mz), np.nan))
 
             # Unmatched theoretical ions
             matched_theo_indices = set(match_idx[match_idx >= 0])
             for theo_idx in set(range(len(theo_mz))) - matched_theo_indices:
                 theo_mz_val = float(theo_mz[theo_idx])
-                theo_ann = (
-                    theo_annotations_list[theo_idx]
-                    if theo_annotations_list and theo_idx < len(theo_annotations_list)
-                    else ""
-                )
+                theo_ann = theo_annotations_list[theo_idx] if theo_annotations_list and theo_idx < len(theo_annotations_list) else ""
                 unmatched_theo_data.append(
                     {
                         "theo_mz": theo_mz_val,
                         "mz_range": self._classify_mz_range(theo_mz_val),
-                        "ion_type": self._extract_ion_type(theo_ann)
-                        if theo_ann
-                        else "unknown",
+                        "ion_type": self._extract_ion_type(theo_ann) if theo_ann else "unknown",
                         "frag_type": frag_type,
                     }
                 )
 
             # Matched peak mass errors
-            for i, (exp_mz_i, ppm_err, theo_mz_i, ann) in enumerate(
-                zip(valid_mz, ppm_errors, matched_theo_mz, matched_annotations)
-            ):
+            for i, (exp_mz_i, ppm_err, theo_mz_i, ann) in enumerate(zip(valid_mz, ppm_errors, matched_theo_mz, matched_annotations, strict=False)):
                 if not np.isnan(ppm_err) and not np.isnan(theo_mz_i):
                     mass_error_data.append(
                         {
@@ -1489,21 +1343,13 @@ class TheoreticalAnalyser:
                             "delta_mz_da": float(abs(exp_mz_i - theo_mz_i)),
                             "delta_mz_ppm": float(abs(ppm_err)),
                             "signed_ppm": float(ppm_err),
-                            "ion_type": self._extract_ion_type(ann)
-                            if ann
-                            else "unknown",
-                            "charge": self._extract_charge_from_annotation(ann)
-                            if ann
-                            else 1,
+                            "ion_type": self._extract_ion_type(ann) if ann else "unknown",
+                            "charge": self._extract_charge_from_annotation(ann) if ann else 1,
                             "mz_range": self._classify_mz_range(theo_mz_i),
                             "frag_type": frag_type,
-                            "feature_type": feature_types[i]
-                            if feature_types and i < len(feature_types)
-                            else "base",
+                            "feature_type": feature_types[i] if feature_types and i < len(feature_types) else "base",
                             "peptide": sequence,
-                            "position": self._extract_fragment_position(ann)
-                            if ann
-                            else -1,
+                            "position": self._extract_fragment_position(ann) if ann else -1,
                             "annotation": ann if ann else "",
                         }
                     )
@@ -1547,16 +1393,53 @@ class TheoreticalAnalyser:
     # Standard amino acid residue masses (monoisotopic, Da)
     # Order: G A S P V T C L I N D Q K E M H F R Y W
     _AA_CODES = [
-        "G", "A", "S", "P", "V", "T", "C", "L", "I", "N",
-        "D", "Q", "K", "E", "M", "H", "F", "R", "Y", "W",
+        "G",
+        "A",
+        "S",
+        "P",
+        "V",
+        "T",
+        "C",
+        "L",
+        "I",
+        "N",
+        "D",
+        "Q",
+        "K",
+        "E",
+        "M",
+        "H",
+        "F",
+        "R",
+        "Y",
+        "W",
     ]
-    _AA_MASSES = np.array([
-        57.021464, 71.037114, 87.032028, 97.052764, 99.068414,   # G A S P V
-        101.047670, 103.009185, 113.084064, 113.084064, 114.042927,  # T C L I N
-        115.026943, 128.058578, 128.094963, 129.042593, 131.040485,  # D Q K E M
-        137.058912, 147.068414, 156.101111, 163.063329, 186.079313,  # H F R Y W
-    ], dtype=np.float64)
-    _AA_MASS_TO_CODE = dict(zip(_AA_MASSES, _AA_CODES))
+    _AA_MASSES = np.array(
+        [
+            57.021464,
+            71.037114,
+            87.032028,
+            97.052764,
+            99.068414,  # G A S P V
+            101.047670,
+            103.009185,
+            113.084064,
+            113.084064,
+            114.042927,  # T C L I N
+            115.026943,
+            128.058578,
+            128.094963,
+            129.042593,
+            131.040485,  # D Q K E M
+            137.058912,
+            147.068414,
+            156.101111,
+            163.063329,
+            186.079313,  # H F R Y W
+        ],
+        dtype=np.float64,
+    )
+    _AA_MASS_TO_CODE = dict(zip(_AA_MASSES, _AA_CODES, strict=False))
     _AA_MASSES_SORTED = np.sort(_AA_MASSES)
 
     def _validate_precursor_mass(
@@ -1589,7 +1472,7 @@ class TheoreticalAnalyser:
         ppm_threshold : float
             PPM threshold above which a warning is raised.
 
-        Returns
+        Returns:
         -------
         Dict[str, Any]
             Keys: theoretical_precursor_mz, observed_precursor_mz,
@@ -1597,9 +1480,7 @@ class TheoreticalAnalyser:
             precursor_isotope_offset.
         """
         try:
-            theo_mz = compute_theoretical_precursor_mz(
-                clean_sequence, precursor_charge
-            )
+            theo_mz = compute_theoretical_precursor_mz(clean_sequence, precursor_charge)
         except Exception:
             return {
                 "theoretical_precursor_mz": np.nan,
@@ -1666,31 +1547,19 @@ class TheoreticalAnalyser:
         n_unannotated_unmasked = int((~annotated_mask & ~masked_peaks).sum())
 
         total_masked = int(masked_peaks.sum())
-        annotated_fraction_of_masked = float(n_annotated_masked) / max(
-            total_masked, 1
-        )
+        annotated_fraction_of_masked = float(n_annotated_masked) / max(total_masked, 1)
 
         # Intensity-based metrics
-        annotated_int_masked = float(
-            valid_intensity[annotated_mask & masked_peaks].sum()
-        )
-        unannotated_int_masked = float(
-            valid_intensity[~annotated_mask & masked_peaks].sum()
-        )
-        annotated_int_unmasked = float(
-            valid_intensity[annotated_mask & ~masked_peaks].sum()
-        )
-        unannotated_int_unmasked = float(
-            valid_intensity[~annotated_mask & ~masked_peaks].sum()
-        )
+        annotated_int_masked = float(valid_intensity[annotated_mask & masked_peaks].sum())
+        unannotated_int_masked = float(valid_intensity[~annotated_mask & masked_peaks].sum())
+        annotated_int_unmasked = float(valid_intensity[annotated_mask & ~masked_peaks].sum())
+        unannotated_int_unmasked = float(valid_intensity[~annotated_mask & ~masked_peaks].sum())
         total_int_masked = annotated_int_masked + unannotated_int_masked
         annotated_int_frac_masked = annotated_int_masked / max(total_int_masked, 1e-12)
         total_annotated_int = annotated_int_masked + annotated_int_unmasked
         total_unannotated_int = unannotated_int_masked + unannotated_int_unmasked
         ann_int_masked_frac = annotated_int_masked / max(total_annotated_int, 1e-12)
-        unann_int_masked_frac = unannotated_int_masked / max(
-            total_unannotated_int, 1e-12
-        )
+        unann_int_masked_frac = unannotated_int_masked / max(total_unannotated_int, 1e-12)
 
         # Per-annotation type
         annotation_labels = theoretical_analysis.get("annotation_labels", [])
@@ -1703,23 +1572,13 @@ class TheoreticalAnalyser:
                 continue
             annotated_type_total[label] = annotated_type_total.get(label, 0) + 1
             peak_int = float(valid_intensity[idx]) if idx < len(valid_intensity) else 0.0
-            annotated_type_intensity_total[label] = (
-                annotated_type_intensity_total.get(label, 0.0) + peak_int
-            )
+            annotated_type_intensity_total[label] = annotated_type_intensity_total.get(label, 0.0) + peak_int
             if idx < len(masked_peaks) and masked_peaks[idx]:
-                annotated_type_masked[label] = (
-                    annotated_type_masked.get(label, 0) + 1
-                )
-                annotated_type_intensity_masked[label] = (
-                    annotated_type_intensity_masked.get(label, 0.0) + peak_int
-                )
-        annotated_type_mask_ratio = {
-            label: masked / max(annotated_type_total.get(label, 0), 1)
-            for label, masked in annotated_type_masked.items()
-        }
+                annotated_type_masked[label] = annotated_type_masked.get(label, 0) + 1
+                annotated_type_intensity_masked[label] = annotated_type_intensity_masked.get(label, 0.0) + peak_int
+        annotated_type_mask_ratio = {label: masked / max(annotated_type_total.get(label, 0), 1) for label, masked in annotated_type_masked.items()}
         annotated_type_intensity_mask_ratio = {
-            label: annotated_type_intensity_masked.get(label, 0.0)
-            / max(annotated_type_intensity_total.get(label, 0.0), 1e-12)
+            label: annotated_type_intensity_masked.get(label, 0.0) / max(annotated_type_intensity_total.get(label, 0.0), 1e-12)
             for label in annotated_type_intensity_total
         }
 
@@ -1744,26 +1603,18 @@ class TheoreticalAnalyser:
             # Determine if this is a precursor peak
             is_precursor = label in ("precursor", "precursor-isotope")
             if is_precursor:
-                precursor_group_totals[group_key] = (
-                    precursor_group_totals.get(group_key, 0) + 1
-                )
+                precursor_group_totals[group_key] = precursor_group_totals.get(group_key, 0) + 1
                 precursor_peak_indices.append(idx)
                 if masked_peaks[idx]:
-                    precursor_group_masked[group_key] = (
-                        precursor_group_masked.get(group_key, 0) + 1
-                    )
+                    precursor_group_masked[group_key] = precursor_group_masked.get(group_key, 0) + 1
                 # Track the base precursor key (monoisotopic: p^...)
                 ann_str = ann or ""
                 if ft == "precursor" and isinstance(ann_str, str) and ann_str.startswith("p^"):
                     precursor_base_key = group_key
             else:
-                fragment_group_totals[group_key] = (
-                    fragment_group_totals.get(group_key, 0) + 1
-                )
+                fragment_group_totals[group_key] = fragment_group_totals.get(group_key, 0) + 1
                 if masked_peaks[idx]:
-                    fragment_group_masked[group_key] = (
-                        fragment_group_masked.get(group_key, 0) + 1
-                    )
+                    fragment_group_masked[group_key] = fragment_group_masked.get(group_key, 0) + 1
 
         # --- Split into "primary" (training-relevant) vs "all" views ---
         # The headline fragment-group metrics are reported against the
@@ -1787,21 +1638,15 @@ class TheoreticalAnalyser:
 
         fragment_group_totals_all = fragment_group_totals
         fragment_group_masked_all = fragment_group_masked
-        fragment_group_totals_primary = {
-            k: v for k, v in fragment_group_totals_all.items() if _is_primary_group(k)
-        }
-        fragment_group_masked_primary = {
-            k: v for k, v in fragment_group_masked_all.items() if _is_primary_group(k)
-        }
+        fragment_group_totals_primary = {k: v for k, v in fragment_group_totals_all.items() if _is_primary_group(k)}
+        fragment_group_masked_primary = {k: v for k, v in fragment_group_masked_all.items() if _is_primary_group(k)}
 
-        def _group_stats(
-            totals: Dict[str, int], masked: Dict[str, int]
-        ) -> Dict[str, Any]:
-            """Compute group-level mask statistics for one totals/masked
-            pair (primary or all). Returns counts + full-mask ratio +
-            per-group mask fractions so callers can reconstruct both the
-            ratio ("how complete is each group") and the count views
-            ("how many groups are fully/partial/un-masked")."""
+        def _group_stats(totals: Dict[str, int], masked: Dict[str, int]) -> Dict[str, Any]:
+            """Compute group-level mask statistics for one totals/masked pair (primary or all).
+
+            Returns counts + full-mask ratio + per-group mask fractions so callers can reconstruct both the ratio ("how complete is each group") and
+            the count views ("how many groups are fully/partial/un-masked").
+            """
             count = len(totals)
             if not count:
                 return {
@@ -1814,35 +1659,22 @@ class TheoreticalAnalyser:
                     "n_partially_masked": 0,
                     "n_unmasked": 0,
                 }
-            fractions = [
-                masked.get(key, 0) / max(total, 1)
-                for key, total in totals.items()
-            ]
-            n_fully = sum(
-                1 for key, total in totals.items()
-                if masked.get(key, 0) >= total
-            )
-            n_partial = sum(
-                1 for key, total in totals.items()
-                if 0 < masked.get(key, 0) < total
-            )
+            fractions = [masked.get(key, 0) / max(total, 1) for key, total in totals.items()]
+            n_fully = sum(1 for key, total in totals.items() if masked.get(key, 0) >= total)
+            n_partial = sum(1 for key, total in totals.items() if 0 < masked.get(key, 0) < total)
             n_unmasked = sum(1 for key in totals if masked.get(key, 0) == 0)
             return {
                 "count": count,
                 "fractions": fractions,
                 "full_mask_ratio": n_fully / count,
                 "avg_mask_fraction": float(np.mean(fractions)),
-                "weighted_mask_fraction": (
-                    sum(masked.values()) / max(sum(totals.values()), 1)
-                ),
+                "weighted_mask_fraction": (sum(masked.values()) / max(sum(totals.values()), 1)),
                 "n_fully_masked": n_fully,
                 "n_partially_masked": n_partial,
                 "n_unmasked": n_unmasked,
             }
 
-        primary_stats = _group_stats(
-            fragment_group_totals_primary, fragment_group_masked_primary
-        )
+        primary_stats = _group_stats(fragment_group_totals_primary, fragment_group_masked_primary)
         all_stats = _group_stats(fragment_group_totals_all, fragment_group_masked_all)
 
         # Headline metrics use the primary view.
@@ -1855,9 +1687,7 @@ class TheoreticalAnalyser:
         n_fragment_groups_fully_masked = primary_stats["n_fully_masked"]
         n_fragment_groups_partially_masked = primary_stats["n_partially_masked"]
         n_fragment_groups_unmasked = primary_stats["n_unmasked"]
-        n_fragment_groups_any_masked = (
-            n_fragment_groups_fully_masked + n_fragment_groups_partially_masked
-        )
+        n_fragment_groups_any_masked = n_fragment_groups_fully_masked + n_fragment_groups_partially_masked
 
         # --- Per-ion-series group masking ---
         series_group_total: Dict[str, int] = {}
@@ -1875,58 +1705,29 @@ class TheoreticalAnalyser:
             series_group_total[series] = series_group_total.get(series, 0) + 1
             masked_count = fragment_group_masked.get(key, 0)
             if masked_count > 0:
-                series_group_any_masked[series] = (
-                    series_group_any_masked.get(series, 0) + 1
-                )
+                series_group_any_masked[series] = series_group_any_masked.get(series, 0) + 1
             if masked_count >= total:
-                series_group_fully_masked[series] = (
-                    series_group_fully_masked.get(series, 0) + 1
-                )
+                series_group_fully_masked[series] = series_group_fully_masked.get(series, 0) + 1
             elif masked_count > 0:
-                series_group_partially_masked[series] = (
-                    series_group_partially_masked.get(series, 0) + 1
-                )
+                series_group_partially_masked[series] = series_group_partially_masked.get(series, 0) + 1
             else:
-                series_group_unmasked[series] = (
-                    series_group_unmasked.get(series, 0) + 1
-                )
+                series_group_unmasked[series] = series_group_unmasked.get(series, 0) + 1
 
         # --- Precursor ion group metrics ---
         precursor_n_peaks = sum(precursor_group_totals.values())
         precursor_n_masked = sum(precursor_group_masked.values())
-        precursor_base_masked = bool(
-            precursor_base_key
-            and precursor_group_masked.get(precursor_base_key, 0) > 0
-        )
-        precursor_group_mask_fraction = (
-            precursor_n_masked / max(precursor_n_peaks, 1)
-        )
-        precursor_fully_masked = bool(
-            precursor_n_peaks > 0 and precursor_n_masked >= precursor_n_peaks
-        )
+        precursor_base_masked = bool(precursor_base_key and precursor_group_masked.get(precursor_base_key, 0) > 0)
+        precursor_group_mask_fraction = precursor_n_masked / max(precursor_n_peaks, 1)
+        precursor_fully_masked = bool(precursor_n_peaks > 0 and precursor_n_masked >= precursor_n_peaks)
 
         # Mask budget fractions (count-based and intensity-based)
-        precursor_mask_budget_fraction = (
-            precursor_n_masked / max(total_masked, 1)
-        )
-        precursor_masked_intensity = float(
-            sum(
-                valid_intensity[i]
-                for i in precursor_peak_indices
-                if i < len(masked_peaks) and masked_peaks[i]
-            )
-        )
-        precursor_intensity_budget_fraction = (
-            precursor_masked_intensity / max(total_int_masked, 1e-12)
-        )
+        precursor_mask_budget_fraction = precursor_n_masked / max(total_masked, 1)
+        precursor_masked_intensity = float(sum(valid_intensity[i] for i in precursor_peak_indices if i < len(masked_peaks) and masked_peaks[i]))
+        precursor_intensity_budget_fraction = precursor_masked_intensity / max(total_int_masked, 1e-12)
 
         # Precursor share of the *annotated* masking signal
-        precursor_fraction_of_annotated_masked = (
-            precursor_n_masked / max(n_annotated_masked, 1)
-        )
-        precursor_intensity_fraction_of_annotated_masked = (
-            precursor_masked_intensity / max(annotated_int_masked, 1e-12)
-        )
+        precursor_fraction_of_annotated_masked = precursor_n_masked / max(n_annotated_masked, 1)
+        precursor_intensity_fraction_of_annotated_masked = precursor_masked_intensity / max(annotated_int_masked, 1e-12)
 
         # Precursor leakage: base precursor masked but some children unmasked
         precursor_has_leakage = False
@@ -1958,29 +1759,15 @@ class TheoreticalAnalyser:
             "annotated_mask_ratio": float(n_annotated_masked) / max(n_ann, 1),
             "unannotated_mask_ratio": float(n_unannotated_masked) / max(n_unann, 1),
             "overall_mask_ratio": float(total_masked) / max(len(masked_peaks), 1),
-            "annotated_preservation_ratio": float(n_annotated_unmasked)
-            / max(n_ann, 1),
+            "annotated_preservation_ratio": float(n_annotated_unmasked) / max(n_ann, 1),
             "annotated_fraction_of_masked_peaks": annotated_fraction_of_masked,
-            "unannotated_fraction_of_masked_peaks": 1.0
-            - annotated_fraction_of_masked,
-            "annotated_intensity_fraction_of_masked": float(
-                annotated_int_frac_masked
-            ),
-            "unannotated_intensity_fraction_of_masked": float(
-                1.0 - annotated_int_frac_masked
-            ),
-            "annotated_intensity_masked_fraction_of_annotated": float(
-                ann_int_masked_frac
-            ),
-            "annotated_intensity_unmasked_fraction_of_annotated": float(
-                1.0 - ann_int_masked_frac
-            ),
-            "unannotated_intensity_masked_fraction_of_unannotated": float(
-                unann_int_masked_frac
-            ),
-            "unannotated_intensity_unmasked_fraction_of_unannotated": float(
-                1.0 - unann_int_masked_frac
-            ),
+            "unannotated_fraction_of_masked_peaks": 1.0 - annotated_fraction_of_masked,
+            "annotated_intensity_fraction_of_masked": float(annotated_int_frac_masked),
+            "unannotated_intensity_fraction_of_masked": float(1.0 - annotated_int_frac_masked),
+            "annotated_intensity_masked_fraction_of_annotated": float(ann_int_masked_frac),
+            "annotated_intensity_unmasked_fraction_of_annotated": float(1.0 - ann_int_masked_frac),
+            "unannotated_intensity_masked_fraction_of_unannotated": float(unann_int_masked_frac),
+            "unannotated_intensity_unmasked_fraction_of_unannotated": float(1.0 - unann_int_masked_frac),
             "annotated_type_total": annotated_type_total,
             "annotated_type_masked": annotated_type_masked,
             "annotated_type_mask_ratio": annotated_type_mask_ratio,
@@ -1990,19 +1777,13 @@ class TheoreticalAnalyser:
             # Backward-compatible fragment group ratio metrics
             "fragment_group_count": int(fragment_group_count),
             "fragment_group_full_mask_ratio": float(fragment_group_full_mask_ratio),
-            "fragment_group_avg_mask_fraction": float(
-                fragment_group_avg_mask_fraction
-            ),
-            "fragment_group_weighted_mask_fraction": float(
-                fragment_group_weighted_mask_fraction
-            ),
+            "fragment_group_avg_mask_fraction": float(fragment_group_avg_mask_fraction),
+            "fragment_group_weighted_mask_fraction": float(fragment_group_weighted_mask_fraction),
             # Fragment group count breakdown (primary view: restricted to
             # the frag_type's canonical backbone ion pair)
             "n_fragment_groups_total": int(n_fragment_groups_total),
             "n_fragment_groups_fully_masked": int(n_fragment_groups_fully_masked),
-            "n_fragment_groups_partially_masked": int(
-                n_fragment_groups_partially_masked
-            ),
+            "n_fragment_groups_partially_masked": int(n_fragment_groups_partially_masked),
             "n_fragment_groups_unmasked": int(n_fragment_groups_unmasked),
             "n_fragment_groups_any_masked": int(n_fragment_groups_any_masked),
             "group_mask_fractions": group_mask_fractions,
@@ -2018,17 +1799,11 @@ class TheoreticalAnalyser:
             # primary-view headline numbers.
             "n_fragment_groups_total_all": int(all_stats["count"]),
             "n_fragment_groups_fully_masked_all": int(all_stats["n_fully_masked"]),
-            "n_fragment_groups_partially_masked_all": int(
-                all_stats["n_partially_masked"]
-            ),
+            "n_fragment_groups_partially_masked_all": int(all_stats["n_partially_masked"]),
             "n_fragment_groups_unmasked_all": int(all_stats["n_unmasked"]),
             "fragment_group_full_mask_ratio_all": float(all_stats["full_mask_ratio"]),
-            "fragment_group_avg_mask_fraction_all": float(
-                all_stats["avg_mask_fraction"]
-            ),
-            "fragment_group_weighted_mask_fraction_all": float(
-                all_stats["weighted_mask_fraction"]
-            ),
+            "fragment_group_avg_mask_fraction_all": float(all_stats["avg_mask_fraction"]),
+            "fragment_group_weighted_mask_fraction_all": float(all_stats["weighted_mask_fraction"]),
             # Per-ion-series group masking (from the *all* view, which is
             # the right scope for this breakdown — users reading this panel
             # want to see all series present, not just the primary pair).
@@ -2044,15 +1819,9 @@ class TheoreticalAnalyser:
             "precursor_group_mask_fraction": float(precursor_group_mask_fraction),
             "precursor_fully_masked": bool(precursor_fully_masked),
             "precursor_mask_budget_fraction": float(precursor_mask_budget_fraction),
-            "precursor_intensity_budget_fraction": float(
-                precursor_intensity_budget_fraction
-            ),
-            "precursor_fraction_of_annotated_masked": float(
-                precursor_fraction_of_annotated_masked
-            ),
-            "precursor_intensity_fraction_of_annotated_masked": float(
-                precursor_intensity_fraction_of_annotated_masked
-            ),
+            "precursor_intensity_budget_fraction": float(precursor_intensity_budget_fraction),
+            "precursor_fraction_of_annotated_masked": float(precursor_fraction_of_annotated_masked),
+            "precursor_intensity_fraction_of_annotated_masked": float(precursor_intensity_fraction_of_annotated_masked),
             "precursor_has_leakage": bool(precursor_has_leakage),
             # Custom ion masking metrics
             "custom_n_peaks": int(custom_n_peaks),
@@ -2077,16 +1846,12 @@ class TheoreticalAnalyser:
         Computes overall matching statistics, coverage, signal composition,
         and ion-type performance.
         """
-        valid_results = [
-            r for r in per_spectrum_results if r.get("sequence_available", False)
-        ]
+        valid_results = [r for r in per_spectrum_results if r.get("sequence_available", False)]
         if not valid_results:
             logger.warning("No valid theoretical results to aggregate")
             return {"error": "No data"}
 
-        logger.info(
-            f"Aggregating theoretical analysis for {len(valid_results):,d} spectra..."
-        )
+        logger.info(f"Aggregating theoretical analysis for {len(valid_results):,d} spectra...")
 
         # --- Per-spectrum summary arrays ---
         match_rates = [r.get("match_rate", 0) for r in valid_results]
@@ -2099,7 +1864,7 @@ class TheoreticalAnalyser:
         n_ann = [r.get("n_annotated_peaks", 0) for r in valid_results]
         n_unann = [r.get("n_unannotated_peaks", 0) for r in valid_results]
 
-        overall_stats = {
+        overall_stats: dict[str, Any] = {
             "n_spectra_analyzed": len(valid_results),
             "avg_match_rate": float(np.mean(match_rates)),
             "std_match_rate": float(np.std(match_rates)),
@@ -2122,16 +1887,12 @@ class TheoreticalAnalyser:
         mass_error_df = None
         if mass_error_data and len(mass_error_data) > 0:
             mass_error_df = pd.DataFrame(mass_error_data)
-            logger.debug(
-                f"Collected {len(mass_error_df):,d} matched peaks for mass error analysis"
-            )
+            logger.debug(f"Collected {len(mass_error_df):,d} matched peaks for mass error analysis")
 
         unmatched_theo_df = None
         if unmatched_theo_data and len(unmatched_theo_data) > 0:
             unmatched_theo_df = pd.DataFrame(unmatched_theo_data)
-            logger.debug(
-                f"Collected {len(unmatched_theo_df):,d} unmatched theoretical ions"
-            )
+            logger.debug(f"Collected {len(unmatched_theo_df):,d} unmatched theoretical ions")
 
         self.results = {
             "overall_stats": overall_stats,
@@ -2154,9 +1915,7 @@ class TheoreticalAnalyser:
         # re-populated in Phase C with the gated-pop run, so plots reflect
         # what survived the gate.
         self.calculate_fragment_group_analysis()
-        self.results["_full_fragment_group_analysis"] = self.results.get(
-            "fragment_group_analysis", {}
-        )
+        self.results["_full_fragment_group_analysis"] = self.results.get("fragment_group_analysis", {})
 
         if self.enable_quality_gate:
             self.analyze_quality_gate()
@@ -2179,9 +1938,7 @@ class TheoreticalAnalyser:
         self.results["_full_mass_error_df"] = mass_error_df
         self.results["_full_unmatched_theo_df"] = unmatched_theo_df
 
-        filter_metadata = self._apply_quality_gate_filter(
-            per_spectrum_results, mass_error_df, unmatched_theo_df
-        )
+        filter_metadata = self._apply_quality_gate_filter(per_spectrum_results, mass_error_df, unmatched_theo_df)
         self.results["filter_metadata"] = filter_metadata
 
         # Re-bind locals to whatever Phase B left in self.results so the
@@ -2286,24 +2043,19 @@ class TheoreticalAnalyser:
         qga = self.results.get("quality_gate_analysis", {})
         below_mask = qga.get("_below_mask")
         if below_mask is None:
-            logger.warning(
-                "apply_quality_gate_filter is True but quality_gate_analysis "
-                "did not produce a below_mask; skipping filter"
-            )
+            logger.warning("apply_quality_gate_filter is True but quality_gate_analysis did not produce a below_mask; skipping filter")
             return meta
 
         # below_mask is aligned to fga_valid (sequence_available + feature_types
         # + theo_annotations). Translate back to per_spectrum positions.
         fga_valid_positions = [
-            i for i, r in enumerate(per_spectrum_results)
-            if r.get("sequence_available", False)
-            and r.get("feature_types")
-            and r.get("theo_annotations")
+            i
+            for i, r in enumerate(per_spectrum_results)
+            if r.get("sequence_available", False) and r.get("feature_types") and r.get("theo_annotations")
         ]
         if len(fga_valid_positions) != len(below_mask):
             logger.warning(
-                f"Quality-gate filter: fga_valid positions ({len(fga_valid_positions)}) "
-                f"!= below_mask length ({len(below_mask)}); skipping filter"
+                f"Quality-gate filter: fga_valid positions ({len(fga_valid_positions)}) != below_mask length ({len(below_mask)}); skipping filter"
             )
             return meta
 
@@ -2312,26 +2064,24 @@ class TheoreticalAnalyser:
         # them as rejected too. This matches the spirit of the gate: only
         # spectra with enough annotated structure to evaluate coverage can
         # be considered "passing".
-        pass_indices: Set[int] = {
-            pos for pos, fail in zip(fga_valid_positions, below_mask_arr) if not fail
-        }
+        pass_indices: Set[int] = {pos for pos, fail in zip(fga_valid_positions, below_mask_arr, strict=False) if not fail}
 
         n_passed = len(pass_indices)
         n_rejected = n_total - n_passed
-        meta.update({
-            "filter_applied": True,
-            "n_passed_spectra": n_passed,
-            "n_rejected_spectra": n_rejected,
-            "rejection_rate": n_rejected / max(n_total, 1),
-        })
+        meta.update(
+            {
+                "filter_applied": True,
+                "n_passed_spectra": n_passed,
+                "n_rejected_spectra": n_rejected,
+                "rejection_rate": n_rejected / max(n_total, 1),
+            }
+        )
 
         # Filter per_spectrum, preserving original ordering. spectrum_idx
         # values stamped on mass_error rows index INTO per_spectrum_results
         # (i.e. before filtering), so we filter the DataFrames using the
         # same per-spectrum index set rather than re-numbering rows.
-        filtered_per_spectrum = [
-            per_spectrum_results[i] for i in range(n_total) if i in pass_indices
-        ]
+        filtered_per_spectrum = [per_spectrum_results[i] for i in range(n_total) if i in pass_indices]
 
         filtered_mass_error_df = mass_error_df
         if mass_error_df is not None and "spectrum_idx" in mass_error_df.columns:
@@ -2339,10 +2089,7 @@ class TheoreticalAnalyser:
             filtered_mass_error_df = mass_error_df.loc[row_mask].copy()
 
         filtered_unmatched_theo_df = unmatched_theo_df
-        if (
-            unmatched_theo_df is not None
-            and "spectrum_idx" in unmatched_theo_df.columns
-        ):
+        if unmatched_theo_df is not None and "spectrum_idx" in unmatched_theo_df.columns:
             row_mask = unmatched_theo_df["spectrum_idx"].isin(pass_indices)
             filtered_unmatched_theo_df = unmatched_theo_df.loc[row_mask].copy()
 
@@ -2382,19 +2129,11 @@ class TheoreticalAnalyser:
         if coverage_arr.size == 0:
             return {}
 
-        fga_valid = [
-            r for r in full_per_spectrum
-            if r.get("sequence_available", False)
-            and r.get("feature_types")
-            and r.get("theo_annotations")
-        ]
+        fga_valid = [r for r in full_per_spectrum if r.get("sequence_available", False) and r.get("feature_types") and r.get("theo_annotations")]
         if len(fga_valid) != len(coverage_arr):
             return {}
 
-        below_mask = (
-            (coverage_arr < self.min_backbone_coverage)
-            | (n_groups_arr < self.min_fragment_groups)
-        )
+        below_mask = (coverage_arr < self.min_backbone_coverage) | (n_groups_arr < self.min_fragment_groups)
         overall_rej_rate = float(below_mask.sum()) / max(len(below_mask), 1)
 
         fga_mod_types: List[List[str]] = []
@@ -2424,7 +2163,7 @@ class TheoreticalAnalyser:
                 "relative_risk": rej_rate / max(overall_rej_rate, 1e-9),
             }
 
-        result = {
+        result: dict[str, Any] = {
             "overall_rejection_rate": overall_rej_rate,
             "by_modification": by_mod,
         }
@@ -2477,7 +2216,7 @@ class TheoreticalAnalyser:
                 mod_label_per_spectrum.append("Unmodified")
 
         n_total = len(valid)
-        prevalence = {
+        prevalence: dict[str, Any] = {
             "n_total": n_total,
             "n_modified": n_modified,
             "n_unmodified": n_unmodified,
@@ -2494,9 +2233,7 @@ class TheoreticalAnalyser:
         # ── B. Per-modification matching quality ───────────────────────
         # Group spectra indices by type (+ Unmodified baseline)
         type_to_indices: Dict[str, List[int]] = {"Unmodified": []}
-        for i, (mtypes, _) in enumerate(
-            zip(mod_types_per_spectrum, valid)
-        ):
+        for i, (mtypes, _) in enumerate(zip(mod_types_per_spectrum, valid, strict=False)):
             if not mtypes:
                 type_to_indices["Unmodified"].append(i)
             else:
@@ -2534,16 +2271,17 @@ class TheoreticalAnalyser:
                     }
                 else:
                     stats[k] = {
-                        "mean": 0.0, "median": 0.0, "std": 0.0,
-                        "q25": 0.0, "q75": 0.0,
+                        "mean": 0.0,
+                        "median": 0.0,
+                        "std": 0.0,
+                        "q25": 0.0,
+                        "q75": 0.0,
                     }
             matching_quality[mod_type] = stats
 
             _match_rate_by_type[mod_type] = vals["match_rate"]
             _frac_intensity_by_type[mod_type] = vals["frac_intensity"]
-            _ppm_by_type[mod_type] = [
-                v for v in vals["median_ppm"] if not np.isnan(v)
-            ]
+            _ppm_by_type[mod_type] = [v for v in vals["median_ppm"] if not np.isnan(v)]
 
         # ── C. Modification-aware mass error ───────────────────────────
         mass_error_by_mod: Dict[str, Dict[str, float]] = {}
@@ -2580,8 +2318,8 @@ class TheoreticalAnalyser:
         for mod_type, indices in type_to_indices.items():
             if len(indices) < 2:
                 continue
-            ann_fracs = []
-            unann_fracs = []
+            ann_fracs: list[Any] = []
+            unann_fracs: list[Any] = []
             for idx in indices:
                 r = valid[idx]
                 ann_fracs.append(r.get("annotated_fraction", 0.0))
@@ -2596,20 +2334,12 @@ class TheoreticalAnalyser:
         # _compute_modification_quality_gate_diagnostic. We only surface
         # it here for backward-compatible JSON output.
         mod_qg = self.results.get("modification_quality_gate", {})
-        quality_gate_by_mod: Dict[str, Dict[str, Any]] = dict(
-            mod_qg.get("by_modification", {})
-        )
+        quality_gate_by_mod: Dict[str, Dict[str, Any]] = dict(mod_qg.get("by_modification", {}))
 
         # ── Diagnostic counters ────────────────────────────────────────
-        n_modifications_stripped = sum(
-            1 for r in valid if r.get("modifications_stripped", False)
-        )
-        n_precursor_mass_warnings = sum(
-            1 for r in valid if r.get("precursor_mass_warning", False)
-        )
-        n_isotope_corrected = sum(
-            1 for r in valid if r.get("precursor_isotope_offset", 0) > 0
-        )
+        n_modifications_stripped = sum(1 for r in valid if r.get("modifications_stripped", False))
+        n_precursor_mass_warnings = sum(1 for r in valid if r.get("precursor_mass_warning", False))
+        n_isotope_corrected = sum(1 for r in valid if r.get("precursor_isotope_offset", 0) > 0)
 
         result = {
             "prevalence": prevalence,
@@ -2629,10 +2359,7 @@ class TheoreticalAnalyser:
             "_mod_label_per_spectrum": mod_label_per_spectrum,
         }
         self.results["modification_analysis"] = result
-        logger.info(
-            f"Modification analysis: {n_modified:,d}/{n_total:,d} modified "
-            f"({len(type_counts)} unique types)"
-        )
+        logger.info(f"Modification analysis: {n_modified:,d}/{n_total:,d} modified ({len(type_counts)} unique types)")
         return result
 
     def visualize_modification_analysis(self) -> Figure:
@@ -2668,9 +2395,7 @@ class TheoreticalAnalyser:
         _frac_intensity_by_type = mod.get("_frac_intensity_by_type", {})
 
         # Top types for box/bar plots (top 8 + Unmodified)
-        sorted_types = sorted(
-            per_type.keys(), key=lambda t: per_type[t]["n_spectra"], reverse=True
-        )
+        sorted_types = sorted(per_type.keys(), key=lambda t: per_type[t]["n_spectra"], reverse=True)
         box_types = ["Unmodified"] + [t for t in sorted_types if t != "Unmodified"][:8]
         box_types = [t for t in box_types if t in matching_quality]
 
@@ -2687,17 +2412,13 @@ class TheoreticalAnalyser:
             ax.set_xlabel("Spectra count")
             ax.set_title("A. Modification Prevalence (top 15)")
         else:
-            ax.text(0.5, 0.5, "No modifications found", ha="center", va="center",
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No modifications found", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("A. Modification Prevalence")
 
         # ── Panel B: Match rate box plots ──────────────────────────────
         ax = axes[0, 1]
         if box_types and _match_rate_by_type:
-            data_b = [
-                _match_rate_by_type.get(t, [])
-                for t in box_types
-            ]
+            data_b = [_match_rate_by_type.get(t, []) for t in box_types]
             bp = ax.boxplot(
                 data_b,
                 labels=[t[:15] for t in box_types],
@@ -2705,7 +2426,7 @@ class TheoreticalAnalyser:
                 showfliers=False,
             )
             colors = ["#2ca02c" if t == "Unmodified" else "#1f77b4" for t in box_types]
-            for patch, c in zip(bp["boxes"], colors):
+            for patch, c in zip(bp["boxes"], colors, strict=False):
                 patch.set_facecolor(c)
                 patch.set_alpha(0.6)
             ax.tick_params(axis="x", rotation=45, labelsize=7)
@@ -2729,17 +2450,13 @@ class TheoreticalAnalyser:
             ax.axhline(1.0, color="grey", linestyle=":", linewidth=0.8)
             ax.set_title("B. Match Rate by Type")
         else:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center",
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("B. Match Rate by Type")
 
         # ── Panel C: Intensity coverage box plots ──────────────────────
         ax = axes[0, 2]
         if box_types and _frac_intensity_by_type:
-            data_c = [
-                _frac_intensity_by_type.get(t, [])
-                for t in box_types
-            ]
+            data_c = [_frac_intensity_by_type.get(t, []) for t in box_types]
             bp = ax.boxplot(
                 data_c,
                 labels=[t[:15] for t in box_types],
@@ -2747,7 +2464,7 @@ class TheoreticalAnalyser:
                 showfliers=False,
             )
             colors = ["#2ca02c" if t == "Unmodified" else "#d62728" for t in box_types]
-            for patch, c in zip(bp["boxes"], colors):
+            for patch, c in zip(bp["boxes"], colors, strict=False):
                 patch.set_facecolor(c)
                 patch.set_alpha(0.6)
             ax.tick_params(axis="x", rotation=45, labelsize=7)
@@ -2755,8 +2472,7 @@ class TheoreticalAnalyser:
             ax.set_ylim(0, 1.05)
             ax.set_title("C. Intensity Coverage by Type")
         else:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center",
-                    transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("C. Intensity Coverage by Type")
 
         # ── Panel D: Mass error bias ───────────────────────────────────
@@ -2767,21 +2483,17 @@ class TheoreticalAnalyser:
                 means = [mass_error[t]["mean_signed_ppm"] for t in me_types]
                 stds = [mass_error[t]["std_signed_ppm"] for t in me_types]
                 x_pos = np.arange(len(me_types))
-                ax.bar(x_pos, means, yerr=stds, capsize=3, color="#ff7f0e",
-                       edgecolor="white", alpha=0.8)
+                ax.bar(x_pos, means, yerr=stds, capsize=3, color="#ff7f0e", edgecolor="white", alpha=0.8)
                 ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
                 ax.set_xticks(x_pos)
-                ax.set_xticklabels([t[:15] for t in me_types], rotation=45,
-                                   fontsize=7, ha="right")
+                ax.set_xticklabels([t[:15] for t in me_types], rotation=45, fontsize=7, ha="right")
                 ax.set_ylabel("Mean signed PPM")
                 ax.set_title("D. Mass Error Bias by Type")
             else:
-                ax.text(0.5, 0.5, "No mass error data", ha="center",
-                        va="center", transform=ax.transAxes)
+                ax.text(0.5, 0.5, "No mass error data", ha="center", va="center", transform=ax.transAxes)
                 ax.set_title("D. Mass Error Bias by Type")
         else:
-            ax.text(0.5, 0.5, "No mass error data", ha="center",
-                    va="center", transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No mass error data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("D. Mass Error Bias by Type")
 
         # ── Panel E: Quality gate rejection ────────────────────────────
@@ -2789,28 +2501,21 @@ class TheoreticalAnalyser:
         if qg_by_mod and box_types:
             # Show all box_types for consistency; types not in qg_by_mod
             # get rejection_rate = 0 (too few spectra to compute).
-            rej_rates = [
-                qg_by_mod[t]["rejection_rate"] if t in qg_by_mod else 0.0
-                for t in box_types
-            ]
+            rej_rates = [qg_by_mod[t]["rejection_rate"] if t in qg_by_mod else 0.0 for t in box_types]
             x_pos = np.arange(len(box_types))
-            ax.bar(x_pos, rej_rates, color="#d62728", edgecolor="white",
-                   alpha=0.8)
+            ax.bar(x_pos, rej_rates, color="#d62728", edgecolor="white", alpha=0.8)
             # Overall rejection rate as reference
             qga = self.results.get("quality_gate_analysis", {})
             overall_rej = qga.get("overall_rejection_rate", 0)
             if overall_rej > 0:
-                ax.axhline(overall_rej, color="black", linewidth=1.2,
-                           linestyle="--", label=f"Overall ({overall_rej*100:.1f}%)")
+                ax.axhline(overall_rej, color="black", linewidth=1.2, linestyle="--", label=f"Overall ({overall_rej * 100:.1f}%)")
                 ax.legend(fontsize=8)
             ax.set_xticks(x_pos)
-            ax.set_xticklabels([t[:15] for t in box_types], rotation=45,
-                               fontsize=7, ha="right")
+            ax.set_xticklabels([t[:15] for t in box_types], rotation=45, fontsize=7, ha="right")
             ax.set_ylabel("Rejection rate")
             ax.set_title("E. Quality Gate Rejection by Type")
         else:
-            ax.text(0.5, 0.5, "No quality gate data", ha="center",
-                    va="center", transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No quality gate data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("E. Quality Gate Rejection by Type")
 
         # ── Panel F: Signal composition ────────────────────────────────
@@ -2821,23 +2526,18 @@ class TheoreticalAnalyser:
                 ann_vals = [signal_comp[t]["mean_annotated_fraction"] for t in sc_types]
                 unann_vals = [signal_comp[t]["mean_unannotated_fraction"] for t in sc_types]
                 x_pos = np.arange(len(sc_types))
-                ax.bar(x_pos, ann_vals, label="Annotated", color="#2ca02c",
-                       edgecolor="white")
-                ax.bar(x_pos, unann_vals, bottom=ann_vals, label="Unannotated",
-                       color="#d62728", edgecolor="white")
+                ax.bar(x_pos, ann_vals, label="Annotated", color="#2ca02c", edgecolor="white")
+                ax.bar(x_pos, unann_vals, bottom=ann_vals, label="Unannotated", color="#d62728", edgecolor="white")
                 ax.set_xticks(x_pos)
-                ax.set_xticklabels([t[:15] for t in sc_types], rotation=45,
-                                   fontsize=7, ha="right")
+                ax.set_xticklabels([t[:15] for t in sc_types], rotation=45, fontsize=7, ha="right")
                 ax.set_ylabel("Fraction")
                 ax.set_title("F. Signal Composition by Type")
                 ax.legend(fontsize=8)
             else:
-                ax.text(0.5, 0.5, "No signal data", ha="center",
-                        va="center", transform=ax.transAxes)
+                ax.text(0.5, 0.5, "No signal data", ha="center", va="center", transform=ax.transAxes)
                 ax.set_title("F. Signal Composition by Type")
         else:
-            ax.text(0.5, 0.5, "No signal data", ha="center",
-                    va="center", transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No signal data", ha="center", va="center", transform=ax.transAxes)
             ax.set_title("F. Signal Composition by Type")
 
         fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -2889,24 +2589,16 @@ class TheoreticalAnalyser:
             sub_unmatched_df = None
             if mass_error_df is not None:
                 if "frag_type" in mass_error_df.columns:
-                    sub_me_df = mass_error_df[
-                        mass_error_df["frag_type"] == ft
-                    ].copy()
+                    sub_me_df = mass_error_df[mass_error_df["frag_type"] == ft].copy()
                 elif "spectrum_idx" in mass_error_df.columns:
-                    sub_me_df = mass_error_df[
-                        mass_error_df["spectrum_idx"].isin(set(indices))
-                    ].copy()
+                    sub_me_df = mass_error_df[mass_error_df["spectrum_idx"].isin(set(indices))].copy()
                 if sub_me_df is not None and len(sub_me_df) == 0:
                     sub_me_df = None
             if unmatched_theo_df is not None:
                 if "frag_type" in unmatched_theo_df.columns:
-                    sub_unmatched_df = unmatched_theo_df[
-                        unmatched_theo_df["frag_type"] == ft
-                    ].copy()
+                    sub_unmatched_df = unmatched_theo_df[unmatched_theo_df["frag_type"] == ft].copy()
                 elif "spectrum_idx" in unmatched_theo_df.columns:
-                    sub_unmatched_df = unmatched_theo_df[
-                        unmatched_theo_df["spectrum_idx"].isin(set(indices))
-                    ].copy()
+                    sub_unmatched_df = unmatched_theo_df[unmatched_theo_df["spectrum_idx"].isin(set(indices))].copy()
                 if sub_unmatched_df is not None and len(sub_unmatched_df) == 0:
                     sub_unmatched_df = None
 
@@ -2925,9 +2617,7 @@ class TheoreticalAnalyser:
                 sub.calculate_mass_error_summary()
 
             stratified[ft] = sub
-            logger.debug(
-                f"Stratified: {ft} -- {len(sub_ps)} spectra"
-            )
+            logger.debug(f"Stratified: {ft} -- {len(sub_ps)} spectra")
 
         self.results["_stratified_analysers"] = stratified
 
@@ -2939,14 +2629,12 @@ class TheoreticalAnalyser:
             return {}
 
         # By m/z range
-        coverage_by_mz_range = {}
+        coverage_by_mz_range: dict[str, Any] = {}
         for mz_range in self.mz_range_order:
             n_matched = len(mass_error_df[mass_error_df["mz_range"] == mz_range])
             n_unmatched = 0
             if unmatched_theo_df is not None:
-                n_unmatched = len(
-                    unmatched_theo_df[unmatched_theo_df["mz_range"] == mz_range]
-                )
+                n_unmatched = len(unmatched_theo_df[unmatched_theo_df["mz_range"] == mz_range])
             n_total = n_matched + n_unmatched
             coverage_by_mz_range[mz_range] = {
                 "n_theoretical": n_total,
@@ -2956,20 +2644,15 @@ class TheoreticalAnalyser:
             }
 
         # By ion type
-        coverage_by_ion_type = {}
+        coverage_by_ion_type: dict[str, Any] = {}
         if "ion_type" in mass_error_df.columns:
             for ion_type in mass_error_df["ion_type"].unique():
                 if not ion_type or ion_type == "unknown":
                     continue
                 n_matched = len(mass_error_df[mass_error_df["ion_type"] == ion_type])
                 n_unmatched = 0
-                if (
-                    unmatched_theo_df is not None
-                    and "ion_type" in unmatched_theo_df.columns
-                ):
-                    n_unmatched = len(
-                        unmatched_theo_df[unmatched_theo_df["ion_type"] == ion_type]
-                    )
+                if unmatched_theo_df is not None and "ion_type" in unmatched_theo_df.columns:
+                    n_unmatched = len(unmatched_theo_df[unmatched_theo_df["ion_type"] == ion_type])
                 n_total = n_matched + n_unmatched
                 coverage_by_ion_type[ion_type] = {
                     "n_theoretical": n_total,
@@ -2982,10 +2665,8 @@ class TheoreticalAnalyser:
         total_unmatched = len(unmatched_theo_df) if unmatched_theo_df is not None else 0
         total_theoretical = total_matched + total_unmatched
 
-        coverage_stats = {
-            "overall_coverage_rate": float(
-                total_matched / max(total_theoretical, 1)
-            ),
+        coverage_stats: dict[str, Any] = {
+            "overall_coverage_rate": float(total_matched / max(total_theoretical, 1)),
             "total_theoretical_ions": total_theoretical,
             "total_matched": total_matched,
             "total_unmatched": total_unmatched,
@@ -2994,10 +2675,7 @@ class TheoreticalAnalyser:
         }
 
         self.results["coverage_stats"] = coverage_stats
-        logger.debug(
-            f"Coverage: {coverage_stats['overall_coverage_rate']*100:.1f}% "
-            f"({total_matched:,d}/{total_theoretical:,d})"
-        )
+        logger.debug(f"Coverage: {coverage_stats['overall_coverage_rate'] * 100:.1f}% ({total_matched:,d}/{total_theoretical:,d})")
         return coverage_stats
 
     def calculate_signal_composition(self) -> Dict[str, Any]:
@@ -3010,9 +2688,7 @@ class TheoreticalAnalyser:
         strategy design and loss weighting.
         """
         per_spectrum = self.results.get("per_spectrum", [])
-        valid_results = [
-            r for r in per_spectrum if r.get("sequence_available", False)
-        ]
+        valid_results = [r for r in per_spectrum if r.get("sequence_available", False)]
         if not valid_results:
             return {}
 
@@ -3040,14 +2716,23 @@ class TheoreticalAnalyser:
         # fragment_base must have matching -loss/-isotope entries here; x/z
         # arise from ETD/UVPD data and their loss/isotope labels were
         # previously silently dropped into "other".
-        category_map = {
+        category_map: dict[str, Any] = {
             "fragment_base": ["b-ion", "y-ion", "a-ion", "c-ion", "x-ion", "z-ion"],
             "fragment_loss": [
-                "b-loss", "y-loss", "a-loss", "c-loss", "x-loss", "z-loss",
+                "b-loss",
+                "y-loss",
+                "a-loss",
+                "c-loss",
+                "x-loss",
+                "z-loss",
             ],
             "fragment_isotope": [
-                "b-isotope", "y-isotope", "a-isotope", "c-isotope",
-                "x-isotope", "z-isotope",
+                "b-isotope",
+                "y-isotope",
+                "a-isotope",
+                "c-isotope",
+                "x-isotope",
+                "z-isotope",
             ],
             "precursor": ["precursor", "precursor-isotope"],
             "other_annotated": ["other"],
@@ -3055,19 +2740,11 @@ class TheoreticalAnalyser:
         }
         category_counts: Dict[str, int] = {}
         for category, labels in category_map.items():
-            category_counts[category] = sum(
-                total_by_label.get(label, 0) for label in labels
-            )
-        category_fractions = {
-            cat: count / grand_total for cat, count in category_counts.items()
-        }
+            category_counts[category] = sum(total_by_label.get(label, 0) for label in labels)
+        category_fractions = {cat: count / grand_total for cat, count in category_counts.items()}
 
         # Informative vs noise summary
-        informative_count = sum(
-            v
-            for k, v in category_counts.items()
-            if k not in ("unannotated", "other_annotated")
-        )
+        informative_count = sum(v for k, v in category_counts.items() if k not in ("unannotated", "other_annotated"))
 
         # --- Intensity-weighted composition (Michalski 2012 insight) ---
         total_intensity_by_label: Dict[str, float] = {}
@@ -3076,46 +2753,30 @@ class TheoreticalAnalyser:
         for r in valid_results:
             intensities = r.get("annotation_label_intensities", {})
             for label, intensity in intensities.items():
-                total_intensity_by_label[label] = (
-                    total_intensity_by_label.get(label, 0.0) + intensity
-                )
-            annotated_intensities.extend(
-                r.get("_annotated_intensity_values", [])
-            )
-            unannotated_intensities.extend(
-                r.get("_unannotated_intensity_values", [])
-            )
+                total_intensity_by_label[label] = total_intensity_by_label.get(label, 0.0) + intensity
+            annotated_intensities.extend(r.get("_annotated_intensity_values", []))
+            unannotated_intensities.extend(r.get("_unannotated_intensity_values", []))
 
         grand_total_intensity = sum(total_intensity_by_label.values())
         if grand_total_intensity > 0:
             intensity_composition = {
                 label: {
                     "intensity": total_intensity_by_label.get(label, 0.0),
-                    "fraction": total_intensity_by_label.get(label, 0.0)
-                    / grand_total_intensity,
+                    "fraction": total_intensity_by_label.get(label, 0.0) / grand_total_intensity,
                 }
                 for label in total_by_label
             }
             category_intensity: Dict[str, float] = {}
             for category, labels in category_map.items():
-                category_intensity[category] = sum(
-                    total_intensity_by_label.get(label, 0.0) for label in labels
-                )
-            category_intensity_fractions = {
-                cat: val / grand_total_intensity
-                for cat, val in category_intensity.items()
-            }
-            informative_intensity = sum(
-                v
-                for k, v in category_intensity.items()
-                if k not in ("unannotated", "other_annotated")
-            )
+                category_intensity[category] = sum(total_intensity_by_label.get(label, 0.0) for label in labels)
+            category_intensity_fractions = {cat: val / grand_total_intensity for cat, val in category_intensity.items()}
+            informative_intensity = sum(v for k, v in category_intensity.items() if k not in ("unannotated", "other_annotated"))
         else:
             intensity_composition = {}
             category_intensity_fractions = {}
             informative_intensity = 0.0
 
-        signal_composition = {
+        signal_composition: dict[str, Any] = {
             "total_peaks": grand_total,
             "count_composition": count_composition,
             "category_counts": category_counts,
@@ -3124,10 +2785,8 @@ class TheoreticalAnalyser:
             "noise_fraction": category_counts.get("unannotated", 0) / grand_total,
             "intensity_composition": intensity_composition,
             "category_intensity_fractions": category_intensity_fractions,
-            "informative_intensity_fraction": informative_intensity
-            / max(grand_total_intensity, 1e-12),
-            "noise_intensity_fraction": category_intensity.get("unannotated", 0.0)
-            / max(grand_total_intensity, 1e-12)
+            "informative_intensity_fraction": informative_intensity / max(grand_total_intensity, 1e-12),
+            "noise_intensity_fraction": category_intensity.get("unannotated", 0.0) / max(grand_total_intensity, 1e-12)
             if grand_total_intensity > 0
             else 0.0,
             "_annotated_intensities": annotated_intensities,
@@ -3136,8 +2795,8 @@ class TheoreticalAnalyser:
 
         self.results["signal_composition"] = signal_composition
         logger.debug(
-            f"Signal composition: {signal_composition['informative_fraction']*100:.1f}% informative, "
-            f"{signal_composition['noise_fraction']*100:.1f}% unannotated"
+            f"Signal composition: {signal_composition['informative_fraction'] * 100:.1f}% informative, "
+            f"{signal_composition['noise_fraction'] * 100:.1f}% unannotated"
         )
         return signal_composition
 
@@ -3147,7 +2806,7 @@ class TheoreticalAnalyser:
         if mass_error_df is None or "ion_type" not in mass_error_df.columns:
             return {}
 
-        ion_type_stats = {}
+        ion_type_stats: dict[str, Any] = {}
         for ion_type in mass_error_df["ion_type"].unique():
             if not ion_type or ion_type == "unknown":
                 continue
@@ -3155,14 +2814,10 @@ class TheoreticalAnalyser:
             ion_df = mass_error_df[mass_error_df["ion_type"] == ion_type]
             ppm_errors = ion_df["delta_mz_ppm"].values
 
-            charge_distribution = {}
+            charge_distribution: dict[int, int] = {}
             if "charge" in ion_df.columns:
                 charge_counts = ion_df["charge"].value_counts().to_dict()
-                charge_distribution = {
-                    int(k): int(v)
-                    for k, v in charge_counts.items()
-                    if not pd.isna(k)
-                }
+                charge_distribution = {int(k): int(v) for k, v in charge_counts.items() if not pd.isna(k)}
 
             ion_type_stats[ion_type] = {
                 "n_matched": len(ion_df),
@@ -3205,7 +2860,7 @@ class TheoreticalAnalyser:
             bias_significant = False
 
         # Percentiles
-        percentiles = {
+        percentiles: dict[str, Any] = {
             "p50": float(np.percentile(abs_ppm, 50)),
             "p90": float(np.percentile(abs_ppm, 90)),
             "p95": float(np.percentile(abs_ppm, 95)),
@@ -3220,7 +2875,7 @@ class TheoreticalAnalyser:
             n_multiple = int((theo_mz_counts > 1).sum())
             multiple_assignment_rate = n_multiple / max(len(theo_mz_counts), 1)
 
-        mass_error_summary = {
+        mass_error_summary: dict[str, Any] = {
             "n_matched_peaks": len(mass_error_df),
             "systematic_bias_ppm": systematic_bias_ppm,
             "systematic_bias_std_ppm": systematic_bias_std,
@@ -3232,10 +2887,7 @@ class TheoreticalAnalyser:
         }
 
         self.results["mass_error_summary"] = mass_error_summary
-        logger.debug(
-            f"Mass error: bias={systematic_bias_ppm:.2f} ppm "
-            f"(p={p_value:.3f}), P50={percentiles['p50']:.2f} ppm"
-        )
+        logger.debug(f"Mass error: bias={systematic_bias_ppm:.2f} ppm (p={p_value:.3f}), P50={percentiles['p50']:.2f} ppm")
         return mass_error_summary
 
     # =========================================================================
@@ -3269,22 +2921,17 @@ class TheoreticalAnalyser:
         ion_library = self.custom_ions or DEFAULT_CUSTOM_IONS
         categories = ["glycan", "immonium", "TMT", "iTRAQ"]
         n_spectra = len(valid)
-        logger.debug(
-            f"Aggregating custom ion data from {n_spectra:,d} spectra"
-        )
+        logger.debug(f"Aggregating custom ion data from {n_spectra:,d} spectra")
 
         # Accumulators
-        group_hit_counts: Dict[str, int] = {g: 0 for g in ion_library}
-        category_hit_counts: Dict[str, int] = {c: 0 for c in categories}
+        group_hit_counts: Dict[str, int] = dict.fromkeys(ion_library, 0)
+        category_hit_counts: Dict[str, int] = dict.fromkeys(categories, 0)
         category_intensities: Dict[str, List[float]] = {c: [] for c in categories}
         ppm_errors_all: List[float] = []
         ppm_errors_by_cat: Dict[str, List[float]] = {c: [] for c in categories}
         per_spectrum_categories: List[set] = []
         # Per-m/z-range coverage accumulators
-        range_totals: Dict[str, Dict[str, int]] = {
-            rn: {"n_peaks": 0, "n_fragment_annotated": 0, "n_custom_only": 0}
-            for rn in self.mz_range_order
-        }
+        range_totals: Dict[str, Dict[str, int]] = {rn: {"n_peaks": 0, "n_fragment_annotated": 0, "n_custom_only": 0} for rn in self.mz_range_order}
 
         for r in valid:
             cid = r["custom_ion_data"]
@@ -3295,9 +2942,7 @@ class TheoreticalAnalyser:
                 if not group_data.get("found", False):
                     continue
 
-                group_hit_counts[group_name] = (
-                    group_hit_counts.get(group_name, 0) + 1
-                )
+                group_hit_counts[group_name] = group_hit_counts.get(group_name, 0) + 1
                 cat = self._classify_ion_category(group_name)
                 cats_present.add(cat)
 
@@ -3314,16 +2959,12 @@ class TheoreticalAnalyser:
                             target_list,
                             key=lambda t: abs(t - matched_mz_val),
                         )
-                        ppm = (
-                            (matched_mz_val - closest) / closest * 1e6
-                        )
+                        ppm = (matched_mz_val - closest) / closest * 1e6
                         ppm_errors_all.append(ppm)
                         ppm_errors_by_cat[cat].append(ppm)
 
             for cat in cats_present:
-                category_hit_counts[cat] = (
-                    category_hit_counts.get(cat, 0) + 1
-                )
+                category_hit_counts[cat] = category_hit_counts.get(cat, 0) + 1
             per_spectrum_categories.append(cats_present)
 
             # Coverage lift per m/z range
@@ -3336,17 +2977,11 @@ class TheoreticalAnalyser:
         # Derived statistics
         # ------------------------------------------------------------------
         # Hit rates
-        group_hit_rates = {
-            g: {"n_found": c, "hit_rate": c / max(n_spectra, 1)}
-            for g, c in group_hit_counts.items()
-        }
-        category_hit_rates = {
-            c: {"n_found": n, "hit_rate": n / max(n_spectra, 1)}
-            for c, n in category_hit_counts.items()
-        }
+        group_hit_rates = {g: {"n_found": c, "hit_rate": c / max(n_spectra, 1)} for g, c in group_hit_counts.items()}
+        category_hit_rates = {c: {"n_found": n, "hit_rate": n / max(n_spectra, 1)} for c, n in category_hit_counts.items()}
 
         # Intensity stats
-        category_intensity_stats = {}
+        category_intensity_stats: dict[str, Any] = {}
         for cat, vals in category_intensities.items():
             if vals:
                 arr = np.array(vals)
@@ -3369,7 +3004,7 @@ class TheoreticalAnalyser:
                 }
 
         # PPM error stats
-        ppm_summary = {}
+        ppm_summary: dict[str, Any] = {}
         if ppm_errors_all:
             arr = np.array(ppm_errors_all)
             ppm_summary = {
@@ -3386,39 +3021,23 @@ class TheoreticalAnalyser:
             for j, cat_b in enumerate(categories):
                 if i > j:
                     continue
-                both = sum(
-                    1
-                    for s in per_spectrum_categories
-                    if cat_a in s and cat_b in s
-                )
-                either = sum(
-                    1
-                    for s in per_spectrum_categories
-                    if cat_a in s or cat_b in s
-                )
+                both = sum(1 for s in per_spectrum_categories if cat_a in s and cat_b in s)
+                either = sum(1 for s in per_spectrum_categories if cat_a in s or cat_b in s)
                 co_occurrence[f"{cat_a}__x__{cat_b}"] = {
                     "jaccard": both / max(either, 1),
                     "n_both": both,
                     "n_either": either,
-                    "p_b_given_a": both
-                    / max(category_hit_counts.get(cat_a, 0), 1),
-                    "p_a_given_b": both
-                    / max(category_hit_counts.get(cat_b, 0), 1),
+                    "p_b_given_a": both / max(category_hit_counts.get(cat_a, 0), 1),
+                    "p_a_given_b": both / max(category_hit_counts.get(cat_b, 0), 1),
                 }
 
         # Coverage lift
-        total_unannotated = sum(
-            rd["n_peaks"] - rd["n_fragment_annotated"]
-            for rd in range_totals.values()
-        )
-        total_custom_lift = sum(
-            rd["n_custom_only"] for rd in range_totals.values()
-        )
-        coverage_lift = {
+        total_unannotated = sum(rd["n_peaks"] - rd["n_fragment_annotated"] for rd in range_totals.values())
+        total_custom_lift = sum(rd["n_custom_only"] for rd in range_totals.values())
+        coverage_lift: dict[str, Any] = {
             "total_unannotated_peaks": total_unannotated,
             "total_explained_by_custom_ions": total_custom_lift,
-            "overall_lift_fraction": total_custom_lift
-            / max(total_unannotated, 1),
+            "overall_lift_fraction": total_custom_lift / max(total_unannotated, 1),
             "by_mz_range": range_totals,
         }
 
@@ -3438,10 +3057,7 @@ class TheoreticalAnalyser:
         }
 
         self.results["custom_ion_analysis"] = analysis
-        logger.debug(
-            f"Custom ions: {n_spectra:,d} spectra, "
-            f"coverage lift {coverage_lift['overall_lift_fraction'] * 100:.2f}%"
-        )
+        logger.debug(f"Custom ions: {n_spectra:,d} spectra, coverage lift {coverage_lift['overall_lift_fraction'] * 100:.2f}%")
         return analysis
 
     # =========================================================================
@@ -3466,9 +3082,7 @@ class TheoreticalAnalyser:
             logger.debug("No neutral loss details to aggregate")
             return {}
 
-        n_total_spectra = len(
-            [r for r in per_spectrum if r.get("sequence_available", False)]
-        )
+        n_total_spectra = len([r for r in per_spectrum if r.get("sequence_available", False)])
         n_spectra_with_losses = len(valid)
 
         # --- Prevalence ---
@@ -3532,9 +3146,7 @@ class TheoreticalAnalyser:
             loss_rows = mass_error_df[mass_error_df["feature_type"] == "loss"]
             if len(loss_rows) > 0:
                 loss_rows = loss_rows.copy()
-                loss_rows["loss_type"] = loss_rows["annotation"].apply(
-                    self._extract_loss_type
-                )
+                loss_rows["loss_type"] = loss_rows["annotation"].apply(self._extract_loss_type)
                 for lt in loss_rows["loss_type"].dropna().unique():
                     subset = loss_rows[loss_rows["loss_type"] == lt]
                     abs_ppm = subset["delta_mz_ppm"].values
@@ -3570,10 +3182,7 @@ class TheoreticalAnalyser:
         }
 
         self.results["neutral_loss_analysis"] = analysis
-        logger.debug(
-            f"Neutral losses: {n_spectra_with_losses:,d} spectra, "
-            f"{len(prevalence)} loss types"
-        )
+        logger.debug(f"Neutral losses: {n_spectra_with_losses:,d} spectra, {len(prevalence)} loss types")
         return analysis
 
     # =========================================================================
@@ -3599,13 +3208,7 @@ class TheoreticalAnalyser:
         Results are stored in ``self.results["fragment_group_analysis"]``.
         """
         per_spectrum = self.results.get("per_spectrum", [])
-        valid = [
-            r
-            for r in per_spectrum
-            if r.get("sequence_available", False)
-            and r.get("feature_types")
-            and r.get("theo_annotations")
-        ]
+        valid = [r for r in per_spectrum if r.get("sequence_available", False) and r.get("feature_types") and r.get("theo_annotations")]
         if not valid:
             logger.debug("No annotated spectra for fragment group analysis")
             return {}
@@ -3638,23 +3241,19 @@ class TheoreticalAnalyser:
         per_spectrum_max_ladder: Dict[str, List[int]] = {s: [] for s in primary_series}
         per_spectrum_n_ladders: Dict[str, List[int]] = {s: [] for s in primary_series}
         all_ladder_lengths: Dict[str, List[int]] = {s: [] for s in primary_series}
-        per_spectrum_mean_peaks_per_pos: Dict[str, List[float]] = {
-            s: [] for s in primary_series
-        }
+        per_spectrum_mean_peaks_per_pos: Dict[str, List[float]] = {s: [] for s in primary_series}
         # Raw per-group peak counts (one entry per fragment ion group across all spectra)
         all_group_peak_counts: Dict[str, List[int]] = {s: [] for s in primary_series}
 
         # Charge multiplicity counts across all spectra
-        charge_mult_counts = {1: 0, 2: 0, "3+": 0}  # groups with 1, 2, 3+ charges
+        charge_mult_counts: dict[int | str, Any] = {1: 0, 2: 0, "3+": 0}  # groups with 1, 2, 3+ charges
         total_groups = 0
 
         # Per-ion-series multiplicity counts (overall)
-        series_mult_counts: Dict[str, Dict] = {
-            s: {1: 0, 2: 0, "3+": 0, "total": 0} for s in primary_series
-        }
+        series_mult_counts: Dict[str, Dict] = {s: {1: 0, 2: 0, "3+": 0, "total": 0} for s in primary_series}
 
         # Charge distribution across all fragment observations
-        charge_obs_counts = {1: 0, 2: 0, "3+": 0}
+        charge_obs_counts: dict[int | str, Any] = {1: 0, 2: 0, "3+": 0}
         total_observations = 0
 
         # Per frag_type accumulators (now includes per-ion-series sub-dicts)
@@ -3703,7 +3302,7 @@ class TheoreticalAnalyser:
 
             # Collect base fragment groups: {(ion_type, position): {charges}}
             groups: Dict[Tuple[str, int], set] = {}
-            for ft, ann in zip(feature_types, annotations):
+            for ft, ann in zip(feature_types, annotations, strict=False):
                 if ft != "base" or not ann:
                     continue
                 ion_type = self._extract_ion_type(ann)
@@ -3736,11 +3335,14 @@ class TheoreticalAnalyser:
             parent_annotations = r.get("parent_annotations")
             # (ion_type, position, charge) -> list of peak indices
             charge_group_indices: Dict[Tuple[str, int, int], List[int]] = {}
-            for peak_idx, (ft, ann, p_ann) in enumerate(zip(
-                feature_types,
-                annotations,
-                parent_annotations if parent_annotations else [None] * len(annotations),
-            )):
+            for peak_idx, (ft, ann, p_ann) in enumerate(
+                zip(
+                    feature_types,
+                    annotations,
+                    parent_annotations if parent_annotations else [None] * len(annotations),
+                    strict=False,
+                )
+            ):
                 if not ann or ft not in ("base", "isotope"):
                     continue
                 ref_ann = p_ann if (ft == "isotope" and p_ann) else ann
@@ -3748,19 +3350,14 @@ class TheoreticalAnalyser:
                 pos = self._extract_fragment_position(ref_ann)
                 charge = self._extract_charge_from_annotation(ann)
                 if pos >= 1 and it != "unknown":
-                    charge_group_indices.setdefault(
-                        (it, pos, charge), []
-                    ).append(peak_idx)
+                    charge_group_indices.setdefault((it, pos, charge), []).append(peak_idx)
 
             # Compute m/z-index span per charge-specific group
             charge_group_spans: Dict[Tuple[str, int, int], int] = {}
-            for key, indices in charge_group_indices.items():
-                charge_group_spans[key] = max(indices) - min(indices) + 1
+            for key, indices in charge_group_indices.items():  # type: ignore[assignment]
+                charge_group_spans[key] = max(indices) - min(indices) + 1  # type: ignore[index]
 
-            series_positions: Dict[str, set] = {
-                s: {pos for (ion, pos) in groups if ion == s}
-                for s in primary_series
-            }
+            series_positions: Dict[str, set] = {s: {pos for (ion, pos) in groups if ion == s} for s in primary_series}
             for s in primary_series:
                 ladders = self._compute_ion_ladders(series_positions[s])
                 lengths = [len(lad) for lad in ladders]
@@ -3770,33 +3367,17 @@ class TheoreticalAnalyser:
                 all_ladder_lengths[s].extend(lengths)
                 # Annotated peaks per position (sum across charge states)
                 ppp_vals = [
-                    sum(
-                        len(idxs)
-                        for (it, p, c), idxs in charge_group_indices.items()
-                        if it == s and p == pos
-                    )
-                    for lad in ladders
-                    for pos in lad
+                    sum(len(idxs) for (it, p, c), idxs in charge_group_indices.items() if it == s and p == pos) for lad in ladders for pos in lad
                 ]
-                per_spectrum_mean_peaks_per_pos[s].append(
-                    float(np.mean(ppp_vals)) if ppp_vals else 0.0
-                )
+                per_spectrum_mean_peaks_per_pos[s].append(float(np.mean(ppp_vals)) if ppp_vals else 0.0)
                 # m/z-index span per charge-specific group
-                for (it, pos, charge), span in charge_group_spans.items():
+                for (it, _pos, _charge), span in charge_group_spans.items():
                     if it == s:
                         all_group_peak_counts[s].append(span)
 
             if seq_len > 1:
-                n_complementary = sum(
-                    1
-                    for site in range(1, seq_len)
-                    if site in b_positions and (seq_len - site) in y_positions
-                )
-                n_either = sum(
-                    1
-                    for site in range(1, seq_len)
-                    if site in b_positions or (seq_len - site) in y_positions
-                )
+                n_complementary = sum(1 for site in range(1, seq_len) if site in b_positions and (seq_len - site) in y_positions)
+                n_either = sum(1 for site in range(1, seq_len) if site in b_positions or (seq_len - site) in y_positions)
                 comp_frac = n_complementary / max(n_either, 1)
             else:
                 n_complementary = 0
@@ -3809,19 +3390,15 @@ class TheoreticalAnalyser:
             # Per-ion-series group counts for this spectrum
             series_counts: Dict[str, int] = {}
             for s in primary_series:
-                series_counts[s] = sum(
-                    1 for (it, _) in groups if it == s
-                )
+                series_counts[s] = sum(1 for (it, _) in groups if it == s)
             per_spectrum_n_by_series.append(series_counts)
 
             # Backbone cleavage coverage (overall and per-ion-series)
             if seq_len > 1:
                 max_sites = seq_len - 1
                 cleavage_sites: set = set()
-                series_cleavage_sites: Dict[str, set] = {
-                    s: set() for s in primary_series
-                }
-                for (ion_type, position), charges in groups.items():
+                series_cleavage_sites: Dict[str, set] = {s: set() for s in primary_series}
+                for (ion_type, position), _charges in groups.items():
                     if ion_type in n_terminal_ions:
                         site = position
                     elif ion_type in c_terminal_ions:
@@ -3833,13 +3410,10 @@ class TheoreticalAnalyser:
                         if ion_type in primary_series:
                             series_cleavage_sites[ion_type].add(site)
                 coverage = len(cleavage_sites) / max_sites
-                series_coverage = {
-                    s: len(sites) / max_sites
-                    for s, sites in series_cleavage_sites.items()
-                }
+                series_coverage = {s: len(sites) / max_sites for s, sites in series_cleavage_sites.items()}
             else:
                 coverage = 0.0
-                series_coverage = {s: 0.0 for s in primary_series}
+                series_coverage = dict.fromkeys(primary_series, 0.0)
             per_spectrum_coverage.append(coverage)
             per_spectrum_coverage_by_series.append(series_coverage)
 
@@ -3878,9 +3452,7 @@ class TheoreticalAnalyser:
                     # Record for Panel D (relative position)
                     if seq_len > 1:
                         rel_pos = position / (seq_len - 1)
-                        fragment_observations.append(
-                            (rel_pos, c, precursor_charge, frag_type)
-                        )
+                        fragment_observations.append((rel_pos, c, precursor_charge, frag_type))
 
             # Accumulate per frag_type
             if frag_type not in frag_type_data:
@@ -3896,18 +3468,13 @@ class TheoreticalAnalyser:
                 # (n_ladders tells us how many were appended for this spectrum)
                 n_lad = per_spectrum_n_ladders[s][-1]
                 if n_lad > 0:
-                    ftd[f"all_ladder_lengths_{s}"].extend(
-                        all_ladder_lengths[s][-n_lad:]
-                    )
-                ftd[f"mean_peaks_per_pos_{s}"].append(
-                    per_spectrum_mean_peaks_per_pos[s][-1]
-                )
+                    ftd[f"all_ladder_lengths_{s}"].extend(all_ladder_lengths[s][-n_lad:])
+                ftd[f"mean_peaks_per_pos_{s}"].append(per_spectrum_mean_peaks_per_pos[s][-1])
                 # m/z-index span per charge-specific group for this frag_type
-                for (it, pos, charge), span in charge_group_spans.items():
+                for (it, _pos, _charge), span in charge_group_spans.items():
                     if it == s:
-                        ftd[f"all_group_peak_counts_{s}"].append(span
-                    )
-            for (ion_type, position), charges in groups.items():
+                        ftd[f"all_group_peak_counts_{s}"].append(span)
+            for (ion_type, _position), charges in groups.items():
                 n_charges = len(charges)
                 if n_charges == 1:
                     ftd["mult_1"] += 1
@@ -3939,8 +3506,13 @@ class TheoreticalAnalyser:
             arr = np.array(values)
             if len(arr) == 0:
                 return {
-                    "mean": 0.0, "median": 0.0, "std": 0.0,
-                    "q25": 0.0, "q75": 0.0, "min": 0.0, "max": 0.0,
+                    "mean": 0.0,
+                    "median": 0.0,
+                    "std": 0.0,
+                    "q25": 0.0,
+                    "q75": 0.0,
+                    "min": 0.0,
+                    "max": 0.0,
                 }
             return {
                 "mean": float(arr.mean()),
@@ -3997,11 +3569,9 @@ class TheoreticalAnalyser:
             s_coverages = [d[s] for d in per_spectrum_coverage_by_series]
             smc = series_mult_counts[s]
             by_ion_series[s] = {
-                "fragment_count": _dist_stats(s_counts),
+                "fragment_count": _dist_stats(s_counts),  # type: ignore[arg-type]
                 "backbone_coverage": _dist_stats(s_coverages),
-                "charge_multiplicity": _mult_fracs(
-                    smc[1], smc[2], smc["3+"], smc["total"]
-                ),
+                "charge_multiplicity": _mult_fracs(smc[1], smc[2], smc["3+"], smc["total"]),
             }
         overall["by_ion_series"] = by_ion_series
 
@@ -4095,9 +3665,7 @@ class TheoreticalAnalyser:
             ft_entry: Dict[str, Any] = {
                 "fragment_count": _dist_stats(ftd["n_groups"]),
                 "backbone_coverage": _dist_stats(ftd["coverage"]),
-                "charge_multiplicity": _mult_fracs(
-                    ftd["mult_1"], ftd["mult_2"], ftd["mult_3+"], ftd["total_groups"]
-                ),
+                "charge_multiplicity": _mult_fracs(ftd["mult_1"], ftd["mult_2"], ftd["mult_3+"], ftd["total_groups"]),
                 "charge_distribution": _charge_fracs(
                     ftd["charge_1"],
                     ftd["charge_2"],
@@ -4122,7 +3690,7 @@ class TheoreticalAnalyser:
             by_frag_type[ft] = ft_entry
 
         # Complementary pair summary statistics
-        comp_arr = np.array(per_spectrum_complementary)
+        np.array(per_spectrum_complementary)
         complementary_pair_stats = _dist_stats(per_spectrum_complementary)
 
         analysis: Dict[str, Any] = {
@@ -4149,10 +3717,7 @@ class TheoreticalAnalyser:
 
         fc = overall["fragment_count"]
         bc = overall["backbone_coverage"]
-        logger.debug(
-            f"Fragment groups: {fc['mean']:.1f} +/- {fc['std']:.1f}, "
-            f"backbone coverage: {bc['mean']*100:.1f}%"
-        )
+        logger.debug(f"Fragment groups: {fc['mean']:.1f} +/- {fc['std']:.1f}, backbone coverage: {bc['mean'] * 100:.1f}%")
         return analysis
 
     # =========================================================================
@@ -4252,12 +3817,10 @@ class TheoreticalAnalyser:
         group_stats["ion_type"] = [p[0] for p in parsed]
         group_stats["charge"] = [p[1] for p in parsed]
 
-        same_series_gaps = []
-        all_series_gaps = []
+        same_series_gaps: list[Any] = []
+        all_series_gaps: list[Any] = []
 
-        for peptide, pep_groups in group_stats.groupby(
-            group_stats.index.map(lambda k: k.split("|")[0])
-        ):
+        for _peptide, pep_groups in group_stats.groupby(group_stats.index.map(lambda k: k.split("|")[0])):
             if len(pep_groups) < 2:
                 continue
 
@@ -4276,10 +3839,7 @@ class TheoreticalAnalyser:
             # spurious small gaps from interleaved charge-state groups.
             for ion_type in ("b", "y"):
                 for charge in pep_groups["charge"].unique():
-                    series_groups = pep_groups[
-                        (pep_groups["ion_type"] == ion_type)
-                        & (pep_groups["charge"] == charge)
-                    ]
+                    series_groups = pep_groups[(pep_groups["ion_type"] == ion_type) & (pep_groups["charge"] == charge)]
                     if len(series_groups) < 2:
                         continue
                     sorted_series = series_groups.sort_values("mean")
@@ -4302,10 +3862,10 @@ class TheoreticalAnalyser:
                 return 0.0
             return float(np.mean(arr > threshold))
 
-        sigma_analysis = {}
+        sigma_analysis: dict[str, Any] = {}
         # Use same-series gaps as the primary metric for sigma selection
         # (these are the amino acid mass gaps the blur must distinguish)
-        primary_gaps = same_series_gaps if len(same_series_gaps) > 0 else all_series_gaps
+        same_series_gaps if len(same_series_gaps) > 0 else all_series_gaps
         for sigma in sigma_values:
             sigma_analysis[f"sigma_{int(sigma)}"] = {
                 "within_group_pct_below": float(np.mean(within_group_spreads <= sigma)) if len(within_group_spreads) > 0 else 0.0,
@@ -4316,7 +3876,7 @@ class TheoreticalAnalyser:
 
         def _safe_stats(arr: np.ndarray, name: str) -> dict:
             if len(arr) == 0:
-                return {k: 0.0 for k in ["mean", "median", "p25", "p75", "p5", "p95", "min", "max"]}
+                return dict.fromkeys(["mean", "median", "p25", "p75", "p5", "p95", "min", "max"], 0.0)
             return {
                 "mean": float(np.mean(arr)),
                 "median": float(np.median(arr)),
@@ -4328,7 +3888,7 @@ class TheoreticalAnalyser:
                 "max": float(np.max(arr)),
             }
 
-        analysis = {
+        analysis: dict[str, Any] = {
             "within_group_spreads": within_group_spreads.tolist(),
             "isotope_only_spreads": isotope_only_spreads.tolist(),
             "with_loss_spreads": with_loss_spreads.tolist(),
@@ -4400,7 +3960,7 @@ class TheoreticalAnalyser:
             ax.hist(iso_only, bins=bins_a, alpha=0.6, color="#aec7e8", label=f"Isotope-only (n={len(iso_only):,})", edgecolor="white", linewidth=0.5)
         if len(with_loss) > 0:
             ax.hist(with_loss, bins=bins_a, alpha=0.6, color="#98df8a", label=f"With losses (n={len(with_loss):,})", edgecolor="white", linewidth=0.5)
-        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors)):
+        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors, strict=False)):
             ax.axvline(sigma, color=color, linestyle="--", linewidth=1.5, alpha=0.8, label=f"σ={int(sigma)} Da")
         ax.set_xlabel("Within-group m/z spread (Da)")
         ax.set_ylabel("Count")
@@ -4417,13 +3977,27 @@ class TheoreticalAnalyser:
         max_plot = 200
         if len(same_series) > 0:
             bins_b = np.linspace(0, min(max_plot, np.percentile(same_series, 99) * 1.1), 80)
-            ax.hist(same_series, bins=bins_b, alpha=0.7, color="#c5b0d5", edgecolor="white", linewidth=0.5,
-                    label=f"Same-series ladder gaps (n={len(same_series):,})")
+            ax.hist(
+                same_series,
+                bins=bins_b,
+                alpha=0.7,
+                color="#c5b0d5",
+                edgecolor="white",
+                linewidth=0.5,
+                label=f"Same-series ladder gaps (n={len(same_series):,})",
+            )
         if len(all_series) > 0:
             bins_b2 = np.linspace(0, min(max_plot, np.percentile(all_series, 99) * 1.1), 80)
-            ax.hist(all_series, bins=bins_b2, alpha=0.3, color="#aec7e8", edgecolor="white", linewidth=0.5,
-                    label=f"All-series gaps (n={len(all_series):,})")
-        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors)):
+            ax.hist(
+                all_series,
+                bins=bins_b2,
+                alpha=0.3,
+                color="#aec7e8",
+                edgecolor="white",
+                linewidth=0.5,
+                label=f"All-series gaps (n={len(all_series):,})",
+            )
+        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors, strict=False)):
             ax.axvline(sigma, color=color, linestyle="--", linewidth=1.5, alpha=0.8, label=f"σ={int(sigma)} Da")
         ax.set_xlabel("Between-group edge-to-edge gap (Da)")
         ax.set_ylabel("Count")
@@ -4461,8 +4035,7 @@ class TheoreticalAnalyser:
         if len(same_series) > 0 and len(all_series) > 0:
             all_sorted = np.sort(all_series)
             all_cdf = np.searchsorted(all_sorted, x_range) / len(all_sorted)
-            ax.plot(x_range, 1 - all_cdf, color="#1f77b4", linewidth=1, linestyle=":", alpha=0.5,
-                    label="P(all-series gap > σ)")
+            ax.plot(x_range, 1 - all_cdf, color="#1f77b4", linewidth=1, linestyle=":", alpha=0.5, label="P(all-series gap > σ)")
 
         # Find optimal σ that maximizes the sweet-spot (min of both curves)
         optimal_sigma = None
@@ -4474,19 +4047,24 @@ class TheoreticalAnalyser:
             ax.annotate(
                 f"Optimal σ ≈ {optimal_sigma:.0f} Da",
                 xy=(optimal_sigma, sweet_values[optimal_idx] + 0.05),
-                fontsize=9, fontweight="bold", ha="center",
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, edgecolor="black"),
+                fontsize=9,
+                fontweight="bold",
+                ha="center",
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "black"},
             )
 
-        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors)):
+        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors, strict=False)):
             sd = sigma_data.get(f"sigma_{int(sigma)}", {})
             pct_within = sd.get("within_group_pct_below", 0)
             pct_same = sd.get("same_series_pct_above", 0)
             ax.axvline(sigma, color=color, linestyle="--", linewidth=1.5, alpha=0.8)
             ax.annotate(
                 f"σ={int(sigma)}\n{pct_within:.0%} hidden\n{pct_same:.0%} distinct",
-                xy=(sigma, 0.03 + 0.24 * (_sig_i % 2)), fontsize=10, ha="center", va="bottom",
-                bbox=dict(boxstyle="round,pad=0.2", facecolor=color, alpha=0.15),
+                xy=(sigma, 0.03 + 0.24 * (_sig_i % 2)),
+                fontsize=10,
+                ha="center",
+                va="bottom",
+                bbox={"boxstyle": "round,pad=0.2", "facecolor": color, "alpha": 0.15},
             )
 
         ax.set_xlabel("σ (Da)")
@@ -4520,8 +4098,7 @@ class TheoreticalAnalyser:
         if len(all_series) > 0:
             all_sorted_d = np.sort(all_series)
             all_cdf_d = np.searchsorted(all_sorted_d, x_range_d) / len(all_sorted_d)
-            ax.plot(x_range_d, 1 - all_cdf_d, color="#1f77b4", linewidth=1.5, linestyle="--",
-                    alpha=0.7, label="P(all-series gap > σ)")
+            ax.plot(x_range_d, 1 - all_cdf_d, color="#1f77b4", linewidth=1.5, linestyle="--", alpha=0.7, label="P(all-series gap > σ)")
 
             # Use all-series for the sweet spot — it's the binding constraint
             # since the model can confuse b-ion with y-ion groups at similar m/z
@@ -4535,11 +4112,13 @@ class TheoreticalAnalyser:
                 ax.annotate(
                     f"Optimal σ ≈ {optimal_sigma_d:.0f} Da",
                     xy=(optimal_sigma_d, sweet_d[optimal_idx_d] + 0.05),
-                    fontsize=9, fontweight="bold", ha="center",
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, edgecolor="black"),
+                    fontsize=9,
+                    fontweight="bold",
+                    ha="center",
+                    bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "black"},
                 )
 
-        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors)):
+        for _sig_i, (sigma, color) in enumerate(zip(sigma_values, sigma_colors, strict=False)):
             if sigma <= 40:
                 sd = sigma_data.get(f"sigma_{int(sigma)}", {})
                 pct_iso = float(np.mean(iso_only <= sigma)) if len(iso_only) > 0 else 0.0
@@ -4547,8 +4126,11 @@ class TheoreticalAnalyser:
                 ax.axvline(sigma, color=color, linestyle="--", linewidth=1.5, alpha=0.8)
                 ax.annotate(
                     f"σ={int(sigma)}\n{pct_iso:.0%} hidden\n{pct_all:.0%} distinct",
-                    xy=(sigma, 0.03 + 0.24 * (_sig_i % 2)), fontsize=10, ha="center", va="bottom",
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor=color, alpha=0.15),
+                    xy=(sigma, 0.03 + 0.24 * (_sig_i % 2)),
+                    fontsize=10,
+                    ha="center",
+                    va="bottom",
+                    bbox={"boxstyle": "round,pad=0.2", "facecolor": color, "alpha": 0.15},
                 )
 
         ax.set_xlabel("σ (Da)")
@@ -4582,8 +4164,7 @@ class TheoreticalAnalyser:
             _a.yaxis.label.set_size(13)
             _a.tick_params(labelsize=11)
         fig.tight_layout(rect=[0, 0, 1, 1])
-        fig.savefig(self.output_dir / "blur_sigma_analysis.svg", bbox_inches="tight",
-                    metadata={"Title": "Blur-sigma calibration (LCFM)"})
+        fig.savefig(self.output_dir / "blur_sigma_analysis.svg", bbox_inches="tight", metadata={"Title": "Blur-sigma calibration (LCFM)"})
         fig.savefig(self.output_dir / "blur_sigma_analysis.pdf", bbox_inches="tight")
         return fig
 
@@ -4608,10 +4189,7 @@ class TheoreticalAnalyser:
             return {}
 
         # Filter to base b/y ions only
-        base_df = mass_error_df[
-            (mass_error_df["feature_type"] == "base")
-            & (mass_error_df["ion_type"].isin(["b", "y"]))
-        ].copy()
+        base_df = mass_error_df[(mass_error_df["feature_type"] == "base") & (mass_error_df["ion_type"].isin(["b", "y"]))].copy()
         if base_df.empty:
             return {}
 
@@ -4666,7 +4244,7 @@ class TheoreticalAnalyser:
             meta = peptide_meta.get(peptide)
             if meta is None:
                 continue
-            arrays = {
+            arrays: dict[str, Any] = {
                 "position": group["position"].values.astype(np.int32),
                 "charge": group["charge"].values.astype(np.int32),
                 "exp_mz": group["exp_mz"].values.astype(np.float64),
@@ -4679,13 +4257,10 @@ class TheoreticalAnalyser:
         # Batch peptides per pickle to amortise per-task Pool overhead —
         # each Pool task processes a batch of peptides, not a single one.
         results: List[Optional[Dict[str, Any]]] = []
-        _PARALLEL_THRESHOLD = 500
-        _BATCH_SIZE = 500  # peptides per worker task
+        _PARALLEL_THRESHOLD = 500  # noqa: N806
+        _BATCH_SIZE = 500  # peptides per worker task  # noqa: N806
         if len(worker_args) >= _PARALLEL_THRESHOLD and self.n_workers > 1:
-            logger.info(
-                f"Complementary pair analysis: dispatching {len(worker_args):,d} peptides "
-                f"to {self.n_workers} workers ({_BATCH_SIZE}/batch)"
-            )
+            logger.info(f"Complementary pair analysis: dispatching {len(worker_args):,d} peptides to {self.n_workers} workers ({_BATCH_SIZE}/batch)")
             init_args = (
                 self._AA_CODES,
                 self._AA_MASSES,
@@ -4695,16 +4270,13 @@ class TheoreticalAnalyser:
                 self.mz_range_order,
                 self.mass_gap_ppm_tol,
             )
-            batches = [
-                worker_args[i:i + _BATCH_SIZE]
-                for i in range(0, len(worker_args), _BATCH_SIZE)
-            ]
+            batches = [worker_args[i : i + _BATCH_SIZE] for i in range(0, len(worker_args), _BATCH_SIZE)]
             with Pool(
                 processes=self.n_workers,
                 initializer=_init_theo_worker,
                 initargs=init_args,
             ) as pool:
-                batch_results = pool.map(_process_batch_complementary_pair, batches)
+                batch_results = pool.map(_process_batch_complementary_pair, batches)  # type: ignore[arg-type]
             # Flatten list-of-lists
             for br in batch_results:
                 results.extend(br)
@@ -4719,7 +4291,7 @@ class TheoreticalAnalyser:
                 self.mz_range_order,
                 self.mass_gap_ppm_tol,
             )
-            results = [_process_peptide_complementary_pair(a) for a in worker_args]
+            results = [_process_peptide_complementary_pair(a) for a in worker_args]  # type: ignore[arg-type]
 
         # Flatten results into the same accumulators used by the old code
         for res in results:
@@ -4756,7 +4328,7 @@ class TheoreticalAnalyser:
 
         # Positional coverage: bin relative positions into deciles
         pos_bins = np.linspace(0, 1, 11)
-        pos_bin_labels = [f"{pos_bins[i]:.1f}-{pos_bins[i+1]:.1f}" for i in range(10)]
+        pos_bin_labels = [f"{pos_bins[i]:.1f}-{pos_bins[i + 1]:.1f}" for i in range(10)]
         pos_arr = np.array(pair_relative_positions) if pair_relative_positions else np.array([])
         pos_bin_counts = [0] * 10
         if len(pos_arr) > 0:
@@ -4768,7 +4340,7 @@ class TheoreticalAnalyser:
         by_frag_type: Dict[str, Dict[str, Any]] = {}
         for ft in set(per_spectrum_frag_type):
             mask = [f == ft for f in per_spectrum_frag_type]
-            ft_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask) if m]
+            ft_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask, strict=False) if m]
             by_frag_type[ft] = {
                 "pair_fraction": _dist(ft_fracs),
                 "n_spectra": len(ft_fracs),
@@ -4778,7 +4350,7 @@ class TheoreticalAnalyser:
         by_charge: Dict[str, Dict[str, Any]] = {}
         for z in sorted(set(per_spectrum_precursor_charge)):
             mask = [c == z for c in per_spectrum_precursor_charge]
-            z_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask) if m]
+            z_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask, strict=False) if m]
             by_charge[str(z)] = {
                 "pair_fraction": _dist(z_fracs),
                 "n_spectra": len(z_fracs),
@@ -4791,7 +4363,7 @@ class TheoreticalAnalyser:
             lo, hi = len_bins[i], len_bins[i + 1]
             label = f"{lo}-{hi}" if hi < 999 else f"{lo}+"
             mask = [lo <= sl < hi for sl in per_spectrum_seq_len]
-            sl_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask) if m]
+            sl_fracs = [v for v, m in zip(per_spectrum_pair_fraction, mask, strict=False) if m]
             if sl_fracs:
                 by_seq_len[label] = {
                     "pair_fraction": _dist(sl_fracs),
@@ -4804,9 +4376,7 @@ class TheoreticalAnalyser:
             "pair_fraction": _dist(per_spectrum_pair_fraction),
             "deviation_da": _dist(pair_deviations_da) if pair_deviations_da else _dist([]),
             "deviation_ppm": _dist(pair_deviations_ppm) if pair_deviations_ppm else _dist([]),
-            "abs_deviation_da": _dist(
-                [abs(d) for d in pair_deviations_da]
-            ) if pair_deviations_da else _dist([]),
+            "abs_deviation_da": _dist([abs(d) for d in pair_deviations_da]) if pair_deviations_da else _dist([]),
             "positional_coverage": {
                 "bin_labels": pos_bin_labels,
                 "bin_counts": pos_bin_counts,
@@ -4828,7 +4398,7 @@ class TheoreticalAnalyser:
         logger.info(
             f"Complementary pair analysis: {analysis['total_pairs']:,d} pairs "
             f"across {analysis['n_spectra']:,d} spectra, "
-            f"mean pair fraction {analysis['pair_fraction']['mean']*100:.1f}%"
+            f"mean pair fraction {analysis['pair_fraction']['mean'] * 100:.1f}%"
         )
         return analysis
 
@@ -4852,7 +4422,7 @@ class TheoreticalAnalyser:
         Results are stored in ``self.results["mass_gap_analysis"]``.
         """
         mass_error_df = self.results.get("mass_error_df")
-        per_spectrum = self.results.get("per_spectrum", [])
+        self.results.get("per_spectrum", [])
         if mass_error_df is None or mass_error_df.empty:
             return {}
 
@@ -4891,13 +4461,10 @@ class TheoreticalAnalyser:
         # Dispatch: parallel for large workloads, sequential otherwise
         # Batch peptides per pickle to amortise per-task Pool overhead.
         results: List[Optional[Dict[str, Any]]] = []
-        _PARALLEL_THRESHOLD = 500
-        _BATCH_SIZE = 500
+        _PARALLEL_THRESHOLD = 500  # noqa: N806
+        _BATCH_SIZE = 500  # noqa: N806
         if len(worker_args) >= _PARALLEL_THRESHOLD and self.n_workers > 1:
-            logger.info(
-                f"Mass gap analysis: dispatching {len(worker_args):,d} peptides "
-                f"to {self.n_workers} workers ({_BATCH_SIZE}/batch)"
-            )
+            logger.info(f"Mass gap analysis: dispatching {len(worker_args):,d} peptides to {self.n_workers} workers ({_BATCH_SIZE}/batch)")
             init_args = (
                 self._AA_CODES,
                 self._AA_MASSES,
@@ -4907,10 +4474,7 @@ class TheoreticalAnalyser:
                 self.mz_range_order,
                 ppm_tol,
             )
-            batches = [
-                worker_args[i:i + _BATCH_SIZE]
-                for i in range(0, len(worker_args), _BATCH_SIZE)
-            ]
+            batches = [worker_args[i : i + _BATCH_SIZE] for i in range(0, len(worker_args), _BATCH_SIZE)]
             with Pool(
                 processes=self.n_workers,
                 initializer=_init_theo_worker,
@@ -4967,9 +4531,7 @@ class TheoreticalAnalyser:
 
         # Ambiguity distribution
         ambiguity_counts = gap_df["n_ambiguous"].value_counts().sort_index()
-        ambiguity_dist = {
-            int(k): int(v) for k, v in ambiguity_counts.items()
-        }
+        ambiguity_dist = {int(k): int(v) for k, v in ambiguity_counts.items()}
 
         # Match error distribution (valid gaps only)
         valid_gaps = gap_df[gap_df["is_valid"]]
@@ -4979,8 +4541,8 @@ class TheoreticalAnalyser:
         by_frag_type: Dict[str, Dict[str, Any]] = {}
         for ft in set(per_spectrum_frag_type_list):
             mask = [f == ft for f in per_spectrum_frag_type_list]
-            ft_match = [v for v, m in zip(per_spectrum_match_rate, mask) if m]
-            ft_correct = [v for v, m in zip(per_spectrum_correct_rate, mask) if m]
+            ft_match = [v for v, m in zip(per_spectrum_match_rate, mask, strict=False) if m]
+            ft_correct = [v for v, m in zip(per_spectrum_correct_rate, mask, strict=False) if m]
             by_frag_type[ft] = {
                 "match_rate": _dist(ft_match),
                 "correct_rate": _dist(ft_correct),
@@ -5049,8 +4611,8 @@ class TheoreticalAnalyser:
         self.results["mass_gap_analysis"] = analysis
         logger.info(
             f"Mass gap analysis: {n_total:,d} gaps, "
-            f"{n_valid_total:,d} valid ({analysis['overall_match_rate']*100:.1f}%), "
-            f"{n_correct_total:,d} correct ({analysis['overall_correct_rate']*100:.1f}%)"
+            f"{n_valid_total:,d} valid ({analysis['overall_match_rate'] * 100:.1f}%), "
+            f"{n_correct_total:,d} correct ({analysis['overall_correct_rate'] * 100:.1f}%)"
         )
         return analysis
 
@@ -5089,19 +4651,10 @@ class TheoreticalAnalyser:
         #   sequence_available AND feature_types AND theo_annotations
         # We must use the *same* filter to align array indices.
         per_spectrum = self.results.get("per_spectrum", [])
-        valid = [
-            r
-            for r in per_spectrum
-            if r.get("sequence_available", False)
-            and r.get("feature_types")
-            and r.get("theo_annotations")
-        ]
+        valid = [r for r in per_spectrum if r.get("sequence_available", False) and r.get("feature_types") and r.get("theo_annotations")]
 
         if len(valid) != len(coverage_arr):
-            logger.warning(
-                f"Quality gate: valid spectra ({len(valid)}) != coverage array "
-                f"({len(coverage_arr)}); skipping"
-            )
+            logger.warning(f"Quality gate: valid spectra ({len(valid)}) != coverage array ({len(coverage_arr)}); skipping")
             return {}
 
         # Failure masks
@@ -5119,19 +4672,13 @@ class TheoreticalAnalyser:
         n_fail_groups_only = int((~fail_coverage & fail_groups).sum())
 
         # A. Rejection rate by dimension
-        rejection_by_dimension = self._quality_gate_rejection_by_dimension(
-            valid, below_mask, overall_rejection
-        )
+        rejection_by_dimension = self._quality_gate_rejection_by_dimension(valid, below_mask, overall_rejection)
 
         # B. Diagnostic comparison (below vs above)
-        diagnostic_comparison = self._quality_gate_diagnostic_comparison(
-            valid, below_mask, coverage_arr, n_groups_arr
-        )
+        diagnostic_comparison = self._quality_gate_diagnostic_comparison(valid, below_mask, coverage_arr, n_groups_arr)
 
         # C. Sequence length vs rejection rate
-        seq_len_analysis = self._quality_gate_seq_len_analysis(
-            valid, coverage_arr, below_mask
-        )
+        seq_len_analysis = self._quality_gate_seq_len_analysis(valid, coverage_arr, below_mask)
 
         # D. Cross-tabulation heatmap data
         cross_tab = self._quality_gate_cross_tabulation(valid, below_mask)
@@ -5159,10 +4706,7 @@ class TheoreticalAnalyser:
         }
 
         self.results["quality_gate_analysis"] = analysis
-        logger.debug(
-            f"Quality gate: rejected {n_below:,d}/{len(valid):,d} "
-            f"({overall_rejection*100:.1f}%)"
-        )
+        logger.debug(f"Quality gate: rejected {n_below:,d}/{len(valid):,d} ({overall_rejection * 100:.1f}%)")
         return analysis
 
     # -- Quality gate helpers --------------------------------------------------
@@ -5193,9 +4737,7 @@ class TheoreticalAnalyser:
                 groups.setdefault(val, []).append(bool(below_mask[i]))
 
             dim_result: Dict[str, Any] = {}
-            for g, vals in sorted(
-                groups.items(), key=lambda x: -sum(x[1]) / max(len(x[1]), 1)
-            ):
+            for g, vals in sorted(groups.items(), key=lambda x: -sum(x[1]) / max(len(x[1]), 1)):
                 n_total = len(vals)
                 n_below = sum(vals)
                 rate = n_below / max(n_total, 1)
@@ -5234,9 +4776,7 @@ class TheoreticalAnalyser:
             ),
             (
                 "sequence_length",
-                lambda r, i: (
-                    len(r["clean_sequence"]) if r.get("clean_sequence") else None
-                ),
+                lambda r, i: (len(r["clean_sequence"]) if r.get("clean_sequence") else None),
             ),
             ("n_matched", lambda r, i: r.get("n_matched")),
         ]
@@ -5285,14 +4825,9 @@ class TheoreticalAnalyser:
             except (ImportError, ValueError):
                 pass
 
-            pooled_std = np.sqrt(
-                (arr_b.var() * len(arr_b) + arr_a.var() * len(arr_a))
-                / max(len(arr_b) + len(arr_a), 1)
-            )
+            pooled_std = np.sqrt((arr_b.var() * len(arr_b) + arr_a.var() * len(arr_a)) / max(len(arr_b) + len(arr_a), 1))
             if pooled_std > 0:
-                entry["cohens_d"] = float(
-                    (arr_a.mean() - arr_b.mean()) / pooled_std
-                )
+                entry["cohens_d"] = float((arr_a.mean() - arr_b.mean()) / pooled_std)
 
             result[fname] = entry
 
@@ -5305,16 +4840,11 @@ class TheoreticalAnalyser:
         below_mask: np.ndarray,
     ) -> Dict[str, Any]:
         """Rejection rate by sequence length bucket + Spearman correlation."""
-        seq_lens = np.array(
-            [
-                len(r["clean_sequence"]) if r.get("clean_sequence") else 0
-                for r in valid
-            ]
-        )
+        seq_lens = np.array([len(r["clean_sequence"]) if r.get("clean_sequence") else 0 for r in valid])
 
         edges = [0] + self.quality_gate_seq_len_bins + [999]
         bins: List[Dict[str, Any]] = []
-        for lo, hi in zip(edges[:-1], edges[1:]):
+        for lo, hi in zip(edges[:-1], edges[1:], strict=False):
             mask = (seq_lens >= lo) & (seq_lens < hi)
             n_total = int(mask.sum())
             if n_total == 0:
@@ -5361,9 +4891,7 @@ class TheoreticalAnalyser:
         for i, r in enumerate(valid):
             frag = str(r.get("_metadata", {}).get("frag_type", "unknown"))
             charge = str(r.get("precursor_charge", "?"))
-            counts.setdefault(frag, {}).setdefault(charge, []).append(
-                bool(below_mask[i])
-            )
+            counts.setdefault(frag, {}).setdefault(charge, []).append(bool(below_mask[i]))
 
         heatmap: Dict[str, Dict[str, Any]] = {}
         for frag, charges in sorted(counts.items()):
@@ -5392,7 +4920,7 @@ class TheoreticalAnalyser:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        def convert_for_json(obj):
+        def convert_for_json(obj: Any) -> Any:
             """Recursively convert numpy types for JSON serialization.
 
             Drops any dict entries whose key starts with ``_`` — those are
@@ -5403,11 +4931,7 @@ class TheoreticalAnalyser:
             ``_annotated_intensities`` / ``_unannotated_intensities``).
             """
             if isinstance(obj, dict):
-                return {
-                    k: convert_for_json(v)
-                    for k, v in obj.items()
-                    if not (isinstance(k, str) and k.startswith("_"))
-                }
+                return {k: convert_for_json(v) for k, v in obj.items() if not (isinstance(k, str) and k.startswith("_"))}
             elif isinstance(obj, list):
                 return [convert_for_json(item) for item in obj]
             elif isinstance(obj, (np.integer, np.int64, np.int32)):
@@ -5421,22 +4945,12 @@ class TheoreticalAnalyser:
             return obj
 
         # Summary JSON
-        summary_data = {
-            "overall_stats": convert_for_json(
-                self.results.get("overall_stats", {})
-            ),
-            "coverage_stats": convert_for_json(
-                self.results.get("coverage_stats", {})
-            ),
-            "signal_composition": convert_for_json(
-                self.results.get("signal_composition", {})
-            ),
-            "mass_error_summary": convert_for_json(
-                self.results.get("mass_error_summary", {})
-            ),
-            "ion_type_performance": convert_for_json(
-                self.results.get("ion_type_performance", {})
-            ),
+        summary_data: dict[str, Any] = {
+            "overall_stats": convert_for_json(self.results.get("overall_stats", {})),
+            "coverage_stats": convert_for_json(self.results.get("coverage_stats", {})),
+            "signal_composition": convert_for_json(self.results.get("signal_composition", {})),
+            "mass_error_summary": convert_for_json(self.results.get("mass_error_summary", {})),
+            "ion_type_performance": convert_for_json(self.results.get("ion_type_performance", {})),
             "analysis_config": {
                 "ppm_tolerance": float(self.ppm_tol),
                 "use_conditional_annotation": bool(self.use_conditional_annotation),
@@ -5449,51 +4963,38 @@ class TheoreticalAnalyser:
             },
             # Always-on, top-level so JSON consumers can immediately tell
             # whether the rest of this file describes the gated population.
-            "filter_metadata": convert_for_json(
-                self.results.get("filter_metadata", {})
-            ),
+            "filter_metadata": convert_for_json(self.results.get("filter_metadata", {})),
         }
         # Add fragment group analysis (exclude internal arrays)
         fga = self.results.get("fragment_group_analysis", {})
         if fga:
-            summary_data["fragment_group_analysis"] = convert_for_json(
-                {k: v for k, v in fga.items() if not k.startswith("_")}
-            )
+            summary_data["fragment_group_analysis"] = convert_for_json({k: v for k, v in fga.items() if not k.startswith("_")})
         # Add quality gate summary (exclude internal arrays)
         qga = self.results.get("quality_gate_analysis", {})
         if qga:
-            summary_data["quality_gate_analysis"] = convert_for_json(
-                {k: v for k, v in qga.items() if not k.startswith("_")}
-            )
+            summary_data["quality_gate_analysis"] = convert_for_json({k: v for k, v in qga.items() if not k.startswith("_")})
         # Add modification analysis (exclude internal arrays)
         mod_analysis = self.results.get("modification_analysis", {})
         if mod_analysis:
-            summary_data["modification_analysis"] = convert_for_json(
-                {k: v for k, v in mod_analysis.items() if not k.startswith("_")}
-            )
+            summary_data["modification_analysis"] = convert_for_json({k: v for k, v in mod_analysis.items() if not k.startswith("_")})
         # Add complementary pair analysis (exclude internal arrays)
         cpa = self.results.get("complementary_pair_analysis", {})
         if cpa:
-            summary_data["complementary_pair_analysis"] = convert_for_json(
-                {k: v for k, v in cpa.items() if not k.startswith("_")}
-            )
+            summary_data["complementary_pair_analysis"] = convert_for_json({k: v for k, v in cpa.items() if not k.startswith("_")})
         # Add mass gap analysis (exclude internal arrays and DataFrames)
         mga = self.results.get("mass_gap_analysis", {})
         if mga:
             summary_data["mass_gap_analysis"] = convert_for_json(
-                {
-                    k: v for k, v in mga.items()
-                    if not k.startswith("_") and not isinstance(v, pd.DataFrame)
-                }
+                {k: v for k, v in mga.items() if not k.startswith("_") and not isinstance(v, pd.DataFrame)}
             )
         # Add blur sigma analysis (exclude raw distributions to keep JSON small)
         bsa = self.results.get("blur_sigma_analysis", {})
         if bsa:
             summary_data["blur_sigma_analysis"] = convert_for_json(
                 {
-                    k: v for k, v in bsa.items()
-                    if k not in ("within_group_spreads", "isotope_only_spreads",
-                                 "with_loss_spreads", "same_series_gaps", "all_series_gaps")
+                    k: v
+                    for k, v in bsa.items()
+                    if k not in ("within_group_spreads", "isotope_only_spreads", "with_loss_spreads", "same_series_gaps", "all_series_gaps")
                 }
             )
         # Atomic write: serialise to a temp file in the same directory
@@ -5526,10 +5027,19 @@ class TheoreticalAnalyser:
         # Mass error CSV (save only essential columns; derivable columns omitted to reduce file size)
         if self.results.get("mass_error_df") is not None:
             df = self.results["mass_error_df"]
-            save_cols = [c for c in [
-                "theo_mz", "exp_mz", "signed_ppm",
-                "ion_type", "charge", "frag_type", "feature_type",
-            ] if c in df.columns]
+            save_cols = [
+                c
+                for c in [
+                    "theo_mz",
+                    "exp_mz",
+                    "signed_ppm",
+                    "ion_type",
+                    "charge",
+                    "frag_type",
+                    "feature_type",
+                ]
+                if c in df.columns
+            ]
             csv_path = self.output_dir / "mass_error_data.csv"
             df[save_cols].to_csv(csv_path, index=False, float_format="%.6f")
             logger.debug(f"Saved mass error data: {csv_path} ({len(df):,d} peaks, {len(save_cols)} columns)")
@@ -5557,20 +5067,14 @@ class TheoreticalAnalyser:
             ]
             if records:
                 csv_path = self.output_dir / "ion_type_statistics.csv"
-                pd.DataFrame(records).to_csv(
-                    csv_path, index=False, float_format="%.6f"
-                )
+                pd.DataFrame(records).to_csv(csv_path, index=False, float_format="%.6f")
                 logger.debug(f"Saved ion type statistics: {csv_path}")
 
         # Custom ion analysis JSON + CSV
         cia = self.results.get("custom_ion_analysis", {})
         if cia:
             # JSON (exclude raw arrays)
-            cia_json = {
-                k: convert_for_json(v)
-                for k, v in cia.items()
-                if not k.startswith("_")
-            }
+            cia_json = {k: convert_for_json(v) for k, v in cia.items() if not k.startswith("_")}
             json_path = self.output_dir / "custom_ion_analysis.json"
             with open(json_path, "w") as f:
                 json.dump(cia_json, f, indent=2)
@@ -5589,19 +5093,13 @@ class TheoreticalAnalyser:
                     for g, d in ghr.items()
                 ]
                 csv_path = self.output_dir / "custom_ion_hit_rates.csv"
-                pd.DataFrame(records).to_csv(
-                    csv_path, index=False, float_format="%.6f"
-                )
+                pd.DataFrame(records).to_csv(csv_path, index=False, float_format="%.6f")
                 logger.debug(f"Saved custom ion hit rates: {csv_path}")
 
         # Neutral loss analysis JSON + CSV
         nla = self.results.get("neutral_loss_analysis", {})
         if nla:
-            nla_json = {
-                k: convert_for_json(v)
-                for k, v in nla.items()
-                if not k.startswith("_")
-            }
+            nla_json = {k: convert_for_json(v) for k, v in nla.items() if not k.startswith("_")}
             json_path = self.output_dir / "neutral_loss_analysis.json"
             with open(json_path, "w") as f:
                 json.dump(nla_json, f, indent=2)
@@ -5621,20 +5119,14 @@ class TheoreticalAnalyser:
                     for lt, d in prev.items()
                 ]
                 csv_path = self.output_dir / "neutral_loss_prevalence.csv"
-                pd.DataFrame(records).to_csv(
-                    csv_path, index=False, float_format="%.6f"
-                )
+                pd.DataFrame(records).to_csv(csv_path, index=False, float_format="%.6f")
                 logger.debug(f"Saved neutral loss prevalence: {csv_path}")
 
         # Fragment group analysis JSON + CSV
         fga = self.results.get("fragment_group_analysis", {})
         if fga:
             # JSON (exclude internal arrays prefixed with _)
-            fga_json = {
-                k: convert_for_json(v)
-                for k, v in fga.items()
-                if not k.startswith("_")
-            }
+            fga_json = {k: convert_for_json(v) for k, v in fga.items() if not k.startswith("_")}
             json_path = self.output_dir / "fragment_group_analysis.json"
             with open(json_path, "w") as f:
                 json.dump(fga_json, f, indent=2)
@@ -5670,25 +5162,17 @@ class TheoreticalAnalyser:
                         s_cm = s_stats.get("charge_multiplicity", {})
                         row[f"mean_{s}_count"] = s_fc.get("mean", 0)
                         row[f"median_{s}_count"] = s_fc.get("median", 0)
-                        row[f"pct_{s}_2plus_charge"] = (
-                            s_cm.get("2", 0) + s_cm.get("3+", 0)
-                        ) * 100
+                        row[f"pct_{s}_2plus_charge"] = (s_cm.get("2", 0) + s_cm.get("3+", 0)) * 100
                     records.append(row)
                 csv_path = self.output_dir / "fragment_group_summary.csv"
-                pd.DataFrame(records).to_csv(
-                    csv_path, index=False, float_format="%.6f"
-                )
+                pd.DataFrame(records).to_csv(csv_path, index=False, float_format="%.6f")
                 logger.debug(f"Saved fragment group summary: {csv_path}")
 
         # Quality gate analysis JSON + CSVs
         qga = self.results.get("quality_gate_analysis", {})
         if qga:
             # JSON (exclude internal arrays)
-            qga_json = {
-                k: convert_for_json(v)
-                for k, v in qga.items()
-                if not k.startswith("_")
-            }
+            qga_json = {k: convert_for_json(v) for k, v in qga.items() if not k.startswith("_")}
             json_path = self.output_dir / "quality_gate_analysis.json"
             with open(json_path, "w") as f:
                 json.dump(qga_json, f, indent=2)
@@ -5708,9 +5192,7 @@ class TheoreticalAnalyser:
                 ]
                 if records:
                     csv_path = self.output_dir / f"quality_gate_rejection_by_{dim}.csv"
-                    pd.DataFrame(records).to_csv(
-                        csv_path, index=False, float_format="%.6f"
-                    )
+                    pd.DataFrame(records).to_csv(csv_path, index=False, float_format="%.6f")
                     logger.debug(f"Saved: {csv_path}")
 
         logger.info(f"Theoretical analysis results saved to {self.output_dir}")
@@ -5732,22 +5214,10 @@ class TheoreticalAnalyser:
             logger.info("")
             logger.info("Quality-gate filter:")
             if fm.get("filter_applied"):
-                logger.info(
-                    f"  APPLIED  (min_backbone_coverage>={fm['min_backbone_coverage']}, "
-                    f"min_fragment_groups>={fm['min_fragment_groups']})"
-                )
-                logger.info(
-                    f"  Passed:  {fm['n_passed_spectra']:,d} / "
-                    f"{fm['n_total_spectra']:,d} "
-                    f"({(1 - fm['rejection_rate']) * 100:.1f}%)"
-                )
-                logger.info(
-                    f"  Rejected:{fm['n_rejected_spectra']:,d} "
-                    f"({fm['rejection_rate'] * 100:.1f}%)"
-                )
-                logger.info(
-                    "  -> Phase-C analyses below are computed on the gated population."
-                )
+                logger.info(f"  APPLIED  (min_backbone_coverage>={fm['min_backbone_coverage']}, min_fragment_groups>={fm['min_fragment_groups']})")
+                logger.info(f"  Passed:  {fm['n_passed_spectra']:,d} / {fm['n_total_spectra']:,d} ({(1 - fm['rejection_rate']) * 100:.1f}%)")
+                logger.info(f"  Rejected:{fm['n_rejected_spectra']:,d} ({fm['rejection_rate'] * 100:.1f}%)")
+                logger.info("  -> Phase-C analyses below are computed on the gated population.")
             else:
                 if fm.get("filter_requested") and not fm.get("gate_enabled"):
                     reason = "quality gate disabled"
@@ -5756,48 +5226,26 @@ class TheoreticalAnalyser:
                 else:
                     reason = "filter disabled in config"
                 logger.info(f"  NOT APPLIED ({reason})")
-                logger.info(
-                    "  -> Analyses below run on the full sequence-available population."
-                )
+                logger.info("  -> Analyses below run on the full sequence-available population.")
 
         overall = self.results.get("overall_stats", {})
         if overall:
             logger.info(f"  Spectra analyzed:       {overall['n_spectra_analyzed']:,d}")
+            logger.info(f"  Avg match rate:         {overall['avg_match_rate'] * 100:.1f}% +/- {overall['std_match_rate'] * 100:.1f}%")
+            logger.info(f"  Avg intensity coverage: {overall['avg_frac_intensity'] * 100:.1f}% +/- {overall['std_frac_intensity'] * 100:.1f}%")
             logger.info(
-                f"  Avg match rate:         "
-                f"{overall['avg_match_rate']*100:.1f}% "
-                f"+/- {overall['std_match_rate']*100:.1f}%"
+                f"  Avg annotated fraction: {overall['avg_annotated_fraction'] * 100:.1f}% +/- {overall['std_annotated_fraction'] * 100:.1f}%"
             )
-            logger.info(
-                f"  Avg intensity coverage: "
-                f"{overall['avg_frac_intensity']*100:.1f}% "
-                f"+/- {overall['std_frac_intensity']*100:.1f}%"
-            )
-            logger.info(
-                f"  Avg annotated fraction: "
-                f"{overall['avg_annotated_fraction']*100:.1f}% "
-                f"+/- {overall['std_annotated_fraction']*100:.1f}%"
-            )
-            logger.info(
-                f"  Total annotated peaks:  {overall['total_annotated_peaks']:,d}"
-            )
-            logger.info(
-                f"  Total unannotated:      {overall['total_unannotated_peaks']:,d}"
-            )
+            logger.info(f"  Total annotated peaks:  {overall['total_annotated_peaks']:,d}")
+            logger.info(f"  Total unannotated:      {overall['total_unannotated_peaks']:,d}")
 
         # Signal composition
         sig = self.results.get("signal_composition", {})
         if sig:
             logger.info("")
             logger.info("Signal Composition:")
-            logger.info(
-                f"  Informative (fragment ions): "
-                f"{sig['informative_fraction']*100:.1f}%"
-            )
-            logger.info(
-                f"  Unannotated (noise):         "
-                f"{sig['noise_fraction']*100:.1f}%"
-            )
+            logger.info(f"  Informative (fragment ions): {sig['informative_fraction'] * 100:.1f}%")
+            logger.info(f"  Unannotated (noise):         {sig['noise_fraction'] * 100:.1f}%")
             cats = sig.get("category_fractions", {})
             for cat in [
                 "fragment_base",
@@ -5806,7 +5254,7 @@ class TheoreticalAnalyser:
                 "precursor",
             ]:
                 if cat in cats:
-                    logger.info(f"    {cat:22s} {cats[cat]*100:5.1f}%")
+                    logger.info(f"    {cat:22s} {cats[cat] * 100:5.1f}%")
 
         # Mass error
         me = self.results.get("mass_error_summary", {})
@@ -5816,20 +5264,14 @@ class TheoreticalAnalyser:
             logger.info(f"  Systematic bias: {me['systematic_bias_ppm']:.2f} ppm")
             percs = me.get("percentiles", {})
             logger.info(
-                f"  |PPM| P50={percs.get('p50', 0):.2f}  "
-                f"P90={percs.get('p90', 0):.2f}  "
-                f"P95={percs.get('p95', 0):.2f}  "
-                f"P99={percs.get('p99', 0):.2f}"
+                f"  |PPM| P50={percs.get('p50', 0):.2f}  P90={percs.get('p90', 0):.2f}  P95={percs.get('p95', 0):.2f}  P99={percs.get('p99', 0):.2f}"
             )
 
         # Coverage
         cov = self.results.get("coverage_stats", {})
         if cov:
             logger.info("")
-            logger.info(
-                f"Ion Coverage: {cov['overall_coverage_rate']*100:.1f}% "
-                f"({cov['total_matched']:,d}/{cov['total_theoretical_ions']:,d})"
-            )
+            logger.info(f"Ion Coverage: {cov['overall_coverage_rate'] * 100:.1f}% ({cov['total_matched']:,d}/{cov['total_theoretical_ions']:,d})")
 
         # Custom ion analysis
         cia = self.results.get("custom_ion_analysis", {})
@@ -5841,22 +5283,15 @@ class TheoreticalAnalyser:
                 d = chr_.get(cat, {})
                 rate = d.get("hit_rate", 0)
                 if rate > 0:
-                    logger.info(
-                        f"  {cat:<12s} {rate*100:5.1f}%  "
-                        f"({d['n_found']:,d}/{cia['n_spectra']:,d})"
-                    )
+                    logger.info(f"  {cat:<12s} {rate * 100:5.1f}%  ({d['n_found']:,d}/{cia['n_spectra']:,d})")
             # Top individual groups
             ghr = cia.get("group_hit_rates", {})
-            top_groups = sorted(
-                ghr.items(), key=lambda x: x[1]["hit_rate"], reverse=True
-            )[:5]
+            top_groups = sorted(ghr.items(), key=lambda x: x[1]["hit_rate"], reverse=True)[:5]
             if top_groups and top_groups[0][1]["hit_rate"] > 0:
                 logger.info("  Top groups:")
                 for g, d in top_groups:
                     if d["hit_rate"] > 0:
-                        logger.info(
-                            f"    {g:<35s} {d['hit_rate']*100:5.1f}%"
-                        )
+                        logger.info(f"    {g:<35s} {d['hit_rate'] * 100:5.1f}%")
             cl = cia.get("coverage_lift", {})
             if cl:
                 logger.info(
@@ -5864,7 +5299,7 @@ class TheoreticalAnalyser:
                     f"{cl['total_explained_by_custom_ions']:,d} / "
                     f"{cl['total_unannotated_peaks']:,d} "
                     f"unannotated peaks now explained "
-                    f"({cl['overall_lift_fraction']*100:.2f}%)"
+                    f"({cl['overall_lift_fraction'] * 100:.2f}%)"
                 )
 
         # Neutral loss analysis
@@ -5875,19 +5310,13 @@ class TheoreticalAnalyser:
             prev = nla.get("prevalence", {})
             for lt, p in prev.items():
                 logger.info(
-                    f"  {lt:<8s} {p['spectra_hit_rate']*100:5.1f}% spectra  "
-                    f"({p['total_count']:,d} total, "
-                    f"{p['mean_per_spectrum']:.1f}/spectrum)"
+                    f"  {lt:<8s} {p['spectra_hit_rate'] * 100:5.1f}% spectra  ({p['total_count']:,d} total, {p['mean_per_spectrum']:.1f}/spectrum)"
                 )
             irs = nla.get("intensity_ratio_stats", {})
             if irs:
                 logger.info("  Intensity ratios (loss/parent):")
                 for lt, stats in irs.items():
-                    logger.info(
-                        f"    {lt:<8s} median={stats['median']:.3f}  "
-                        f"mean={stats['mean']:.3f}  "
-                        f"IQR=[{stats['q25']:.3f}, {stats['q75']:.3f}]"
-                    )
+                    logger.info(f"    {lt:<8s} median={stats['median']:.3f}  mean={stats['mean']:.3f}  IQR=[{stats['q25']:.3f}, {stats['q75']:.3f}]")
 
         # Fragment group analysis
         fga = self.results.get("fragment_group_analysis", {})
@@ -5898,32 +5327,19 @@ class TheoreticalAnalyser:
             bc = fga["overall"]["backbone_coverage"]
             cm = fga["overall"]["charge_multiplicity"]
             multi_pct = (cm["2"] + cm["3+"]) * 100
-            logger.info(
-                f"  Unique fragments/spectrum: "
-                f"{fc['mean']:.1f} +/- {fc['std']:.1f} "
-                f"(median: {fc['median']:.0f})"
-            )
+            logger.info(f"  Unique fragments/spectrum: {fc['mean']:.1f} +/- {fc['std']:.1f} (median: {fc['median']:.0f})")
             by_series = fga["overall"].get("by_ion_series", {})
             # Report any series with non-zero activity so ETD/ECD runs
             # (which emit c/z rather than b/y) still get a summary line.
             for s in ("a", "b", "c", "x", "y", "z"):
                 sfc = by_series.get(s, {}).get("fragment_count", {})
                 if sfc and sfc.get("mean", 0) > 0:
-                    logger.info(
-                        f"    {s}-ions: {sfc['mean']:.1f} +/- {sfc['std']:.1f} "
-                        f"(median: {sfc['median']:.0f})"
-                    )
-            logger.info(
-                f"  Backbone coverage:         "
-                f"{bc['mean']*100:.1f}% +/- {bc['std']*100:.1f}%"
-            )
-            logger.info(
-                f"  Multi-charge groups:       "
-                f"{multi_pct:.1f}% of groups at 2+ charge states"
-            )
+                    logger.info(f"    {s}-ions: {sfc['mean']:.1f} +/- {sfc['std']:.1f} (median: {sfc['median']:.0f})")
+            logger.info(f"  Backbone coverage:         {bc['mean'] * 100:.1f}% +/- {bc['std'] * 100:.1f}%")
+            logger.info(f"  Multi-charge groups:       {multi_pct:.1f}% of groups at 2+ charge states")
             by_ft = fga.get("by_frag_type", {})
             if by_ft:
-                parts = []
+                parts: list[Any] = []
                 for ft, stats in sorted(by_ft.items()):
                     ft_series = stats.get("by_ion_series", {})
                     # Show the N/C pair native to this fragmentation method
@@ -5931,16 +5347,12 @@ class TheoreticalAnalyser:
                     # b/y pair shows 0.0/0.0 for electron-driven runs and
                     # misrepresents fragmentation quality.
                     n_key, c_key = self._primary_pair_for_mode(ft)
-                    n_m = ft_series.get(n_key, {}).get(
-                        "fragment_count", {}
-                    ).get("mean", 0)
-                    c_m = ft_series.get(c_key, {}).get(
-                        "fragment_count", {}
-                    ).get("mean", 0)
+                    n_m = ft_series.get(n_key, {}).get("fragment_count", {}).get("mean", 0)
+                    c_m = ft_series.get(c_key, {}).get("fragment_count", {}).get("mean", 0)
                     parts.append(
                         f"{ft}: {stats['fragment_count']['mean']:.1f} "
                         f"({n_key}={n_m:.1f}, {c_key}={c_m:.1f}), "
-                        f"{stats['backbone_coverage']['mean']*100:.1f}% cov"
+                        f"{stats['backbone_coverage']['mean'] * 100:.1f}% cov"
                     )
                 logger.info(f"  By frag_type:  {' | '.join(parts)}")
 
@@ -5960,11 +5372,7 @@ class TheoreticalAnalyser:
                     al = sl.get("all_ladder_lengths", {})
                     gs = sl.get("group_mz_span", {})
                     if ml:
-                        logger.info(
-                            f"  {s}-ion max ladder: "
-                            f"{ml['mean']:.1f} +/- {ml['std']:.1f} "
-                            f"(median: {ml['median']:.0f})"
-                        )
+                        logger.info(f"  {s}-ion max ladder: {ml['mean']:.1f} +/- {ml['std']:.1f} (median: {ml['median']:.0f})")
                         logger.info(
                             f"    All ladders: median={al.get('median', 0):.1f}, "
                             f"p75={al.get('p75', 0):.1f}, "
@@ -5982,10 +5390,7 @@ class TheoreticalAnalyser:
                 rec = ladder.get("combined", {})
                 if rec:
                     logger.info(
-                        f"  Span recommendation: "
-                        f"span_min={rec['suggested_span_min']}, "
-                        f"span_max={rec['suggested_span_max']} "
-                        f"({rec['reasoning']})"
+                        f"  Span recommendation: span_min={rec['suggested_span_min']}, span_max={rec['suggested_span_max']} ({rec['reasoning']})"
                     )
 
         # Quality gate
@@ -5993,14 +5398,8 @@ class TheoreticalAnalyser:
         if qga:
             logger.info("")
             logger.info("Quality Gate Analysis:")
-            logger.info(
-                f"  Thresholds:       coverage >= {qga['min_backbone_coverage']}, "
-                f"groups >= {qga['min_fragment_groups']}"
-            )
-            logger.info(
-                f"  Rejected:         {qga['n_below']:,d} / {qga['n_total']:,d} "
-                f"({qga['overall_rejection_rate']*100:.1f}%)"
-            )
+            logger.info(f"  Thresholds:       coverage >= {qga['min_backbone_coverage']}, groups >= {qga['min_fragment_groups']}")
+            logger.info(f"  Rejected:         {qga['n_below']:,d} / {qga['n_total']:,d} ({qga['overall_rejection_rate'] * 100:.1f}%)")
             logger.info(
                 f"  Fail breakdown:   coverage only: {qga['n_fail_coverage_only']:,d}, "
                 f"groups only: {qga['n_fail_groups_only']:,d}, "
@@ -6012,17 +5411,11 @@ class TheoreticalAnalyser:
             worst_rate = 0.0
             for dim_name, groups in dim_data.items():
                 for g, stats in groups.items():
-                    if (
-                        stats["n_total"] >= 10
-                        and stats["rejection_rate"] > worst_rate
-                    ):
+                    if stats["n_total"] >= 10 and stats["rejection_rate"] > worst_rate:
                         worst_rate = stats["rejection_rate"]
                         worst_dim = f"{dim_name}/{g}"
             if worst_dim:
-                logger.info(
-                    f"  Highest rejection: {worst_dim} "
-                    f"({worst_rate*100:.1f}%)"
-                )
+                logger.info(f"  Highest rejection: {worst_dim} ({worst_rate * 100:.1f}%)")
 
         # Modification analysis
         mod = self.results.get("modification_analysis", {})
@@ -6033,7 +5426,7 @@ class TheoreticalAnalyser:
             logger.info(
                 f"  Modified spectra:       "
                 f"{prev.get('n_modified', 0):,d} / {prev.get('n_total', 0):,d} "
-                f"({prev.get('modified_fraction', 0)*100:.1f}%)"
+                f"({prev.get('modified_fraction', 0) * 100:.1f}%)"
             )
             per_type = prev.get("per_type", {})
             if per_type:
@@ -6043,16 +5436,10 @@ class TheoreticalAnalyser:
                     reverse=True,
                 )[:8]
                 for mod_name, stats in top_types:
-                    logger.info(
-                        f"    {mod_name:<25s} "
-                        f"{stats['n_spectra']:>6,d} spectra "
-                        f"({stats['spectra_fraction']*100:5.1f}%)"
-                    )
+                    logger.info(f"    {mod_name:<25s} {stats['n_spectra']:>6,d} spectra ({stats['spectra_fraction'] * 100:5.1f}%)")
             # Per-type match rate deltas
             matching_quality = mod.get("matching_quality", {})
-            unmod_mean = matching_quality.get("Unmodified", {}).get(
-                "match_rate", {}
-            ).get("mean", 0)
+            unmod_mean = matching_quality.get("Unmodified", {}).get("match_rate", {}).get("mean", 0)
             if matching_quality and unmod_mean > 0:
                 logger.info("  Match rate vs Unmodified baseline:")
                 for mod_name, metrics in sorted(matching_quality.items()):
@@ -6060,26 +5447,16 @@ class TheoreticalAnalyser:
                         continue
                     mr = metrics.get("match_rate", {})
                     delta = mr.get("mean", 0) - unmod_mean
-                    logger.info(
-                        f"    {mod_name:<25s} "
-                        f"{mr.get('mean', 0)*100:5.1f}% "
-                        f"(delta: {delta*100:+.1f}%)"
-                    )
+                    logger.info(f"    {mod_name:<25s} {mr.get('mean', 0) * 100:5.1f}% (delta: {delta * 100:+.1f}%)")
             # Diagnostic counters
             diag = mod.get("diagnostics", {})
             n_stripped = diag.get("n_modifications_stripped", 0)
             n_prec_warn = diag.get("n_precursor_mass_warnings", 0)
             n_iso = diag.get("n_isotope_corrected", 0)
             if any((n_stripped, n_prec_warn, n_iso)):
-                logger.info(
-                    f"  Precursor validation:  "
-                    f"isotope-corrected={n_iso:,d}, "
-                    f"warnings={n_prec_warn:,d}"
-                )
+                logger.info(f"  Precursor validation:  isotope-corrected={n_iso:,d}, warnings={n_prec_warn:,d}")
                 if n_stripped > 0:
-                    logger.info(
-                        f"  Modifications stripped (fallback): {n_stripped:,d}"
-                    )
+                    logger.info(f"  Modifications stripped (fallback): {n_stripped:,d}")
 
         # Complementary pair analysis
         cpa = self.results.get("complementary_pair_analysis", {})
@@ -6088,28 +5465,18 @@ class TheoreticalAnalyser:
             logger.info("Complementary b/y Pair Analysis:")
             pf = cpa.get("pair_fraction", {})
             logger.info(
-                f"  Pair fraction:    "
-                f"{pf.get('mean', 0)*100:.1f}% +/- {pf.get('std', 0)*100:.1f}% "
-                f"(median: {pf.get('median', 0)*100:.1f}%)"
+                f"  Pair fraction:    {pf.get('mean', 0) * 100:.1f}% +/- {pf.get('std', 0) * 100:.1f}% (median: {pf.get('median', 0) * 100:.1f}%)"
             )
-            logger.info(
-                f"  Total pairs:      {cpa.get('total_pairs', 0):,d} "
-                f"across {cpa.get('n_spectra', 0):,d} spectra"
-            )
+            logger.info(f"  Total pairs:      {cpa.get('total_pairs', 0):,d} across {cpa.get('n_spectra', 0):,d} spectra")
             dev = cpa.get("deviation_da", {})
             abs_dev = cpa.get("abs_deviation_da", {})
-            logger.info(
-                f"  Sum deviation:    median={dev.get('median', 0):.5f} Da "
-                f"(|dev| median={abs_dev.get('median', 0):.5f} Da)"
-            )
+            logger.info(f"  Sum deviation:    median={dev.get('median', 0):.5f} Da (|dev| median={abs_dev.get('median', 0):.5f} Da)")
             by_ft = cpa.get("by_frag_type", {})
             if by_ft:
                 parts = []
                 for ft, stats in sorted(by_ft.items()):
                     fp = stats.get("pair_fraction", {})
-                    parts.append(
-                        f"{ft}: {fp.get('mean', 0)*100:.1f}% (n={stats.get('n_spectra', 0)})"
-                    )
+                    parts.append(f"{ft}: {fp.get('mean', 0) * 100:.1f}% (n={stats.get('n_spectra', 0)})")
                 logger.info(f"  By frag_type:     {' | '.join(parts)}")
 
         # Mass gap analysis
@@ -6118,43 +5485,27 @@ class TheoreticalAnalyser:
             logger.info("")
             logger.info("Mass Gap Analysis:")
             logger.info(
-                f"  Valid AA match:   "
-                f"{mga.get('overall_match_rate', 0)*100:.1f}% "
-                f"({mga.get('n_valid', 0):,d}/{mga.get('n_gaps', 0):,d} gaps)"
+                f"  Valid AA match:   {mga.get('overall_match_rate', 0) * 100:.1f}% ({mga.get('n_valid', 0):,d}/{mga.get('n_gaps', 0):,d} gaps)"
             )
             logger.info(
-                f"  Correct AA:       "
-                f"{mga.get('overall_correct_rate', 0)*100:.1f}% "
-                f"({mga.get('n_correct', 0):,d}/{mga.get('n_gaps', 0):,d} gaps)"
+                f"  Correct AA:       {mga.get('overall_correct_rate', 0) * 100:.1f}% ({mga.get('n_correct', 0):,d}/{mga.get('n_gaps', 0):,d} gaps)"
             )
             me = mga.get("match_error_ppm", {})
-            logger.info(
-                f"  Match error:      "
-                f"median={me.get('median', 0):.2f} ppm "
-                f"(IQR=[{me.get('q25', 0):.2f}, {me.get('q75', 0):.2f}])"
-            )
+            logger.info(f"  Match error:      median={me.get('median', 0):.2f} ppm (IQR=[{me.get('q25', 0):.2f}, {me.get('q75', 0):.2f}])")
             ts = mga.get("per_spectrum_two_sided_rate", {})
-            logger.info(
-                f"  Two-sided rate:   "
-                f"{ts.get('mean', 0)*100:.1f}% +/- {ts.get('std', 0)*100:.1f}%"
-            )
+            logger.info(f"  Two-sided rate:   {ts.get('mean', 0) * 100:.1f}% +/- {ts.get('std', 0) * 100:.1f}%")
             ambig = mga.get("ambiguity_distribution", {})
             if ambig:
                 total_a = sum(ambig.values())
                 unambig = ambig.get(1, 0)
-                logger.info(
-                    f"  Unambiguous (1 AA): "
-                    f"{unambig/max(total_a,1)*100:.1f}% of valid gaps"
-                )
+                logger.info(f"  Unambiguous (1 AA): {unambig / max(total_a, 1) * 100:.1f}% of valid gaps")
             by_ft = mga.get("by_frag_type", {})
             if by_ft:
                 parts = []
                 for ft, stats in sorted(by_ft.items()):
                     mr = stats.get("match_rate", {}).get("mean", 0)
                     cr = stats.get("correct_rate", {}).get("mean", 0)
-                    parts.append(
-                        f"{ft}: match={mr*100:.1f}%, correct={cr*100:.1f}%"
-                    )
+                    parts.append(f"{ft}: match={mr * 100:.1f}%, correct={cr * 100:.1f}%")
                 logger.info(f"  By frag_type:     {' | '.join(parts)}")
 
         logger.info("=" * 70)
@@ -6173,24 +5524,22 @@ class TheoreticalAnalyser:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         mass_error_df = self.results.get("mass_error_df")
-        has_mass_error = mass_error_df is not None and (
-            not isinstance(mass_error_df, pd.DataFrame) or not mass_error_df.empty
-        )
+        has_mass_error = mass_error_df is not None and (not isinstance(mass_error_df, pd.DataFrame) or not mass_error_df.empty)
 
-        figures = []
+        figures: list[Any] = []
         if has_mass_error:
-            figures.extend([
-                ("annotation summary", self.visualize_annotation_summary),
-                ("mass error analysis", self.visualize_mass_error_analysis),
-                ("ion type summary", self.visualize_ion_type_summary),
-            ])
+            figures.extend(
+                [
+                    ("annotation summary", self.visualize_annotation_summary),
+                    ("mass error analysis", self.visualize_mass_error_analysis),
+                    ("ion type summary", self.visualize_ion_type_summary),
+                ]
+            )
         else:
             logger.warning("No mass error data -- skipping fragment-matching figures")
 
         sig_comp = self.results.get("signal_composition", {})
-        if sig_comp.get("_annotated_intensities") or sig_comp.get(
-            "_unannotated_intensities"
-        ):
+        if sig_comp.get("_annotated_intensities") or sig_comp.get("_unannotated_intensities"):
             figures.append(
                 (
                     "annotated intensity comparison",
@@ -6199,49 +5548,35 @@ class TheoreticalAnalyser:
             )
 
         if self.results.get("custom_ion_analysis"):
-            figures.append(
-                ("custom ion analysis", self.visualize_custom_ion_analysis)
-            )
+            figures.append(("custom ion analysis", self.visualize_custom_ion_analysis))
 
         if self.results.get("neutral_loss_analysis"):
-            figures.append(
-                ("neutral loss analysis", self.visualize_neutral_loss_analysis)
-            )
+            figures.append(("neutral loss analysis", self.visualize_neutral_loss_analysis))
 
         if self.results.get("fragment_group_analysis"):
-            figures.append(
-                ("fragment group analysis", self.visualize_fragment_group_analysis)
-            )
+            figures.append(("fragment group analysis", self.visualize_fragment_group_analysis))
             if self.results["fragment_group_analysis"].get("ladder_analysis"):
-                figures.append(
-                    ("ladder length analysis", self.visualize_ladder_analysis)
-                )
+                figures.append(("ladder length analysis", self.visualize_ladder_analysis))
 
         if self.results.get("quality_gate_analysis"):
-            figures.extend([
-                ("quality gate overview", self.visualize_quality_gate_overview),
-                ("quality gate diagnostics", self.visualize_quality_gate_diagnostics),
-            ])
+            figures.extend(
+                [
+                    ("quality gate overview", self.visualize_quality_gate_overview),
+                    ("quality gate diagnostics", self.visualize_quality_gate_diagnostics),
+                ]
+            )
 
         if self.results.get("modification_analysis"):
-            figures.append(
-                ("modification analysis", self.visualize_modification_analysis)
-            )
+            figures.append(("modification analysis", self.visualize_modification_analysis))
 
         if self.results.get("complementary_pair_analysis"):
-            figures.append(
-                ("complementary pair analysis", self.visualize_complementary_pair_analysis)
-            )
+            figures.append(("complementary pair analysis", self.visualize_complementary_pair_analysis))
 
         if self.results.get("mass_gap_analysis"):
-            figures.append(
-                ("mass gap analysis", self.visualize_mass_gap_analysis)
-            )
+            figures.append(("mass gap analysis", self.visualize_mass_gap_analysis))
 
         if self.results.get("blur_sigma_analysis"):
-            figures.append(
-                ("blur sigma analysis", self.visualize_blur_sigma_analysis)
-            )
+            figures.append(("blur sigma analysis", self.visualize_blur_sigma_analysis))
 
         for name, method in figures:
             try:
@@ -6279,25 +5614,16 @@ class TheoreticalAnalyser:
         )
 
         coverage_stats = self.results.get("coverage_stats", {})
-        overall_stats = self.results.get("overall_stats", {})
+        self.results.get("overall_stats", {})
         signal_comp = self.results.get("signal_composition", {})
 
         # --- Panel A: Coverage by m/z range ---
         ax = axes[0, 0]
         if coverage_stats.get("coverage_by_mz_range"):
             mz_ranges = list(coverage_stats["coverage_by_mz_range"].keys())
-            rates = [
-                coverage_stats["coverage_by_mz_range"][r]["coverage_rate"]
-                for r in mz_ranges
-            ]
-            n_matched = [
-                coverage_stats["coverage_by_mz_range"][r]["n_matched"]
-                for r in mz_ranges
-            ]
-            n_total = [
-                coverage_stats["coverage_by_mz_range"][r]["n_theoretical"]
-                for r in mz_ranges
-            ]
+            rates = [coverage_stats["coverage_by_mz_range"][r]["coverage_rate"] for r in mz_ranges]
+            n_matched = [coverage_stats["coverage_by_mz_range"][r]["n_matched"] for r in mz_ranges]
+            n_total = [coverage_stats["coverage_by_mz_range"][r]["n_theoretical"] for r in mz_ranges]
 
             x_pos = np.arange(len(mz_ranges))
             bars = ax.bar(x_pos, rates, color="steelblue", alpha=0.7)
@@ -6307,7 +5633,7 @@ class TheoreticalAnalyser:
             ax.set_title("A. Coverage by m/z Range")
             ax.set_ylim(0, 1.0)
             ax.grid(axis="y", alpha=0.3)
-            for bar, matched, total in zip(bars, n_matched, n_total):
+            for bar, matched, total in zip(bars, n_matched, n_total, strict=False):
                 ax.text(
                     bar.get_x() + bar.get_width() / 2.0,
                     bar.get_height(),
@@ -6318,8 +5644,12 @@ class TheoreticalAnalyser:
                 )
         else:
             ax.text(
-                0.5, 0.5, "No coverage data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No coverage data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
             ax.set_title("A. Coverage by m/z Range")
 
@@ -6345,13 +5675,22 @@ class TheoreticalAnalyser:
             y_pos = np.arange(len(cat_labels))
             # Count fraction bars (solid)
             bars_count = ax.barh(
-                y_pos - bar_height / 2, count_values, bar_height,
-                color=colors, alpha=0.8, label="By count",
+                y_pos - bar_height / 2,
+                count_values,
+                bar_height,
+                color=colors,
+                alpha=0.8,
+                label="By count",
             )
             # Intensity fraction bars (hatched)
             bars_int = ax.barh(
-                y_pos + bar_height / 2, int_values, bar_height,
-                color=colors, alpha=0.5, hatch="//", label="By intensity",
+                y_pos + bar_height / 2,
+                int_values,
+                bar_height,
+                color=colors,
+                alpha=0.5,
+                hatch="//",
+                label="By intensity",
             )
             ax.set_yticks(y_pos)
             ax.set_yticklabels(cat_labels, fontsize=9)
@@ -6365,21 +5704,11 @@ class TheoreticalAnalyser:
             # peak counts per spectrum vary: aggregate weights long
             # spectra more, per-spectrum mean weights every spectrum
             # equally.
-            agg_annot_count = sum(
-                cats.get(c, 0.0) for c in cat_labels if c != "unannotated"
-            ) * 100.0
-            agg_annot_int = sum(
-                int_cats.get(c, 0.0) for c in cat_labels if c != "unannotated"
-            ) * 100.0
-            ann_per = [
-                float(r.get("annotated_fraction", 0))
-                for r in self.results.get("per_spectrum", [])
-                if r.get("sequence_available", False)
-            ]
+            agg_annot_count = sum(cats.get(c, 0.0) for c in cat_labels if c != "unannotated") * 100.0
+            agg_annot_int = sum(int_cats.get(c, 0.0) for c in cat_labels if c != "unannotated") * 100.0
+            ann_per = [float(r.get("annotated_fraction", 0)) for r in self.results.get("per_spectrum", []) if r.get("sequence_available", False)]
             int_per = [
-                float(r.get("annotated_intensity_fraction", 0))
-                for r in self.results.get("per_spectrum", [])
-                if r.get("sequence_available", False)
+                float(r.get("annotated_intensity_fraction", 0)) for r in self.results.get("per_spectrum", []) if r.get("sequence_available", False)
             ]
             if ann_per:
                 _a = np.asarray(ann_per)
@@ -6389,49 +5718,51 @@ class TheoreticalAnalyser:
                     f"aggregate annotated: count {agg_annot_count:.1f}%, "
                     f"intensity {agg_annot_int:.1f}% "
                     f"(sum to 100% with unannotated)\n"
-                    f"per-spectrum annotated: count {_a.mean()*100:.1f}±{_a.std()*100:.1f}%, "
-                    f"intensity {_i.mean()*100:.1f}±{_i.std()*100:.1f}%"
+                    f"per-spectrum annotated: count {_a.mean() * 100:.1f}±{_a.std() * 100:.1f}%, "
+                    f"intensity {_i.mean() * 100:.1f}±{_i.std() * 100:.1f}%"
                 )
             else:
                 title = (
-                    "B. Signal Composition (Count vs Intensity)\n"
-                    f"aggregate annotated: count {agg_annot_count:.1f}%, "
-                    f"intensity {agg_annot_int:.1f}%"
+                    f"B. Signal Composition (Count vs Intensity)\naggregate annotated: count {agg_annot_count:.1f}%, intensity {agg_annot_int:.1f}%"
                 )
             ax.set_title(title, fontsize=10)
             ax.grid(axis="x", alpha=0.3)
             ax.legend(fontsize=8, loc="lower right")
-            for bar, val in zip(bars_count, count_values):
+            for bar, val in zip(bars_count, count_values, strict=False):
                 if val > 2:
                     ax.text(
                         bar.get_width() + 0.3,
                         bar.get_y() + bar.get_height() / 2.0,
                         f"{val:.1f}%",
-                        ha="left", va="center", fontsize=7,
+                        ha="left",
+                        va="center",
+                        fontsize=7,
                     )
-            for bar, val in zip(bars_int, int_values):
+            for bar, val in zip(bars_int, int_values, strict=False):
                 if val > 2:
                     ax.text(
                         bar.get_width() + 0.3,
                         bar.get_y() + bar.get_height() / 2.0,
                         f"{val:.1f}%",
-                        ha="left", va="center", fontsize=7,
+                        ha="left",
+                        va="center",
+                        fontsize=7,
                     )
         else:
             ax.text(
-                0.5, 0.5, "No signal composition data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No signal composition data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
             ax.set_title("B. Signal Composition (Count vs Intensity)")
 
         # --- Panel C: Annotated fraction distribution ---
         ax = axes[1, 0]
         per_spectrum = self.results.get("per_spectrum", [])
-        annotated_fracs = [
-            r.get("annotated_fraction", 0)
-            for r in per_spectrum
-            if r.get("sequence_available", False)
-        ]
+        annotated_fracs = [r.get("annotated_fraction", 0) for r in per_spectrum if r.get("sequence_available", False)]
         if annotated_fracs:
             af_arr = np.asarray(annotated_fracs, dtype=float)
             af_mean = float(af_arr.mean())
@@ -6442,15 +5773,25 @@ class TheoreticalAnalyser:
                 float(np.percentile(af_arr, 75)),
             )
             ax.hist(
-                af_arr, bins=30, color="green", alpha=0.6, edgecolor="black",
+                af_arr,
+                bins=30,
+                color="green",
+                alpha=0.6,
+                edgecolor="black",
             )
             ax.axvline(
-                af_mean, color="red", linestyle="--", linewidth=2,
-                label=f"Mean: {af_mean*100:.1f}% ± {af_std*100:.1f}%",
+                af_mean,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Mean: {af_mean * 100:.1f}% ± {af_std * 100:.1f}%",
             )
             ax.axvline(
-                af_med, color="black", linestyle=":", linewidth=1.5,
-                label=f"Median: {af_med*100:.1f}% (IQR {af_q25*100:.1f}–{af_q75*100:.1f}%)",
+                af_med,
+                color="black",
+                linestyle=":",
+                linewidth=1.5,
+                label=f"Median: {af_med * 100:.1f}% (IQR {af_q25 * 100:.1f}–{af_q75 * 100:.1f}%)",
             )
             ax.set_xlabel("Annotated Fraction")
             ax.set_ylabel("Count")
@@ -6460,20 +5801,20 @@ class TheoreticalAnalyser:
             ax.grid(axis="y", alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No annotation data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No annotation data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
             ax.set_title("C. Annotated Fraction Distribution")
 
         # --- Panel D: Annotated fraction vs intensity fraction scatter ---
         ax = axes[1, 1]
-        valid_ps = [
-            r for r in per_spectrum if r.get("sequence_available", False)
-        ]
+        valid_ps = [r for r in per_spectrum if r.get("sequence_available", False)]
         ann_fracs_d = [r.get("annotated_fraction", 0) for r in valid_ps]
-        int_fracs_d = [
-            r.get("annotated_intensity_fraction", 0) for r in valid_ps
-        ]
+        int_fracs_d = [r.get("annotated_intensity_fraction", 0) for r in valid_ps]
         if ann_fracs_d and int_fracs_d:
             # Subsample if too many points
             n_pts = len(ann_fracs_d)
@@ -6486,10 +5827,7 @@ class TheoreticalAnalyser:
                 valid_ps_sub = valid_ps
 
             # Color by frag_type
-            frag_types_d = [
-                str(r.get("_metadata", {}).get("frag_type", "unknown"))
-                for r in valid_ps_sub
-            ]
+            frag_types_d = [str(r.get("_metadata", {}).get("frag_type", "unknown")) for r in valid_ps_sub]
             unique_ft = sorted(set(frag_types_d))
             for ft in unique_ft:
                 mask = [f == ft for f in frag_types_d]
@@ -6497,7 +5835,12 @@ class TheoreticalAnalyser:
                 y_pts = [int_fracs_d[i] for i, m in enumerate(mask) if m]
                 color = FRAG_TYPE_COLORS.get(ft, "#7f7f7f")
                 ax.scatter(
-                    x_pts, y_pts, alpha=0.3, s=5, color=color, label=ft,
+                    x_pts,
+                    y_pts,
+                    alpha=0.3,
+                    s=5,
+                    color=color,
+                    label=ft,
                 )
             # y=x reference line
             ax.plot([0, 1], [0, 1], "k--", linewidth=1, alpha=0.5, label="y=x")
@@ -6509,8 +5852,12 @@ class TheoreticalAnalyser:
             ax.grid(alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No per-spectrum data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No per-spectrum data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Count vs Intensity Annotation")
 
@@ -6551,14 +5898,24 @@ class TheoreticalAnalyser:
         ax = axes[0]
         if len(ann_log) > 0:
             ax.hist(
-                ann_log, bins=50, density=True, alpha=0.6,
-                color="#2ca02c", edgecolor="black", linewidth=0.3,
+                ann_log,
+                bins=50,
+                density=True,
+                alpha=0.6,
+                color="#2ca02c",
+                edgecolor="black",
+                linewidth=0.3,
                 label=f"Annotated (n={len(ann_log):,d})",
             )
         if len(unann_log) > 0:
             ax.hist(
-                unann_log, bins=50, density=True, alpha=0.6,
-                color="#d62728", edgecolor="black", linewidth=0.3,
+                unann_log,
+                bins=50,
+                density=True,
+                alpha=0.6,
+                color="#d62728",
+                edgecolor="black",
+                linewidth=0.3,
                 label=f"Unannotated (n={len(unann_log):,d})",
             )
         ax.set_xlabel("log₁₀(Intensity)")
@@ -6569,9 +5926,9 @@ class TheoreticalAnalyser:
 
         # --- Panel B: Box plot comparison ---
         ax = axes[1]
-        box_data = []
-        box_labels = []
-        box_colors = []
+        box_data: list[Any] = []
+        box_labels: list[Any] = []
+        box_colors: list[Any] = []
         if len(ann_log) > 0:
             box_data.append(ann_log)
             box_labels.append(f"Annotated\n(n={len(ann_log):,d})")
@@ -6582,18 +5939,26 @@ class TheoreticalAnalyser:
             box_colors.append("#d62728")
         if box_data:
             bp = ax.boxplot(
-                box_data, labels=box_labels, patch_artist=True,
-                showfliers=False, widths=0.5,
+                box_data,
+                labels=box_labels,
+                patch_artist=True,
+                showfliers=False,
+                widths=0.5,
             )
-            for patch, color in zip(bp["boxes"], box_colors):
+            for patch, color in zip(bp["boxes"], box_colors, strict=False):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.5)
             # Annotate medians
             for i, vals in enumerate(box_data, start=1):
                 median_val = float(np.median(vals))
                 ax.text(
-                    i, median_val, f"  {median_val:.2f}",
-                    ha="left", va="center", fontsize=8, fontweight="bold",
+                    i,
+                    median_val,
+                    f"  {median_val:.2f}",
+                    ha="left",
+                    va="center",
+                    fontsize=8,
+                    fontweight="bold",
                 )
         ax.set_ylabel("log₁₀(Intensity)")
         ax.set_title("B. Intensity Comparison")
@@ -6623,20 +5988,16 @@ class TheoreticalAnalyser:
             return None
 
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        fig.suptitle(
-            "Mass Error Characterization", fontsize=16, fontweight="bold"
-        )
+        fig.suptitle("Mass Error Characterization", fontsize=16, fontweight="bold")
 
         # Subsample for scatter plots
         n = len(mass_error_df)
-        idx = (
-            np.random.choice(n, 10000, replace=False) if n > 10000 else np.arange(n)
-        )
+        idx = np.random.choice(n, 10000, replace=False) if n > 10000 else np.arange(n)
 
         # --- Panel A: |PPM| error by feature type (box plot) ---
         ax = axes[0, 0]
         ft_order = ["base", "loss", "isotope", "precursor"]
-        ft_colors = {
+        ft_colors: dict[str, Any] = {
             "base": "#2ca02c",
             "loss": "#98df8a",
             "isotope": "#aec7e8",
@@ -6647,9 +6008,7 @@ class TheoreticalAnalyser:
             box_labels = []
             box_colors = []
             for ft in ft_order:
-                subset = mass_error_df.loc[
-                    mass_error_df["feature_type"] == ft, "delta_mz_ppm"
-                ]
+                subset = mass_error_df.loc[mass_error_df["feature_type"] == ft, "delta_mz_ppm"]
                 if len(subset) > 0:
                     box_data.append(subset.values)
                     box_labels.append(ft)
@@ -6659,10 +6018,12 @@ class TheoreticalAnalyser:
                 all_ppm = np.concatenate(box_data)
                 y_clip = float(np.percentile(all_ppm, 99))
                 bp = ax.boxplot(
-                    box_data, labels=box_labels, patch_artist=True,
+                    box_data,
+                    labels=box_labels,
+                    patch_artist=True,
                     showfliers=False,
                 )
-                for patch, color in zip(bp["boxes"], box_colors):
+                for patch, color in zip(bp["boxes"], box_colors, strict=False):
                     patch.set_facecolor(color)
                     patch.set_alpha(0.6)
                 ax.set_ylim(0, y_clip * 1.1)
@@ -6670,19 +6031,30 @@ class TheoreticalAnalyser:
                 ax.grid(axis="y", alpha=0.3)
                 for i, vals in enumerate(box_data, start=1):
                     ax.text(
-                        i, ax.get_ylim()[1] * 0.95,
+                        i,
+                        ax.get_ylim()[1] * 0.95,
                         f"n={len(vals):,d}",
-                        ha="center", va="top", fontsize=7,
+                        ha="center",
+                        va="top",
+                        fontsize=7,
                     )
             else:
                 ax.text(
-                    0.5, 0.5, "No feature type data",
-                    ha="center", va="center", transform=ax.transAxes,
+                    0.5,
+                    0.5,
+                    "No feature type data",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
                 )
         else:
             ax.text(
-                0.5, 0.5, "No feature type column",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No feature type column",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("A. Mass Error by Feature Type")
 
@@ -6723,27 +6095,22 @@ class TheoreticalAnalyser:
             ax.text(
                 0.98,
                 0.98,
-                f"|PPM| P50={percs.get('p50', 0):.1f}\n"
-                f"|PPM| P95={percs.get('p95', 0):.1f}\n"
-                f"|PPM| P99={percs.get('p99', 0):.1f}",
+                f"|PPM| P50={percs.get('p50', 0):.1f}\n|PPM| P95={percs.get('p95', 0):.1f}\n|PPM| P99={percs.get('p99', 0):.1f}",
                 transform=ax.transAxes,
                 ha="right",
                 va="top",
                 fontsize=8,
-                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+                bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
             )
 
         # --- Panel D: Systematic bias vs m/z ---
         ax = axes[1, 1]
         mz_bins = np.arange(0, 2500, 100)
         bin_centers = (mz_bins[:-1] + mz_bins[1:]) / 2
-        binned_means = []
-        binned_stds = []
+        binned_means: list[Any] = []
+        binned_stds: list[Any] = []
         for i in range(len(mz_bins) - 1):
-            subset = mass_error_df[
-                (mass_error_df["theo_mz"] >= mz_bins[i])
-                & (mass_error_df["theo_mz"] < mz_bins[i + 1])
-            ]
+            subset = mass_error_df[(mass_error_df["theo_mz"] >= mz_bins[i]) & (mass_error_df["theo_mz"] < mz_bins[i + 1])]
             if len(subset) > 10:
                 binned_means.append(float(np.mean(subset["signed_ppm"])))
                 binned_stds.append(float(np.std(subset["signed_ppm"])))
@@ -6806,7 +6173,7 @@ class TheoreticalAnalyser:
                 ha="left",
                 va="top",
                 fontsize=8,
-                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+                bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
             )
 
         plt.tight_layout()
@@ -6843,13 +6210,9 @@ class TheoreticalAnalyser:
         # --- Panel A: Coverage rate + b:y ratio ---
         ax = axes[0, 0]
         ion_cov_a = coverage_stats.get("coverage_by_ion_type", {})
-        cov_rates_a = [
-            ion_cov_a.get(it, {}).get("coverage_rate", 0) for it in ion_types
-        ]
+        cov_rates_a = [ion_cov_a.get(it, {}).get("coverage_rate", 0) for it in ion_types]
         n_matched_a = [ion_perf[it]["n_matched"] for it in ion_types]
-        n_theo_a = [
-            ion_cov_a.get(it, {}).get("n_theoretical", 0) for it in ion_types
-        ]
+        n_theo_a = [ion_cov_a.get(it, {}).get("n_theoretical", 0) for it in ion_types]
         bars = ax.bar(x_pos, cov_rates_a, color=bar_colors, alpha=0.7)
         ax.set_xticks(x_pos)
         ax.set_xticklabels(ion_types)
@@ -6861,23 +6224,30 @@ class TheoreticalAnalyser:
         b_count = ion_perf.get("b", {}).get("n_matched", 0)
         y_count = ion_perf.get("y", {}).get("n_matched", 0)
         if y_count > 0:
-            ratio_text = f"b:y = {b_count/y_count:.2f}"
+            ratio_text = f"b:y = {b_count / y_count:.2f}"
         elif b_count > 0:
             ratio_text = f"b:y = {b_count}:0"
         else:
             ratio_text = ""
         if ratio_text:
             ax.text(
-                0.95, 0.95, ratio_text, transform=ax.transAxes,
-                ha="right", va="top", fontsize=9,
-                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+                0.95,
+                0.95,
+                ratio_text,
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontsize=9,
+                bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
             )
         for i, bar in enumerate(bars):
             ax.text(
                 bar.get_x() + bar.get_width() / 2.0,
                 bar.get_height(),
                 f"{n_matched_a[i]:,d}/{n_theo_a[i]:,d}",
-                ha="center", va="bottom", fontsize=7,
+                ha="center",
+                va="bottom",
+                fontsize=7,
             )
 
         # --- Panel B: Matched vs theoretical counts (grouped bar) ---
@@ -6891,13 +6261,22 @@ class TheoreticalAnalyser:
             w = 0.35
             cov_colors = [ION_TYPE_COLORS.get(it, "#7f7f7f") for it in cov_types]
             ax.bar(
-                cx_pos - w / 2, theo_counts, w,
-                color=cov_colors, alpha=0.3,
-                edgecolor=cov_colors, linewidth=1.2, label="Theoretical",
+                cx_pos - w / 2,
+                theo_counts,
+                w,
+                color=cov_colors,
+                alpha=0.3,
+                edgecolor=cov_colors,
+                linewidth=1.2,
+                label="Theoretical",
             )
             ax.bar(
-                cx_pos + w / 2, matched_counts, w,
-                color=cov_colors, alpha=0.7, label="Matched",
+                cx_pos + w / 2,
+                matched_counts,
+                w,
+                color=cov_colors,
+                alpha=0.7,
+                label="Matched",
             )
             ax.set_xticks(cx_pos)
             ax.set_xticklabels(cov_types)
@@ -6906,8 +6285,12 @@ class TheoreticalAnalyser:
             ax.grid(axis="y", alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No coverage data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No coverage data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("B. Theoretical vs Matched Counts")
 
@@ -6915,17 +6298,13 @@ class TheoreticalAnalyser:
         ax = axes[1, 0]
         mass_error_df = self.results.get("mass_error_df")
         median_errors = [ion_perf[it]["median_abs_ppm_error"] for it in ion_types]
-        iqr_lower = []
-        iqr_upper = []
+        iqr_lower: list[Any] = []
+        iqr_upper: list[Any] = []
         if mass_error_df is not None and "ion_type" in mass_error_df.columns:
             for it in ion_types:
-                subset = mass_error_df.loc[
-                    mass_error_df["ion_type"] == it, "delta_mz_ppm"
-                ]
+                subset = mass_error_df.loc[mass_error_df["ion_type"] == it, "delta_mz_ppm"]
                 if len(subset) > 0:
-                    q25, q75 = float(np.percentile(subset, 25)), float(
-                        np.percentile(subset, 75)
-                    )
+                    q25, q75 = float(np.percentile(subset, 25)), float(np.percentile(subset, 75))
                     med = float(np.median(subset))
                     iqr_lower.append(med - q25)
                     iqr_upper.append(q75 - med)
@@ -6959,24 +6338,19 @@ class TheoreticalAnalyser:
         if charge_keys:
             charge_colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
             # Compute totals per ion type for normalization
-            totals = np.array([
-                sum(
-                    ion_perf[it].get("charge_distribution", {}).get(ck, 0)
-                    for ck in charge_keys
-                )
-                for it in ion_types
-            ], dtype=float)
+            totals = np.array([sum(ion_perf[it].get("charge_distribution", {}).get(ck, 0) for ck in charge_keys) for it in ion_types], dtype=float)
             totals[totals == 0] = 1.0  # avoid division by zero
             bottom = np.zeros(len(ion_types))
             for ci, ck in enumerate(charge_keys):
-                raw = np.array([
-                    ion_perf[it].get("charge_distribution", {}).get(ck, 0)
-                    for it in ion_types
-                ], dtype=float)
+                raw = np.array([ion_perf[it].get("charge_distribution", {}).get(ck, 0) for it in ion_types], dtype=float)
                 fracs = raw / totals
                 color = charge_colors[ci % len(charge_colors)]
                 ax.bar(
-                    x_pos, fracs, bottom=bottom, color=color, alpha=0.7,
+                    x_pos,
+                    fracs,
+                    bottom=bottom,
+                    color=color,
+                    alpha=0.7,
                     label=f"z={ck}",
                 )
                 bottom += fracs
@@ -6987,15 +6361,23 @@ class TheoreticalAnalyser:
             ax.legend(fontsize=8, title="Charge", loc="upper right")
             ax.grid(axis="y", alpha=0.3)
             # Annotate total count per ion type
-            for i, it in enumerate(ion_types):
+            for i, _it in enumerate(ion_types):
                 ax.text(
-                    i, 1.01, f"n={int(totals[i]):,d}",
-                    ha="center", va="bottom", fontsize=7,
+                    i,
+                    1.01,
+                    f"n={int(totals[i]):,d}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
                 )
         else:
             ax.text(
-                0.5, 0.5, "No charge data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No charge data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Charge Distribution per Ion Type")
 
@@ -7030,7 +6412,7 @@ class TheoreticalAnalyser:
             fontweight="bold",
         )
 
-        cat_colors = {
+        cat_colors: dict[str, Any] = {
             "glycan": "#1f77b4",
             "immonium": "#2ca02c",
             "TMT": "#ff7f0e",
@@ -7043,18 +6425,13 @@ class TheoreticalAnalyser:
         ax = axes[0, 0]
         ghr = cia.get("group_hit_rates", {})
         if ghr:
-            sorted_groups = sorted(
-                ghr.items(), key=lambda x: x[1]["hit_rate"], reverse=True
-            )
+            sorted_groups = sorted(ghr.items(), key=lambda x: x[1]["hit_rate"], reverse=True)
             # Keep top 25 with non-zero hit rate
             top = [(g, d) for g, d in sorted_groups if d["hit_rate"] > 0][:25]
             if top:
                 labels = [g for g, _ in top]
                 rates = [d["hit_rate"] * 100 for _, d in top]
-                colors = [
-                    cat_colors.get(self._classify_ion_category(g), "#7f7f7f")
-                    for g, _ in top
-                ]
+                colors = [cat_colors.get(self._classify_ion_category(g), "#7f7f7f") for g, _ in top]
                 y_pos = np.arange(len(labels))
                 ax.barh(y_pos, rates, color=colors, alpha=0.8)
                 ax.set_yticks(y_pos)
@@ -7064,22 +6441,20 @@ class TheoreticalAnalyser:
                 ax.grid(axis="x", alpha=0.3)
                 # Legend for categories
                 from matplotlib.patches import Patch
+
                 legend_handles = [
-                    Patch(facecolor=cat_colors[c], label=c)
-                    for c in categories
-                    if any(
-                        self._classify_ion_category(g) == c
-                        for g, _ in top
-                    )
+                    Patch(facecolor=cat_colors[c], label=c) for c in categories if any(self._classify_ion_category(g) == c for g, _ in top)
                 ]
                 if legend_handles:
-                    ax.legend(
-                        handles=legend_handles, fontsize=7, loc="lower right"
-                    )
+                    ax.legend(handles=legend_handles, fontsize=7, loc="lower right")
             else:
                 ax.text(
-                    0.5, 0.5, "No ions detected",
-                    ha="center", va="center", transform=ax.transAxes,
+                    0.5,
+                    0.5,
+                    "No ions detected",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
                 )
         ax.set_title("A. Custom Ion Hit Rates (top groups)")
 
@@ -7102,26 +6477,31 @@ class TheoreticalAnalyser:
                 labels=box_labels,
                 patch_artist=True,
                 showfliers=True,
-                flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
             )
-            for patch, color in zip(bp["boxes"], box_colors):
+            for patch, color in zip(bp["boxes"], box_colors, strict=False):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.6)
             ax.set_ylabel("Max Matched Intensity (normalised)")
             ax.grid(axis="y", alpha=0.3)
             # Add sample counts
-            for i, (cat, vals) in enumerate(
-                zip(box_labels, box_data), start=1
-            ):
+            for i, (_cat, vals) in enumerate(zip(box_labels, box_data, strict=False), start=1):
                 ax.text(
-                    i, ax.get_ylim()[1] * 0.95,
+                    i,
+                    ax.get_ylim()[1] * 0.95,
                     f"n={len(vals):,d}",
-                    ha="center", va="top", fontsize=7,
+                    ha="center",
+                    va="top",
+                    fontsize=7,
                 )
         else:
             ax.text(
-                0.5, 0.5, "No intensity data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No intensity data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("B. Intensity Distribution by Category")
 
@@ -7129,11 +6509,7 @@ class TheoreticalAnalyser:
         ax = axes[1, 0]
         co_occ = cia.get("co_occurrence", {})
         # Only include categories with >1% hit rate (avoids sparse heatmaps)
-        active_cats = [
-            c for c in categories
-            if cia.get("category_hit_rates", {}).get(c, {}).get("hit_rate", 0)
-            > 0.01
-        ]
+        active_cats = [c for c in categories if cia.get("category_hit_rates", {}).get(c, {}).get("hit_rate", 0) > 0.01]
         if len(active_cats) >= 2 and co_occ:
             n_cats = len(active_cats)
             matrix = np.zeros((n_cats, n_cats))
@@ -7159,14 +6535,23 @@ class TheoreticalAnalyser:
                 for j in range(n_cats):
                     val = matrix[i, j]
                     ax.text(
-                        j, i, f"{val:.2f}",
-                        ha="center", va="center", fontsize=9,
+                        j,
+                        i,
+                        f"{val:.2f}",
+                        ha="center",
+                        va="center",
+                        fontsize=9,
                         color="white" if val > 0.5 else "black",
                     )
         else:
             ax.text(
-                0.5, 0.5, "Not enough categories detected\n(need ≥2 with >1% hit rate)",
-                ha="center", va="center", transform=ax.transAxes, fontsize=9,
+                0.5,
+                0.5,
+                "Not enough categories detected\n(need ≥2 with >1% hit rate)",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=9,
             )
         ax.set_title("C. Category Co-occurrence (Jaccard)")
 
@@ -7175,46 +6560,44 @@ class TheoreticalAnalyser:
         cl = cia.get("coverage_lift", {})
         range_data = cl.get("by_mz_range", {})
         if range_data:
-            range_names = [
-                rn for rn in self.mz_range_order if rn in range_data
-            ]
+            range_names = [rn for rn in self.mz_range_order if rn in range_data]
             n_peaks = [range_data[rn]["n_peaks"] for rn in range_names]
-            n_frag = [
-                range_data[rn]["n_fragment_annotated"] for rn in range_names
-            ]
-            n_custom = [
-                range_data[rn]["n_custom_only"] for rn in range_names
-            ]
-            n_remaining = [
-                p - f - c for p, f, c in zip(n_peaks, n_frag, n_custom)
-            ]
+            n_frag = [range_data[rn]["n_fragment_annotated"] for rn in range_names]
+            n_custom = [range_data[rn]["n_custom_only"] for rn in range_names]
+            n_remaining = [p - f - c for p, f, c in zip(n_peaks, n_frag, n_custom, strict=False)]
 
             # Convert to fractions
-            fracs_frag = [
-                f / max(p, 1) for f, p in zip(n_frag, n_peaks)
-            ]
-            fracs_custom = [
-                c / max(p, 1) for c, p in zip(n_custom, n_peaks)
-            ]
-            fracs_remain = [
-                r / max(p, 1) for r, p in zip(n_remaining, n_peaks)
-            ]
+            fracs_frag = [f / max(p, 1) for f, p in zip(n_frag, n_peaks, strict=False)]
+            fracs_custom = [c / max(p, 1) for c, p in zip(n_custom, n_peaks, strict=False)]
+            fracs_remain = [r / max(p, 1) for r, p in zip(n_remaining, n_peaks, strict=False)]
 
             x_pos = np.arange(len(range_names))
             bar_width = 0.6
-            bars_frag = ax.bar(
-                x_pos, fracs_frag, bar_width,
-                label="Fragment-annotated", color="#2ca02c", alpha=0.8,
+            ax.bar(
+                x_pos,
+                fracs_frag,
+                bar_width,
+                label="Fragment-annotated",
+                color="#2ca02c",
+                alpha=0.8,
             )
-            bars_custom = ax.bar(
-                x_pos, fracs_custom, bar_width,
+            ax.bar(
+                x_pos,
+                fracs_custom,
+                bar_width,
                 bottom=fracs_frag,
-                label="Custom-ion explained", color="#1f77b4", alpha=0.8,
+                label="Custom-ion explained",
+                color="#1f77b4",
+                alpha=0.8,
             )
-            bars_remain = ax.bar(
-                x_pos, fracs_remain, bar_width,
-                bottom=[f + c for f, c in zip(fracs_frag, fracs_custom)],
-                label="Remaining unannotated", color="#d62728", alpha=0.5,
+            ax.bar(
+                x_pos,
+                fracs_remain,
+                bar_width,
+                bottom=[f + c for f, c in zip(fracs_frag, fracs_custom, strict=False)],
+                label="Remaining unannotated",
+                color="#d62728",
+                alpha=0.5,
             )
             ax.set_xticks(x_pos)
             ax.set_xticklabels(range_names, rotation=30, ha="right", fontsize=8)
@@ -7224,20 +6607,26 @@ class TheoreticalAnalyser:
             ax.grid(axis="y", alpha=0.3)
 
             # Annotate custom-ion counts on bars
-            for i, (cf, cc, rn) in enumerate(
-                zip(fracs_frag, fracs_custom, range_names)
-            ):
+            for i, (cf, cc, _rn) in enumerate(zip(fracs_frag, fracs_custom, range_names, strict=False)):
                 if n_custom[i] > 0:
                     ax.text(
-                        i, cf + cc / 2,
+                        i,
+                        cf + cc / 2,
                         f"+{n_custom[i]:,d}",
-                        ha="center", va="center", fontsize=7,
-                        fontweight="bold", color="white",
+                        ha="center",
+                        va="center",
+                        fontsize=7,
+                        fontweight="bold",
+                        color="white",
                     )
         else:
             ax.text(
-                0.5, 0.5, "No coverage data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No coverage data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Coverage Impact by m/z Range")
 
@@ -7272,13 +6661,13 @@ class TheoreticalAnalyser:
         )
 
         prevalence = nla.get("prevalence", {})
-        intensity_ratio_stats = nla.get("intensity_ratio_stats", {})
-        mass_error_by_lt = nla.get("mass_error_by_loss_type", {})
+        nla.get("intensity_ratio_stats", {})
+        nla.get("mass_error_by_loss_type", {})
         crosstab = nla.get("crosstab", {})
         intensity_ratios_raw = nla.get("_intensity_ratios", {})
 
         loss_types = sorted(prevalence.keys())
-        loss_colors = {
+        loss_colors: dict[str, Any] = {
             "H2O": "#1f77b4",
             "NH3": "#ff7f0e",
             "H3PO4": "#2ca02c",
@@ -7291,12 +6680,8 @@ class TheoreticalAnalyser:
         if loss_types:
             x_pos = np.arange(len(loss_types))
             total_counts = [prevalence[lt]["total_count"] for lt in loss_types]
-            hit_rates = [
-                prevalence[lt]["spectra_hit_rate"] for lt in loss_types
-            ]
-            n_spectra_hit = [
-                prevalence[lt].get("n_spectra_hit", 0) for lt in loss_types
-            ]
+            hit_rates = [prevalence[lt]["spectra_hit_rate"] for lt in loss_types]
+            n_spectra_hit = [prevalence[lt].get("n_spectra_hit", 0) for lt in loss_types]
             colors = [loss_colors.get(lt, "#7f7f7f") for lt in loss_types]
 
             bars = ax.bar(x_pos, hit_rates, color=colors, alpha=0.7)
@@ -7306,7 +6691,7 @@ class TheoreticalAnalyser:
             ax.set_ylim(0, min(1.0, max(hit_rates) * 1.3) if hit_rates else 1.0)
             ax.grid(axis="y", alpha=0.3)
 
-            for bar, count, n_hit in zip(bars, total_counts, n_spectra_hit):
+            for bar, count, n_hit in zip(bars, total_counts, n_spectra_hit, strict=False):
                 ax.text(
                     bar.get_x() + bar.get_width() / 2.0,
                     bar.get_height(),
@@ -7317,8 +6702,12 @@ class TheoreticalAnalyser:
                 )
         else:
             ax.text(
-                0.5, 0.5, "No loss data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No loss data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("A. Neutral Loss Prevalence")
 
@@ -7340,14 +6729,14 @@ class TheoreticalAnalyser:
                 labels=box_labels,
                 patch_artist=True,
                 showfliers=True,
-                flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
             )
-            for patch, color in zip(bp["boxes"], box_colors):
+            for patch, color in zip(bp["boxes"], box_colors, strict=False):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.6)
             ax.set_ylabel("Loss / Parent Intensity Ratio")
             ax.grid(axis="y", alpha=0.3)
-            for i, (lt, vals) in enumerate(zip(box_labels, box_data), start=1):
+            for i, (_lt, vals) in enumerate(zip(box_labels, box_data, strict=False), start=1):
                 ax.text(
                     i,
                     ax.get_ylim()[1] * 0.95,
@@ -7358,8 +6747,12 @@ class TheoreticalAnalyser:
                 )
         else:
             ax.text(
-                0.5, 0.5, "No intensity ratio data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No intensity ratio data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("B. Loss-to-Parent Intensity Ratio")
 
@@ -7368,9 +6761,9 @@ class TheoreticalAnalyser:
         mass_error_df = self.results.get("mass_error_df")
         if mass_error_df is not None and "annotation" in mass_error_df.columns:
             # Collect box data from raw DataFrame for proper box plots
-            me_box_data = []
-            me_box_labels = []
-            me_box_colors = []
+            me_box_data: list[Any] = []
+            me_box_labels: list[Any] = []
+            me_box_colors: list[Any] = []
 
             # Base ions reference
             base_rows = mass_error_df[mass_error_df["feature_type"] == "base"]
@@ -7382,9 +6775,7 @@ class TheoreticalAnalyser:
             # Loss types
             loss_rows = mass_error_df[mass_error_df["feature_type"] == "loss"].copy()
             if len(loss_rows) > 0:
-                loss_rows["loss_type"] = loss_rows["annotation"].apply(
-                    self._extract_loss_type
-                )
+                loss_rows["loss_type"] = loss_rows["annotation"].apply(self._extract_loss_type)
                 for lt in loss_types:
                     subset = loss_rows[loss_rows["loss_type"] == lt]
                     if len(subset) > 0:
@@ -7398,16 +6789,14 @@ class TheoreticalAnalyser:
                     labels=me_box_labels,
                     patch_artist=True,
                     showfliers=True,
-                    flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                    flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
                 )
-                for patch, color in zip(bp["boxes"], me_box_colors):
+                for patch, color in zip(bp["boxes"], me_box_colors, strict=False):
                     patch.set_facecolor(color)
                     patch.set_alpha(0.6)
                 ax.set_ylabel("|PPM| Error")
                 ax.grid(axis="y", alpha=0.3)
-                for i, (lbl, vals) in enumerate(
-                    zip(me_box_labels, me_box_data), start=1
-                ):
+                for i, (_lbl, vals) in enumerate(zip(me_box_labels, me_box_data, strict=False), start=1):
                     ax.text(
                         i,
                         ax.get_ylim()[1] * 0.95,
@@ -7418,22 +6807,28 @@ class TheoreticalAnalyser:
                     )
             else:
                 ax.text(
-                    0.5, 0.5, "No mass error data",
-                    ha="center", va="center", transform=ax.transAxes,
+                    0.5,
+                    0.5,
+                    "No mass error data",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
                 )
         else:
             ax.text(
-                0.5, 0.5, "No mass error data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No mass error data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("C. Mass Error: Loss Types vs Base Ions")
 
         # --- Panel D: Heatmap of loss_type x ion_series (row-normalized) ---
         ax = axes[1, 1]
         if crosstab:
-            all_series = sorted(
-                {s for lt_dict in crosstab.values() for s in lt_dict}
-            )
+            all_series = sorted({s for lt_dict in crosstab.values() for s in lt_dict})
             ct_loss_types = sorted(crosstab.keys())
             raw_matrix = np.zeros((len(ct_loss_types), len(all_series)))
             for i, lt in enumerate(ct_loss_types):
@@ -7458,16 +6853,22 @@ class TheoreticalAnalyser:
                     raw = int(raw_matrix[i, j])
                     if raw > 0:
                         ax.text(
-                            j, i, f"{frac:.0%}\n({raw:,d})",
-                            ha="center", va="center", fontsize=7,
-                            color="white"
-                            if frac > 0.5
-                            else "black",
+                            j,
+                            i,
+                            f"{frac:.0%}\n({raw:,d})",
+                            ha="center",
+                            va="center",
+                            fontsize=7,
+                            color="white" if frac > 0.5 else "black",
                         )
         else:
             ax.text(
-                0.5, 0.5, "No cross-tab data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No cross-tab data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Loss Type x Ion Series")
 
@@ -7520,22 +6921,19 @@ class TheoreticalAnalyser:
 
         from matplotlib.patches import Patch
 
-        ion_series_colors = {
-            s: ION_TYPE_COLORS.get(s, "#888888")
-            for s in ("a", "b", "c", "x", "y", "z")
-        }
+        ion_series_colors = {s: ION_TYPE_COLORS.get(s, "#888888") for s in ("a", "b", "c", "x", "y", "z")}
 
         def _grouped_box_panel(
-            ax,
+            ax: Axes,
             frag_types: List[str],
             per_spectrum_dicts: list,
             frag_type_list: list,
-            series_keys_for_ft,
+            series_keys_for_ft: Any,
             ylabel: str,
             title: str,
-            fmt_median="{:.0f}",
-            ylim=None,
-        ):
+            fmt_median: Any = "{:.0f}",
+            ylim: Any = None,
+        ) -> None:
             """Draw per-ion-series box plots grouped by frag_type.
 
             Parameters
@@ -7581,11 +6979,7 @@ class TheoreticalAnalyser:
                 n_series_ft = len(keys)
                 offset = (max_n_series - n_series_ft) * box_width / 2
                 for s_idx, s in enumerate(keys):
-                    vals = [
-                        d.get(s, 0)
-                        for d, f in zip(per_spectrum_dicts, frag_type_list)
-                        if f == ft
-                    ]
+                    vals = [d.get(s, 0) for d, f in zip(per_spectrum_dicts, frag_type_list, strict=False) if f == ft]
                     if vals:
                         pos = group_left + offset + s_idx * box_width
                         box_data.append(vals)
@@ -7593,9 +6987,7 @@ class TheoreticalAnalyser:
                         colors.append(ion_series_colors.get(s, "#888888"))
                         if s not in legend_keys:
                             legend_keys.append(s)
-                group_centers.append(
-                    group_left + (max_n_series - 1) * box_width / 2
-                )
+                group_centers.append(group_left + (max_n_series - 1) * box_width / 2)
 
             if box_data:
                 bp = ax.boxplot(
@@ -7604,12 +6996,12 @@ class TheoreticalAnalyser:
                     widths=box_width * 0.8,
                     patch_artist=True,
                     showfliers=True,
-                    flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                    flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
                 )
-                for patch, color in zip(bp["boxes"], colors):
+                for patch, color in zip(bp["boxes"], colors, strict=False):
                     patch.set_facecolor(color)
                     patch.set_alpha(0.6)
-                for pos, vals in zip(positions, box_data):
+                for pos, vals in zip(positions, box_data, strict=False):
                     median_val = float(np.median(vals))
                     ax.text(
                         pos,
@@ -7643,17 +7035,10 @@ class TheoreticalAnalyser:
                 for g_idx, ft in enumerate(frag_types):
                     parts = []
                     for s in per_ft_keys[ft]:
-                        vals = [
-                            d.get(s, 0)
-                            for d, f in zip(per_spectrum_dicts, frag_type_list)
-                            if f == ft
-                        ]
+                        vals = [d.get(s, 0) for d, f in zip(per_spectrum_dicts, frag_type_list, strict=False) if f == ft]
                         if vals:
                             arr = np.asarray(vals, dtype=float)
-                            parts.append(
-                                f"{s}: " + fmt_median.format(float(arr.mean()))
-                                + "±" + fmt_median.format(float(arr.std()))
-                            )
+                            parts.append(f"{s}: " + fmt_median.format(float(arr.mean())) + "±" + fmt_median.format(float(arr.std())))
                     if parts:
                         ax.text(
                             group_centers[g_idx],
@@ -7667,8 +7052,12 @@ class TheoreticalAnalyser:
                 ax.set_ylim(ymin - 0.20 * (ymax - ymin), ymax)
             else:
                 ax.text(
-                    0.5, 0.5, "No data",
-                    ha="center", va="center", transform=ax.transAxes,
+                    0.5,
+                    0.5,
+                    "No data",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
                 )
             ax.set_title(title)
 
@@ -7682,37 +7071,44 @@ class TheoreticalAnalyser:
         # clear on the main plot.
         ax = axes[0, 0]
         totals_by_ft: Dict[str, List[int]] = {ft: [] for ft in frag_types}
-        for total, f in zip(n_groups_total_raw, frag_type_raw):
+        for total, f in zip(n_groups_total_raw, frag_type_raw, strict=False):
             if f in totals_by_ft:
                 totals_by_ft[f].append(int(total))
-        box_data_A = [totals_by_ft[ft] for ft in frag_types]
-        has_data_A = [len(v) > 0 for v in box_data_A]
-        plot_fts = [ft for ft, ok in zip(frag_types, has_data_A) if ok]
-        plot_data = [v for v, ok in zip(box_data_A, has_data_A) if ok]
+        box_data_A = [totals_by_ft[ft] for ft in frag_types]  # noqa: N806
+        has_data_A = [len(v) > 0 for v in box_data_A]  # noqa: N806
+        plot_fts = [ft for ft, ok in zip(frag_types, has_data_A, strict=False) if ok]
+        plot_data = [v for v, ok in zip(box_data_A, has_data_A, strict=False) if ok]
         if plot_data:
             bp = ax.boxplot(
                 plot_data,
                 labels=plot_fts,
                 patch_artist=True,
                 showfliers=True,
-                flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
             )
             for patch in bp["boxes"]:
                 patch.set_facecolor("#4c72b0")
                 patch.set_alpha(0.6)
             # Annotate each box with median on top, mean ± std under label.
-            for i, (ft, vals) in enumerate(zip(plot_fts, plot_data), start=1):
+            for i, (_ft, vals) in enumerate(zip(plot_fts, plot_data, strict=False), start=1):
                 arr = np.asarray(vals, dtype=float)
                 ax.text(
-                    i, float(np.median(arr)),
+                    i,
+                    float(np.median(arr)),
                     f"{int(np.median(arr))}",
-                    ha="center", va="bottom", fontsize=8, fontweight="bold",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    fontweight="bold",
                 )
             # Horizontal reference line at the gate threshold so the reader
             # can confirm visually that no box extends below it.
             min_grp = int(getattr(self, "min_fragment_groups", 7))
             ax.axhline(
-                min_grp, color="red", linestyle="--", linewidth=1.2,
+                min_grp,
+                color="red",
+                linestyle="--",
+                linewidth=1.2,
                 label=f"gate threshold (≥ {min_grp})",
             )
             ax.legend(fontsize=8, loc="upper right")
@@ -7727,26 +7123,29 @@ class TheoreticalAnalyser:
             for i, ft in enumerate(plot_fts, start=1):
                 parts = []
                 for s in self._primary_pair_for_mode(ft):
-                    vs = [
-                        d.get(s, 0)
-                        for d, f in zip(n_by_series_raw, frag_type_raw)
-                        if f == ft and isinstance(d, dict)
-                    ]
+                    vs = [d.get(s, 0) for d, f in zip(n_by_series_raw, frag_type_raw, strict=False) if f == ft and isinstance(d, dict)]
                     if vs:
                         a = np.asarray(vs, dtype=float)
-                        parts.append(
-                            f"{s}: {a.mean():.1f}±{a.std():.1f}"
-                        )
+                        parts.append(f"{s}: {a.mean():.1f}±{a.std():.1f}")
                 if parts:
                     ax.text(
-                        i, summary_y, "\n".join(parts),
-                        ha="center", va="top", fontsize=6, color="#444",
+                        i,
+                        summary_y,
+                        "\n".join(parts),
+                        ha="center",
+                        va="top",
+                        fontsize=6,
+                        color="#444",
                     )
             ax.set_ylim(ymin - 0.20 * (ymax - ymin), ymax)
         else:
             ax.text(
-                0.5, 0.5, "No data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("A. Total Fragment Groups per Spectrum (gate threshold shown)")
 
@@ -7758,13 +7157,8 @@ class TheoreticalAnalyser:
             mult_colors = ["#1f77b4", "#ff7f0e", "#d62728"]
             mult_labels = ["1x", "2x", "3+x"]
 
-            for k, (mult_key, color, label) in enumerate(
-                zip(["1", "2", "3+"], mult_colors, mult_labels)
-            ):
-                vals = [
-                    by_frag_type[ft]["charge_multiplicity"].get(mult_key, 0) * 100
-                    for ft in frag_types
-                ]
+            for k, (mult_key, color, label) in enumerate(zip(["1", "2", "3+"], mult_colors, mult_labels, strict=False)):
+                vals = [by_frag_type[ft]["charge_multiplicity"].get(mult_key, 0) * 100 for ft in frag_types]
                 bars = ax.bar(
                     x_pos + k * bar_width - bar_width,
                     vals,
@@ -7774,7 +7168,7 @@ class TheoreticalAnalyser:
                     label=label,
                 )
                 # Annotate with percentages
-                for bar, val in zip(bars, vals):
+                for bar, val in zip(bars, vals, strict=False):
                     if val > 3:  # Only annotate if visible
                         ax.text(
                             bar.get_x() + bar.get_width() / 2.0,
@@ -7791,8 +7185,12 @@ class TheoreticalAnalyser:
             ax.grid(axis="y", alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No multiplicity data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No multiplicity data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("B. Charge State Multiplicity")
 
@@ -7817,7 +7215,7 @@ class TheoreticalAnalyser:
         ax = axes[1, 1]
         if frag_obs:
             # Group by precursor charge
-            prec_groups = {"z=2": [], "z=3": [], "z=4+": []}
+            prec_groups: dict[str, Any] = {"z=2": [], "z=3": [], "z=4+": []}
             for rel_pos, charge, prec_charge, _ in frag_obs:
                 if prec_charge == 2:
                     prec_groups["z=2"].append((rel_pos, charge))
@@ -7830,8 +7228,8 @@ class TheoreticalAnalyser:
             bin_edges = np.linspace(0, 1, n_bins + 1)
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
-            prec_colors = {"z=2": "#1f77b4", "z=3": "#ff7f0e", "z=4+": "#d62728"}
-            prec_markers = {"z=2": "o", "z=3": "s", "z=4+": "^"}
+            prec_colors: dict[str, Any] = {"z=2": "#1f77b4", "z=3": "#ff7f0e", "z=4+": "#d62728"}
+            prec_markers: dict[str, Any] = {"z=2": "o", "z=3": "s", "z=4+": "^"}
 
             for label, obs_list in prec_groups.items():
                 if not obs_list:
@@ -7841,8 +7239,8 @@ class TheoreticalAnalyser:
                 bin_idx = np.digitize(positions, bin_edges) - 1
                 bin_idx = np.clip(bin_idx, 0, n_bins - 1)
 
-                mean_charges = []
-                valid_centers = []
+                mean_charges: list[Any] = []
+                valid_centers: list[Any] = []
                 for b in range(n_bins):
                     mask = bin_idx == b
                     if mask.sum() >= 5:  # require minimum observations
@@ -7867,8 +7265,12 @@ class TheoreticalAnalyser:
             ax.grid(alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No fragment observations",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No fragment observations",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Fragment Charge vs Size by Precursor Charge")
 
@@ -7877,11 +7279,18 @@ class TheoreticalAnalyser:
         if comp_raw:
             comp_arr = np.array(comp_raw)
             ax.hist(
-                comp_arr, bins=30, color="steelblue", alpha=0.7, edgecolor="black",
+                comp_arr,
+                bins=30,
+                color="steelblue",
+                alpha=0.7,
+                edgecolor="black",
             )
             mean_comp = float(np.mean(comp_arr))
             ax.axvline(
-                mean_comp, color="red", linestyle="--", linewidth=2,
+                mean_comp,
+                color="red",
+                linestyle="--",
+                linewidth=2,
                 label=f"Mean: {mean_comp:.2f}",
             )
             ax.set_xlabel("Complementary Pair Fraction")
@@ -7891,17 +7300,19 @@ class TheoreticalAnalyser:
             ax.grid(axis="y", alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No complementary pair data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No complementary pair data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("E. Complementary b/y Ion Pairs")
 
         # --- Panel F: Complementary fraction by precursor charge ---
         ax = axes[2, 1]
         per_spectrum = self.results.get("per_spectrum", [])
-        valid_ps = [
-            r for r in per_spectrum if r.get("sequence_available", False)
-        ]
+        valid_ps = [r for r in per_spectrum if r.get("sequence_available", False)]
         if comp_raw and len(comp_raw) == len(valid_ps):
             charge_groups: Dict[str, List[float]] = {}
             for i, r in enumerate(valid_ps):
@@ -7913,15 +7324,16 @@ class TheoreticalAnalyser:
                 else:
                     continue
                 charge_groups.setdefault(key, []).append(comp_raw[i])
-            sorted_keys = sorted(
-                charge_groups.keys(), key=lambda x: (x.endswith("+"), x)
-            )
+            sorted_keys = sorted(charge_groups.keys(), key=lambda x: (x.endswith("+"), x))
             if sorted_keys:
                 box_data = [charge_groups[k] for k in sorted_keys]
                 box_labels = [f"z={k}\n(n={len(charge_groups[k]):,d})" for k in sorted_keys]
                 bp = ax.boxplot(
-                    box_data, labels=box_labels, patch_artist=True,
-                    showfliers=False, widths=0.5,
+                    box_data,
+                    labels=box_labels,
+                    patch_artist=True,
+                    showfliers=False,
+                    widths=0.5,
                 )
                 for patch in bp["boxes"]:
                     patch.set_facecolor("steelblue")
@@ -7930,13 +7342,21 @@ class TheoreticalAnalyser:
                 ax.grid(axis="y", alpha=0.3)
             else:
                 ax.text(
-                    0.5, 0.5, "No charge data",
-                    ha="center", va="center", transform=ax.transAxes,
+                    0.5,
+                    0.5,
+                    "No charge data",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
                 )
         else:
             ax.text(
-                0.5, 0.5, "No complementary pair data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No complementary pair data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("F. Complementary Pairs by Precursor Charge")
 
@@ -7973,7 +7393,7 @@ class TheoreticalAnalyser:
             fontweight="bold",
         )
 
-        ion_colors = {
+        ion_colors: dict[str, Any] = {
             "b": ION_TYPE_COLORS["b"],
             "y": ION_TYPE_COLORS["y"],
         }
@@ -8002,7 +7422,10 @@ class TheoreticalAnalyser:
                 )
                 med = np.median(lengths)
                 ax.axvline(
-                    med, color=ion_colors[s], linestyle="--", linewidth=1.5,
+                    med,
+                    color=ion_colors[s],
+                    linestyle="--",
+                    linewidth=1.5,
                     label=f"{s} median={med:.1f}",
                 )
         ax.set_yscale("log")
@@ -8017,25 +7440,19 @@ class TheoreticalAnalyser:
         max_ladder_data = fga.get("_per_spectrum_max_ladder", {})
         frag_types_raw = fga.get("_per_spectrum_frag_type", [])
         # Filter out ETD (zero b/y signal)
-        frag_types_unique = sorted(
-            ft for ft in set(frag_types_raw) if ft.upper() != "ETD"
-        )
+        frag_types_unique = sorted(ft for ft in set(frag_types_raw) if ft.upper() != "ETD")
 
         box_width = 0.35
         gap = 1.0
         box_data = []
-        positions = []
-        colors = []
-        group_centers = []
+        positions: list[Any] = []
+        colors: list[Any] = []
+        group_centers: list[Any] = []
 
         for g_idx, ft in enumerate(frag_types_unique):
             group_left = g_idx * (2 * box_width + gap)
             for s_idx, s in enumerate(("b", "y")):
-                vals = [
-                    ml
-                    for ml, f in zip(max_ladder_data.get(s, []), frag_types_raw)
-                    if f == ft
-                ]
+                vals = [ml for ml, f in zip(max_ladder_data.get(s, []), frag_types_raw, strict=False) if f == ft]
                 if vals:
                     pos = group_left + s_idx * box_width
                     box_data.append(vals)
@@ -8050,19 +7467,17 @@ class TheoreticalAnalyser:
                 widths=box_width * 0.8,
                 patch_artist=True,
                 showfliers=True,
-                flierprops=dict(marker=".", markersize=2, alpha=0.3),
+                flierprops={"marker": ".", "markersize": 2, "alpha": 0.3},
             )
-            for patch, color in zip(bp["boxes"], colors):
+            for patch, color in zip(bp["boxes"], colors, strict=False):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.6)
             ax.set_xticks(group_centers)
             ax.set_xticklabels(frag_types_unique)
             from matplotlib.patches import Patch
+
             ax.legend(
-                handles=[
-                    Patch(facecolor=ion_colors[s], alpha=0.6, label=f"{s}-ion")
-                    for s in ("b", "y")
-                ],
+                handles=[Patch(facecolor=ion_colors[s], alpha=0.6, label=f"{s}-ion") for s in ("b", "y")],
                 fontsize=8,
             )
         ax.set_ylabel("Max Ladder Length")
@@ -8081,11 +7496,7 @@ class TheoreticalAnalyser:
                     bins=span_bins,
                     alpha=0.6,
                     color=ion_colors[s],
-                    label=(
-                        f"{s}-ion (median={np.median(spans):.0f}, "
-                        f"p75={np.percentile(spans, 75):.0f}, "
-                        f"n={len(spans):,d})"
-                    ),
+                    label=(f"{s}-ion (median={np.median(spans):.0f}, p75={np.percentile(spans, 75):.0f}, n={len(spans):,d})"),
                     edgecolor="white",
                     linewidth=0.5,
                 )
@@ -8107,7 +7518,8 @@ class TheoreticalAnalyser:
                 sorted_spans = np.sort(spans)
                 cdf = np.arange(1, len(sorted_spans) + 1) / len(sorted_spans)
                 ax.step(
-                    sorted_spans, cdf * 100,
+                    sorted_spans,
+                    cdf * 100,
                     color=ion_colors[s],
                     linewidth=2,
                     label=f"{s}-ion (n={len(spans):,d})",
@@ -8185,7 +7597,10 @@ class TheoreticalAnalyser:
                 label=f"Accepted ({int((~below_mask).sum()):,d})",
             )
             ax.axvline(
-                min_cov, color="red", linestyle="--", linewidth=2,
+                min_cov,
+                color="red",
+                linestyle="--",
+                linewidth=2,
                 label=f"Threshold = {min_cov}",
             )
             ax.set_xlabel("Backbone coverage")
@@ -8202,9 +7617,7 @@ class TheoreticalAnalyser:
         ax = axes[1, 0]
         project_data = qga.get("rejection_by_dimension", {}).get("search_project", {})
         if len(project_data) > 15:
-            sorted_items = sorted(
-                project_data.items(), key=lambda x: x[1]["n_total"], reverse=True
-            )
+            sorted_items = sorted(project_data.items(), key=lambda x: x[1]["n_total"], reverse=True)
             project_data = dict(sorted_items[:15])
         self._draw_rejection_bar(ax, project_data, overall_rate, "C. Rejection by Project")
 
@@ -8214,20 +7627,34 @@ class TheoreticalAnalyser:
             ax.scatter(
                 n_groups_arr[~below_mask],
                 coverage_arr[~below_mask],
-                s=8, alpha=0.3, color="green", label="Accepted",
+                s=8,
+                alpha=0.3,
+                color="green",
+                label="Accepted",
                 rasterized=True,
             )
             ax.scatter(
                 n_groups_arr[below_mask],
                 coverage_arr[below_mask],
-                s=8, alpha=0.3, color="red", label="Rejected",
+                s=8,
+                alpha=0.3,
+                color="red",
+                label="Rejected",
                 rasterized=True,
             )
             ax.axhline(
-                min_cov, color="red", linestyle="--", linewidth=1.5, alpha=0.7,
+                min_cov,
+                color="red",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
             )
             ax.axvline(
-                min_grp, color="red", linestyle="--", linewidth=1.5, alpha=0.7,
+                min_grp,
+                color="red",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
             )
             ax.set_xlabel("Fragment groups")
             ax.set_ylabel("Backbone coverage")
@@ -8235,8 +7662,12 @@ class TheoreticalAnalyser:
             ax.grid(alpha=0.3)
         else:
             ax.text(
-                0.5, 0.5, "No data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Coverage vs Fragment Groups")
 
@@ -8305,10 +7736,13 @@ class TheoreticalAnalyser:
                     box_colors.append("green")
             if box_data:
                 bp = ax.boxplot(
-                    box_data, labels=box_labels, patch_artist=True,
-                    showfliers=False, widths=0.6,
+                    box_data,
+                    labels=box_labels,
+                    patch_artist=True,
+                    showfliers=False,
+                    widths=0.6,
                 )
-                for patch, color in zip(bp["boxes"], box_colors):
+                for patch, color in zip(bp["boxes"], box_colors, strict=False):
                     patch.set_facecolor(color)
                     patch.set_alpha(0.3)
                 ax.tick_params(axis="x", labelsize=8)
@@ -8336,10 +7770,13 @@ class TheoreticalAnalyser:
                     box_colors.append("green")
             if box_data:
                 bp = ax.boxplot(
-                    box_data, labels=box_labels, patch_artist=True,
-                    showfliers=False, widths=0.6,
+                    box_data,
+                    labels=box_labels,
+                    patch_artist=True,
+                    showfliers=False,
+                    widths=0.6,
                 )
-                for patch, color in zip(bp["boxes"], box_colors):
+                for patch, color in zip(bp["boxes"], box_colors, strict=False):
                     patch.set_facecolor(color)
                     patch.set_alpha(0.3)
                 ax.tick_params(axis="x", labelsize=8)
@@ -8364,10 +7801,14 @@ class TheoreticalAnalyser:
             rho = seq_data.get("spearman_rho")
             if rho is not None:
                 ax.text(
-                    0.95, 0.95,
+                    0.95,
+                    0.95,
                     f"Spearman r={rho:.3f}",
-                    transform=ax.transAxes, ha="right", va="top", fontsize=9,
-                    bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="top",
+                    fontsize=9,
+                    bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
                 )
         ax.set_title("C. Rejection Rate vs Sequence Length")
 
@@ -8388,8 +7829,11 @@ class TheoreticalAnalyser:
                         matrix[i, j] = entry["rejection_rate"]
 
             im = ax.imshow(
-                matrix, cmap="RdYlGn_r", aspect="auto",
-                vmin=0, vmax=min(1.0, np.nanmax(matrix) * 1.2) if np.any(np.isfinite(matrix)) else 1.0,
+                matrix,
+                cmap="RdYlGn_r",
+                aspect="auto",
+                vmin=0,
+                vmax=min(1.0, np.nanmax(matrix) * 1.2) if np.any(np.isfinite(matrix)) else 1.0,
             )
             ax.set_xticks(np.arange(len(all_charges)))
             ax.set_xticklabels(all_charges, fontsize=9)
@@ -8404,14 +7848,22 @@ class TheoreticalAnalyser:
                     if np.isfinite(val):
                         n = cross_tab[frag_type_list[i]].get(all_charges[j], {}).get("n_total", 0)
                         ax.text(
-                            j, i, f"{val:.0%}\n(n={n})",
-                            ha="center", va="center", fontsize=7,
+                            j,
+                            i,
+                            f"{val:.0%}\n(n={n})",
+                            ha="center",
+                            va="center",
+                            fontsize=7,
                             color="white" if val > 0.5 else "black",
                         )
         else:
             ax.text(
-                0.5, 0.5, "No cross-tab data",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No cross-tab data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
         ax.set_title("D. Rejection Rate: Frag Type x Charge")
 
@@ -8457,10 +7909,14 @@ class TheoreticalAnalyser:
         ax.invert_yaxis()
 
         # Annotate with n/N
-        for i, (nb, nt) in enumerate(zip(n_belows, n_totals)):
+        for i, (nb, nt) in enumerate(zip(n_belows, n_totals, strict=False)):
             ax.text(
-                rates[i] + 0.01, i, f"{nb}/{nt}",
-                va="center", fontsize=7, color="gray",
+                rates[i] + 0.01,
+                i,
+                f"{nb}/{nt}",
+                va="center",
+                fontsize=7,
+                color="gray",
             )
 
         ax.set_title(title)
@@ -8494,8 +7950,7 @@ class TheoreticalAnalyser:
         if fracs:
             ax.hist(fracs, bins=30, color="#1f77b4", edgecolor="white", alpha=0.8)
             mean_frac = cpa["pair_fraction"]["mean"]
-            ax.axvline(mean_frac, color="red", linestyle="--", linewidth=1.5,
-                       label=f"mean = {mean_frac:.3f}")
+            ax.axvline(mean_frac, color="red", linestyle="--", linewidth=1.5, label=f"mean = {mean_frac:.3f}")
             ax.legend(fontsize=9)
         ax.set_xlabel("Complementary pair fraction")
         ax.set_ylabel("Number of spectra")
@@ -8528,18 +7983,20 @@ class TheoreticalAnalyser:
             med = float(np.median(devs_arr))
             mean = float(np.mean(devs_arr))
             std = float(np.std(devs_arr))
-            ax.axvline(med, color="orange", linestyle="--", linewidth=1,
-                       label=f"median = {med:.4f} Da")
-            legend_lines = []
+            ax.axvline(med, color="orange", linestyle="--", linewidth=1, label=f"median = {med:.4f} Da")
+            legend_lines: list[Any] = []
             if n_clipped > 0:
-                legend_lines.append(
-                    f"{n_clipped:,d}/{len(devs_arr):,d} pairs outside |{x_range:.3f}| Da (hidden)"
-                )
+                legend_lines.append(f"{n_clipped:,d}/{len(devs_arr):,d} pairs outside |{x_range:.3f}| Da (hidden)")
             legend_lines.append(f"mean ± std = {mean:.4f} ± {std:.4f} Da")
             ax.text(
-                0.02, 0.97, "\n".join(legend_lines),
-                transform=ax.transAxes, ha="left", va="top", fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.75),
+                0.02,
+                0.97,
+                "\n".join(legend_lines),
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                fontsize=8,
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.75},
             )
             ax.set_xlim(-x_range, x_range)
             ax.legend(fontsize=9, loc="upper right")
@@ -8568,16 +8025,13 @@ class TheoreticalAnalyser:
         frag_types_list = cpa.get("_per_spectrum_frag_type", [])
         if fracs and frag_types_list:
             unique_ft = sorted(set(frag_types_list))
-            data_by_ft = [
-                [f for f, ft in zip(fracs, frag_types_list) if ft == uft]
-                for uft in unique_ft
-            ]
+            data_by_ft = [[f for f, ft in zip(fracs, frag_types_list, strict=False) if ft == uft] for uft in unique_ft]
             # Filter empty groups
-            non_empty = [(uft, d) for uft, d in zip(unique_ft, data_by_ft) if d]
+            non_empty = [(uft, d) for uft, d in zip(unique_ft, data_by_ft, strict=False) if d]
             if non_empty:
-                ft_labels, ft_data = zip(*non_empty)
+                ft_labels, ft_data = zip(*non_empty, strict=False)
                 bp = ax.boxplot(ft_data, labels=ft_labels, patch_artist=True)
-                for patch, ft in zip(bp["boxes"], ft_labels):
+                for patch, ft in zip(bp["boxes"], ft_labels, strict=False):
                     patch.set_facecolor(FRAG_TYPE_COLORS.get(ft, "#7f7f7f"))
                     patch.set_alpha(0.7)
         ax.set_xlabel("Fragmentation type")
@@ -8615,9 +8069,9 @@ class TheoreticalAnalyser:
 
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         fig.suptitle(
-            f"Mass Gap Validation Against Amino Acid Masses "
-            f"(tol={mga.get('ppm_tolerance', 20):.0f} ppm)",
-            fontsize=14, fontweight="bold",
+            f"Mass Gap Validation Against Amino Acid Masses (tol={mga.get('ppm_tolerance', 20):.0f} ppm)",
+            fontsize=14,
+            fontweight="bold",
         )
 
         # Panel A: Per-spectrum match rate histogram
@@ -8626,8 +8080,7 @@ class TheoreticalAnalyser:
         if match_rates:
             ax.hist(match_rates, bins=30, color="#1f77b4", edgecolor="white", alpha=0.8)
             mean_mr = mga["per_spectrum_match_rate"]["mean"]
-            ax.axvline(mean_mr, color="red", linestyle="--", linewidth=1.5,
-                       label=f"mean = {mean_mr:.3f}")
+            ax.axvline(mean_mr, color="red", linestyle="--", linewidth=1.5, label=f"mean = {mean_mr:.3f}")
             ax.legend(fontsize=9)
         ax.set_xlabel("Fraction of gaps matching a valid AA mass")
         ax.set_ylabel("Number of spectra")
@@ -8640,8 +8093,7 @@ class TheoreticalAnalyser:
             ax.hist(errors_ppm, bins=50, color="#2ca02c", edgecolor="white", alpha=0.8)
             ax.axvline(0, color="red", linestyle="-", linewidth=1)
             med_err = float(np.median(errors_ppm))
-            ax.axvline(med_err, color="orange", linestyle="--", linewidth=1,
-                       label=f"median = {med_err:.2f} ppm")
+            ax.axvline(med_err, color="orange", linestyle="--", linewidth=1, label=f"median = {med_err:.2f} ppm")
             ax.legend(fontsize=9)
         ax.set_xlabel("Match error (PPM)")
         ax.set_ylabel("Number of gaps")
@@ -8653,15 +8105,13 @@ class TheoreticalAnalyser:
         if ambig:
             x_vals = sorted(ambig.keys())
             y_vals = [ambig[x] for x in x_vals]
-            colors = ["#2ca02c" if x == 1 else "#ff7f0e" if x == 2 else "#d62728"
-                      for x in x_vals]
+            colors = ["#2ca02c" if x == 1 else "#ff7f0e" if x == 2 else "#d62728" for x in x_vals]
             ax.bar([str(x) for x in x_vals], y_vals, color=colors, edgecolor="white")
             # Annotate with percentages
             total_gaps = sum(y_vals)
-            for i, (x, y) in enumerate(zip(x_vals, y_vals)):
+            for i, (_x, y) in enumerate(zip(x_vals, y_vals, strict=False)):
                 pct = y / max(total_gaps, 1) * 100
-                ax.text(i, y + total_gaps * 0.01, f"{pct:.1f}%",
-                        ha="center", fontsize=8)
+                ax.text(i, y + total_gaps * 0.01, f"{pct:.1f}%", ha="center", fontsize=8)
         ax.set_xlabel("Number of AA masses matching")
         ax.set_ylabel("Number of gaps")
         ax.set_title("C) Ambiguity (AAs within tolerance)")
@@ -8675,18 +8125,15 @@ class TheoreticalAnalyser:
             correct_vals = [by_ft[ft]["correct_rate"]["mean"] for ft in ft_names]
             x_pos = np.arange(len(ft_names))
             w = 0.35
-            ax.bar(x_pos - w / 2, match_vals, w,
-                   label="Valid AA match", color="#1f77b4", alpha=0.8)
-            ax.bar(x_pos + w / 2, correct_vals, w,
-                   label="Correct AA", color="#2ca02c", alpha=0.8)
+            ax.bar(x_pos - w / 2, match_vals, w, label="Valid AA match", color="#1f77b4", alpha=0.8)
+            ax.bar(x_pos + w / 2, correct_vals, w, label="Correct AA", color="#2ca02c", alpha=0.8)
             ax.set_xticks(x_pos)
             ax.set_xticklabels(ft_names)
             ax.legend(fontsize=9)
             # Annotate with n_spectra
             for i, ft in enumerate(ft_names):
                 n = by_ft[ft]["n_spectra"]
-                ax.text(i, max(match_vals[i], correct_vals[i]) + 0.02,
-                        f"n={n}", ha="center", fontsize=7, color="gray")
+                ax.text(i, max(match_vals[i], correct_vals[i]) + 0.02, f"n={n}", ha="center", fontsize=7, color="gray")
         ax.set_xlabel("Fragmentation type")
         ax.set_ylabel("Rate")
         ax.set_ylim(0, 1.15)
@@ -8698,8 +8145,7 @@ class TheoreticalAnalyser:
         if two_sided:
             ax.hist(two_sided, bins=30, color="#9467bd", edgecolor="white", alpha=0.8)
             mean_ts = mga["per_spectrum_two_sided_rate"]["mean"]
-            ax.axvline(mean_ts, color="red", linestyle="--", linewidth=1.5,
-                       label=f"mean = {mean_ts:.3f}")
+            ax.axvline(mean_ts, color="red", linestyle="--", linewidth=1.5, label=f"mean = {mean_ts:.3f}")
             ax.legend(fontsize=9)
         ax.set_xlabel("Two-sided constraint success rate")
         ax.set_ylabel("Number of spectra")
@@ -8715,18 +8161,13 @@ class TheoreticalAnalyser:
             n_vals = [by_mz[r]["n_gaps"] for r in range_order]
             x_pos = np.arange(len(range_order))
             w = 0.35
-            ax.bar(x_pos - w / 2, match_vals, w,
-                   label="Valid AA match", color="#1f77b4", alpha=0.8)
-            ax.bar(x_pos + w / 2, correct_vals, w,
-                   label="Correct AA", color="#2ca02c", alpha=0.8)
+            ax.bar(x_pos - w / 2, match_vals, w, label="Valid AA match", color="#1f77b4", alpha=0.8)
+            ax.bar(x_pos + w / 2, correct_vals, w, label="Correct AA", color="#2ca02c", alpha=0.8)
             ax.set_xticks(x_pos)
-            ax.set_xticklabels(
-                [r.replace("_", "\n") for r in range_order], fontsize=8
-            )
+            ax.set_xticklabels([r.replace("_", "\n") for r in range_order], fontsize=8)
             ax.legend(fontsize=9)
             for i, n in enumerate(n_vals):
-                ax.text(i, max(match_vals[i], correct_vals[i]) + 0.02,
-                        f"n={n:,}", ha="center", fontsize=7, color="gray")
+                ax.text(i, max(match_vals[i], correct_vals[i]) + 0.02, f"n={n:,}", ha="center", fontsize=7, color="gray")
         ax.set_xlabel("m/z range")
         ax.set_ylabel("Rate")
         ax.set_ylim(0, 1.15)

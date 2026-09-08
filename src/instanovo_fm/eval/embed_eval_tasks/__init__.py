@@ -1,5 +1,4 @@
-"""
-Evaluation task plug-in interface with auto-discovery.
+"""Evaluation task plug-in interface with auto-discovery.
 
 This module provides a base class and metaclass for automatically registering
 evaluation tasks. Any class that inherits from BaseTask will be automatically
@@ -7,43 +6,43 @@ registered in the TASK_REGISTRY.
 """
 
 from typing import Any, Dict, List, Tuple, Type
+
 import numpy as np
+
 try:
     import faiss
 except ImportError:
     faiss = None
 
 # Global registry for evaluation tasks
-TASK_REGISTRY: Dict[str, Type['BaseTask']] = {}
+TASK_REGISTRY: Dict[str, Type["BaseTask"]] = {}
 
 
 class SpectrumEvalTask(type):
-    """
-    Metaclass for automatically registering evaluation tasks.
-    
+    """Metaclass for automatically registering evaluation tasks.
+
     Any class that uses this metaclass will be automatically added to
     the TASK_REGISTRY when the module is imported.
     """
-    
-    def __init__(cls, name: str, bases: tuple, attrs: dict):
+
+    def __init__(cls, name: str, bases: tuple, attrs: dict) -> None:
         """Register the class in the task registry if it's not the base class."""
-        if name != 'BaseTask':
+        if name != "BaseTask":
             # Register with lowercase class name for easy lookup
-            TASK_REGISTRY[cls.__name__.lower()] = cls
+            TASK_REGISTRY[cls.__name__.lower()] = cls  # type: ignore[assignment]
             # Also register with the task's .name attribute (if it's a valid identifier)
-            if hasattr(cls, 'name') and isinstance(cls.name, str):
-                task_name_key = cls.name.lower().replace(' ', '_').replace('-', '_')
-                TASK_REGISTRY[task_name_key] = cls
+            if hasattr(cls, "name") and isinstance(cls.name, str):
+                task_name_key = cls.name.lower().replace(" ", "_").replace("-", "_")
+                TASK_REGISTRY[task_name_key] = cls  # type: ignore[assignment]
         super().__init__(name, bases, attrs)
 
 
 class BaseTask(metaclass=SpectrumEvalTask):
-    """
-    Base class for all evaluation tasks.
-    
+    """Base class for all evaluation tasks.
+
     All evaluation tasks should inherit from this class. They will be
     automatically registered in the TASK_REGISTRY when their module is imported.
-    
+
     Attributes:
         name: Human-readable name for the task
         description: Description of what the task does
@@ -51,23 +50,30 @@ class BaseTask(metaclass=SpectrumEvalTask):
         requires_faiss: Whether the task requires FAISS index
         requires_model: Whether the task requires direct model access (for attention/gradient analysis)
     """
-    
+
     name: str = "Base Task"
     description: str = "Base evaluation task"
     requires_metadata: bool = True
     requires_faiss: bool = False
     requires_model: bool = False
     requires_multi_split: bool = False
-    
-    def __init__(self, **kwargs):
+
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize the task with optional configuration."""
         self.config = kwargs
-    
-    def run(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any, 
-            model: Any = None, dataloader: Any = None, config: Any = None, device: Any = None) -> Dict[str, Any]:
-        """
-        Run the evaluation task.
-        
+
+    def run(
+        self,
+        emb: np.ndarray,
+        meta: Dict[str, np.ndarray],
+        faiss_index: Any,
+        model: Any = None,
+        dataloader: Any = None,
+        config: Any = None,
+        device: Any = None,
+    ) -> Dict[str, Any]:
+        """Run the evaluation task.
+
         Args:
             emb: Embeddings array of shape (N, D)
             meta: Metadata dictionary with keys mapping to arrays of length N
@@ -76,28 +82,27 @@ class BaseTask(metaclass=SpectrumEvalTask):
             dataloader: DataLoader instance (only provided if requires_model=True)
             config: Configuration dict (only provided if requires_model=True)
             device: Device to run on (only provided if requires_model=True)
-            
+
         Returns:
             Dictionary containing evaluation results
         """
         raise NotImplementedError("Subclasses must implement run()")
-    
+
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Extract metrics suitable for logging to TensorBoard/Neptune from task results.
-        
+        """Extract metrics suitable for logging to TensorBoard/Neptune from task results.
+
         This method should be overridden by subclasses to define which metrics
         from their results should be logged. The returned dictionary should have
         flat string keys (without prefixes) and scalar float values.
-        
+
         Args:
             task_results: Results dictionary returned by run()
-            
+
         Returns:
             Dictionary mapping metric names to scalar values for logging.
             Keys should be simple metric names (e.g., "recall@5", "accuracy").
             The evaluator/trainer will add task-specific prefixes.
-            
+
         Example:
             {
                 "recall@1": 0.85,
@@ -109,31 +114,30 @@ class BaseTask(metaclass=SpectrumEvalTask):
         # Default implementation: return empty dict (no metrics to log)
         # Subclasses should override this to extract their specific metrics
         return {}
-    
+
     def validate_inputs(self, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any) -> None:
-        """
-        Validate inputs before running the task.
-        
+        """Validate inputs before running the task.
+
         Args:
             emb: Embeddings array
             meta: Metadata dictionary
             faiss_index: FAISS index
-            
+
         Raises:
             ValueError: If inputs are invalid
         """
         if emb is None or len(emb.shape) != 2:
             raise ValueError("emb must be a 2D numpy array")
-        
+
         if self.requires_metadata and (meta is None or len(meta) == 0):
             raise ValueError(f"Task {self.name} requires metadata but none provided")
-        
+
         if self.requires_faiss and faiss_index is None:
             raise ValueError(f"Task {self.name} requires FAISS index but none provided")
-        
+
         # Note: Model access validation is handled by the evaluator, not here
         # since model/dataloader/config/device are passed separately
-        
+
         # Check that metadata arrays have the same length as embeddings
         # Skip non-array values (dicts, scalars, strings) which are aggregate metadata
         if meta:
@@ -141,7 +145,7 @@ class BaseTask(metaclass=SpectrumEvalTask):
             for key, value in meta.items():
                 if isinstance(value, (dict, str, int, float, bool)):
                     continue
-                if hasattr(value, '__len__') and len(value) != expected_length:
+                if hasattr(value, "__len__") and len(value) != expected_length:
                     raise ValueError(f"Metadata '{key}' has length {len(value)} but expected {expected_length}")
 
     @staticmethod
@@ -200,15 +204,14 @@ class BaseTask(metaclass=SpectrumEvalTask):
 
 
 def get_task(task_name: str) -> Type[BaseTask]:
-    """
-    Get a task class by name.
-    
+    """Get a task class by name.
+
     Args:
         task_name: Name of the task (case-insensitive)
-        
+
     Returns:
         Task class
-        
+
     Raises:
         KeyError: If task not found
     """
@@ -220,27 +223,24 @@ def get_task(task_name: str) -> Type[BaseTask]:
 
 
 def list_tasks() -> Dict[str, Type[BaseTask]]:
-    """
-    List all available tasks.
-    
+    """List all available tasks.
+
     Returns:
         Dictionary mapping task names to task classes
     """
     return TASK_REGISTRY.copy()
 
 
-def run_task(task_name: str, emb: np.ndarray, meta: Dict[str, np.ndarray], 
-             faiss_index: Any = None, **task_kwargs) -> Dict[str, Any]:
-    """
-    Run a specific task by name.
-    
+def run_task(task_name: str, emb: np.ndarray, meta: Dict[str, np.ndarray], faiss_index: Any = None, **task_kwargs) -> Dict[str, Any]:  # type: ignore[no-untyped-def]
+    """Run a specific task by name.
+
     Args:
         task_name: Name of the task to run
         emb: Embeddings array
         meta: Metadata dictionary
         faiss_index: FAISS index (optional)
         **task_kwargs: Additional arguments to pass to task constructor
-        
+
     Returns:
         Task results
     """
@@ -252,10 +252,11 @@ def run_task(task_name: str, emb: np.ndarray, meta: Dict[str, np.ndarray],
 # Import all task modules to register them
 # This will automatically discover and register any tasks defined in .py files
 # in this directory (except __init__.py)
-import importlib
-from pathlib import Path
+import importlib  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-def _discover_tasks():
+
+def _discover_tasks() -> None:
     """Discover and import all task modules in this directory."""
     current_dir = Path(__file__).parent
     for file_path in current_dir.glob("*.py"):
@@ -265,46 +266,47 @@ def _discover_tasks():
                 importlib.import_module(f"instanovo_fm.eval.embed_eval_tasks.{module_name}")
             except ImportError as e:
                 # Log but don't fail - some tasks might have optional dependencies
-                print(f"Warning: Could not import task module {module_name}: {e}")
+                print(f"Warning: Could not import task module {module_name}: {e}")  # noqa: T201
+
 
 # Discover tasks when this module is imported
 _discover_tasks()
 
 # Explicit imports for direct access
 try:
-    from .embedding_statistics import EmbeddingStatisticsTask
-    from .duplicate_retrieval import DuplicateRetrievalTask
-    from .linear_probe import LinearProbeTask
-    from .cosine_hyperscore_correlation import CosineHyperscoreCorrelationTask
-    from .umap_visualisation import UMAPVisualisationTask
     from .confidence_signal_analysis import ConfidenceSignalAnalysisTask
-    from .head_analysis import HeadAnalysisTask
-    from .ig_attribution import IGAttributionTask
-    from .peak_type_classification import PeakTypeClassificationTask
+    from .cosine_hyperscore_correlation import CosineHyperscoreCorrelationTask
+    from .duplicate_retrieval import DuplicateRetrievalTask
+    from .embedding_statistics import EmbeddingStatisticsTask
     from .esm2_cross_modal_alignment import ESM2CrossModalAlignmentTask
     from .evoc_clustering import EVoCClusteringTask
     from .glass_box_attribution import GlassBoxAttributionTask
+    from .head_analysis import HeadAnalysisTask
+    from .ig_attribution import IGAttributionTask
+    from .linear_probe import LinearProbeTask
+    from .peak_type_classification import PeakTypeClassificationTask
+    from .umap_visualisation import UMAPVisualisationTask
 except ImportError as e:
     # Some tasks might have optional dependencies
-    print(f"Warning: Could not import some task classes: {e}")
+    print(f"Warning: Could not import some task classes: {e}")  # noqa: T201
 
 # Export all task classes
 __all__ = [
-    'BaseTask',
-    'TASK_REGISTRY',
-    'get_task',
-    'list_tasks',
-    'run_task',
-    'EmbeddingStatisticsTask',
-    'DuplicateRetrievalTask',
-    'LinearProbeTask',
-    'CosineHyperscoreCorrelationTask',
-    'UMAPVisualisationTask',
-    'ConfidenceSignalAnalysisTask',
-    'HeadAnalysisTask',
-    'IGAttributionTask',
-    'PeakTypeClassificationTask',
-    'ESM2CrossModalAlignmentTask',
-    'EVoCClusteringTask',
-    'GlassBoxAttributionTask',
+    "BaseTask",
+    "TASK_REGISTRY",
+    "get_task",
+    "list_tasks",
+    "run_task",
+    "EmbeddingStatisticsTask",
+    "DuplicateRetrievalTask",
+    "LinearProbeTask",
+    "CosineHyperscoreCorrelationTask",
+    "UMAPVisualisationTask",
+    "ConfidenceSignalAnalysisTask",
+    "HeadAnalysisTask",
+    "IGAttributionTask",
+    "PeakTypeClassificationTask",
+    "ESM2CrossModalAlignmentTask",
+    "EVoCClusteringTask",
+    "GlassBoxAttributionTask",
 ]

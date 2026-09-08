@@ -36,15 +36,16 @@ logger = logging.getLogger(__name__)
 # Utilities
 # ---------------------------------------------------------------------------
 
+
 def _clean_sequence(seq: str) -> str:
     """Strip modification annotations, keep only amino acid letters."""
     return "".join(c for c in seq if c.isalpha()).upper()
 
 
-def _linear_cka(X: np.ndarray, Y: np.ndarray) -> float:
+def _linear_cka(X: np.ndarray, Y: np.ndarray) -> float:  # noqa: N803
     """Linear Centered Kernel Alignment (Kornblith et al., 2019)."""
-    X = X - X.mean(axis=0)
-    Y = Y - Y.mean(axis=0)
+    X = X - X.mean(axis=0)  # noqa: N806
+    Y = Y - Y.mean(axis=0)  # noqa: N806
     hsic_xy = np.sum((X.T @ Y) ** 2)
     hsic_xx = np.sum((X.T @ X) ** 2)
     hsic_yy = np.sum((Y.T @ Y) ** 2)
@@ -59,12 +60,14 @@ def _pairwise_cosine(emb: np.ndarray, idx_i: np.ndarray, idx_j: np.ndarray) -> n
 
 
 def _sample_pairs(
-    n: int, max_pairs: int, rng: np.random.RandomState,
+    n: int,
+    max_pairs: int,
+    rng: np.random.RandomState,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Sample unique (i, j) pairs with i < j."""
     total = n * (n - 1) // 2
     if total <= max_pairs:
-        return np.triu_indices(n, k=1)
+        return np.triu_indices(n, k=1)  # type: ignore[no-any-return]
     idx_i = rng.randint(0, n, size=int(max_pairs * 1.1))
     idx_j = rng.randint(0, n, size=int(max_pairs * 1.1))
     mask = idx_i < idx_j
@@ -74,6 +77,7 @@ def _sample_pairs(
 # ---------------------------------------------------------------------------
 # Task
 # ---------------------------------------------------------------------------
+
 
 class ESM2CrossModalAlignmentTask(BaseTask):
     """Representational similarity between spectrum embeddings and ESM2.
@@ -89,6 +93,7 @@ class ESM2CrossModalAlignmentTask(BaseTask):
     requires_faiss = False
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialise the input."""
         super().__init__(**kwargs)
         self.max_samples: int = kwargs.get("max_samples", 5_000)
         self.esm2_model: str = kwargs.get("esm2_model", "esm2_t33_650M_UR50D")
@@ -116,6 +121,7 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         config: Any = None,
         device: Any = None,
     ) -> Dict[str, Any]:
+        """Run."""
         t0 = time.time()
 
         # --- 1. Sequences ---
@@ -145,17 +151,16 @@ class ESM2CrossModalAlignmentTask(BaseTask):
             return {"error": "ESM2 not available (pip install fair-esm)"}
 
         unique_seqs = sorted(set(clean_seqs))
-        logger.info(
-            f"Generating ESM2 embeddings for {len(unique_seqs)} unique peptides "
-            f"({len(clean_seqs)} spectra) with {self.esm2_model}..."
-        )
+        logger.info(f"Generating ESM2 embeddings for {len(unique_seqs)} unique peptides ({len(clean_seqs)} spectra) with {self.esm2_model}...")
         embedder = ESM2Embedder(model_name=self.esm2_model, device=self.device)
         unique_esm2 = embedder.embed(
-            unique_seqs, batch_size=self.esm2_batch_size, pooling=self.esm2_pooling,
+            unique_seqs,
+            batch_size=self.esm2_batch_size,
+            pooling=self.esm2_pooling,
         )
 
         seq_to_esm2: Dict[str, np.ndarray] = {}
-        for seq, vec in zip(unique_seqs, unique_esm2):
+        for seq, vec in zip(unique_seqs, unique_esm2, strict=False):
             if np.linalg.norm(vec) > 1e-8:
                 seq_to_esm2[seq] = vec
 
@@ -177,11 +182,8 @@ class ESM2CrossModalAlignmentTask(BaseTask):
 
         # --- 4. Sample pairs ---
         idx_i, idx_j = _sample_pairs(n_spectra, self.max_pairs, rng)
-        same_pep = np.array([clean_seqs[a] == clean_seqs[b] for a, b in zip(idx_i, idx_j)])
-        logger.info(
-            f"Sampled {len(idx_i)} pairs "
-            f"({same_pep.sum()} same-peptide, {(~same_pep).sum()} different-peptide)"
-        )
+        same_pep = np.array([clean_seqs[a] == clean_seqs[b] for a, b in zip(idx_i, idx_j, strict=False)])
+        logger.info(f"Sampled {len(idx_i)} pairs ({same_pep.sum()} same-peptide, {(~same_pep).sum()} different-peptide)")
 
         # --- 5. Pairwise similarities ---
         sim_spec = _pairwise_cosine(spec_emb, idx_i, idx_j)
@@ -189,16 +191,14 @@ class ESM2CrossModalAlignmentTask(BaseTask):
 
         # --- 6. RSA: model (all pairs and different-peptide-only) ---
         from scipy.stats import spearmanr
+
         rsa_all, rsa_all_p = spearmanr(sim_spec, sim_esm2)
         rsa_all, rsa_all_p = float(rsa_all), float(rsa_all_p)
 
         diff_mask = ~same_pep
         rsa_diff, rsa_diff_p = spearmanr(sim_spec[diff_mask], sim_esm2[diff_mask])
         rsa_diff, rsa_diff_p = float(rsa_diff), float(rsa_diff_p)
-        logger.info(
-            f"RSA (model): all_pairs rho={rsa_all:.4f}, "
-            f"diff_peptide_only rho={rsa_diff:.4f} (p={rsa_diff_p:.2e})"
-        )
+        logger.info(f"RSA (model): all_pairs rho={rsa_all:.4f}, diff_peptide_only rho={rsa_diff:.4f} (p={rsa_diff_p:.2e})")
 
         # --- 7. RSA: shuffled baseline ---
         shuf_order = rng.permutation(n_spectra)
@@ -213,6 +213,7 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         rsa_meta_all = rsa_meta_diff = None
         if meta_features is not None:
             from sklearn.preprocessing import StandardScaler
+
             mf = StandardScaler().fit_transform(meta_features)
             sim_meta = _pairwise_cosine(mf, idx_i, idx_j)
             rsa_meta_all, _ = spearmanr(sim_meta, sim_esm2)
@@ -310,15 +311,9 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         p = p[p > 1e-12]
         effective_rank = float(np.exp(-np.sum(p * np.log(p))))
 
-        logger.info(
-            f"ESM2 sanity: mean_pairwise_cosine={mean_sim:.3f} (std={std_sim:.3f}), "
-            f"effective_rank={effective_rank:.1f}/{esm2_mat.shape[1]}"
-        )
+        logger.info(f"ESM2 sanity: mean_pairwise_cosine={mean_sim:.3f} (std={std_sim:.3f}), effective_rank={effective_rank:.1f}/{esm2_mat.shape[1]}")
         if mean_sim > 0.95:
-            logger.warning(
-                f"ESM2 embeddings near-degenerate (mean cosine={mean_sim:.3f}). "
-                f"Short peptides may not be well-separated in ESM2 space."
-            )
+            logger.warning(f"ESM2 embeddings near-degenerate (mean cosine={mean_sim:.3f}). Short peptides may not be well-separated in ESM2 space.")
 
         return {
             "mean_pairwise_cosine": mean_sim,
@@ -331,7 +326,10 @@ class ESM2CrossModalAlignmentTask(BaseTask):
     # Metadata features
     # ------------------------------------------------------------------
     def _build_metadata_features(
-        self, clean_seqs: List[str], meta: Dict[str, np.ndarray], indices: np.ndarray,
+        self,
+        clean_seqs: List[str],
+        meta: Dict[str, np.ndarray],
+        indices: np.ndarray,
     ) -> Optional[np.ndarray]:
         cols: List[np.ndarray] = []
         cols.append(np.array([len(s) for s in clean_seqs], dtype=np.float64))
@@ -372,13 +370,14 @@ class ESM2CrossModalAlignmentTask(BaseTask):
     ) -> Optional[Path]:
         try:
             import matplotlib
+
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
             from matplotlib.colors import LogNorm
         except ImportError:
             return None
 
-        out_dir = Path(self.output_dir)
+        out_dir = Path(self.output_dir)  # type: ignore[arg-type]
         out_dir.mkdir(parents=True, exist_ok=True)
         fig, axes = plt.subplots(2, 2, figsize=(12, 10), gridspec_kw={"hspace": 0.35, "wspace": 0.35})
 
@@ -394,8 +393,12 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         y_lo = max(np.percentile(sim_spec_d, 0.5) - 0.02, -0.3)
         y_hi = min(np.percentile(sim_spec_d, 99.5) + 0.02, 1.05)
         hb = ax.hexbin(
-            sim_esm2_d, sim_spec_d, gridsize=50, cmap="Blues",
-            mincnt=1, norm=LogNorm(),
+            sim_esm2_d,
+            sim_spec_d,
+            gridsize=50,
+            cmap="Blues",
+            mincnt=1,
+            norm=LogNorm(),
             extent=(x_lo, x_hi, y_lo, y_hi),
         )
         fig.colorbar(hb, ax=ax, label="Pair count (log)", shrink=0.8)
@@ -403,7 +406,8 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         ax.set_ylabel("Spectrum pairwise cosine")
         ax.set_title(
             f"A.  RSA (diff. peptide pairs): $\\rho$ = {rsa_diff:.3f}",
-            fontweight="bold", loc="left",
+            fontweight="bold",
+            loc="left",
         )
 
         # ---- Panel B: Violin — spectrum similarity by ESM2 similarity bin ----
@@ -421,8 +425,11 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         if bin_data:
             bin_width = (bin_positions[-1] - bin_positions[0]) / len(bin_positions) * 0.8
             vp = ax.violinplot(
-                bin_data, positions=bin_positions,
-                widths=bin_width, showmedians=True, showextrema=False,
+                bin_data,
+                positions=bin_positions,
+                widths=bin_width,
+                showmedians=True,
+                showextrema=False,
             )
             for body in vp["bodies"]:
                 body.set_facecolor("#2171b5")
@@ -431,13 +438,11 @@ class ESM2CrossModalAlignmentTask(BaseTask):
 
             # Median trend line
             medians = [np.median(d) for d in bin_data]
-            ax.plot(bin_positions, medians, "o-", color="#cb181d", linewidth=1.5,
-                    markersize=4, zorder=5, label="median")
+            ax.plot(bin_positions, medians, "o-", color="#cb181d", linewidth=1.5, markersize=4, zorder=5, label="median")
 
             # Global median reference
             global_median = np.median(sim_spec_d)
-            ax.axhline(global_median, color="#636363", linewidth=1, linestyle=":",
-                       label=f"global median ({global_median:.2f})")
+            ax.axhline(global_median, color="#636363", linewidth=1, linestyle=":", label=f"global median ({global_median:.2f})")
             ax.legend(fontsize=8, loc="lower right")
 
         ax.set_xlabel("ESM2 pairwise cosine (binned)")
@@ -446,26 +451,26 @@ class ESM2CrossModalAlignmentTask(BaseTask):
 
         # ---- Panel C: ESM2 pairwise cosine distribution ----
         ax = axes[1, 0]
-        ax.hist(sim_esm2_d, bins=60, alpha=0.7, color="#bdbdbd",
-                label="diff. peptide pairs", edgecolor="white", linewidth=0.3)
+        ax.hist(sim_esm2_d, bins=60, alpha=0.7, color="#bdbdbd", label="diff. peptide pairs", edgecolor="white", linewidth=0.3)
         if same_pep.any():
             same_vals = sim_esm2[same_pep]
             if np.std(same_vals) < 0.01:
-                ax.axvline(same_vals.mean(), color="#2171b5", linewidth=2,
-                           label=f"same peptide (cosine = {same_vals.mean():.2f})")
+                ax.axvline(same_vals.mean(), color="#2171b5", linewidth=2, label=f"same peptide (cosine = {same_vals.mean():.2f})")
             else:
-                ax.hist(same_vals, bins=30, alpha=0.8, color="#2171b5",
-                        label="same peptide", edgecolor="white", linewidth=0.3)
+                ax.hist(same_vals, bins=30, alpha=0.8, color="#2171b5", label="same peptide", edgecolor="white", linewidth=0.3)
         ax.set_xlabel("ESM2 pairwise cosine similarity")
         ax.set_ylabel("Pair count")
         ax.set_title("C.  ESM2 embedding structure", fontweight="bold", loc="left")
         ax.legend(fontsize=8)
         ax.text(
-            0.03, 0.95,
-            f"mean cosine = {esm2_sanity['mean_pairwise_cosine']:.3f}\n"
-            f"eff. rank = {esm2_sanity['effective_rank']:.0f} / 1280",
-            transform=ax.transAxes, ha="left", va="top", fontsize=8,
-            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#cccccc", alpha=0.9),
+            0.03,
+            0.95,
+            f"mean cosine = {esm2_sanity['mean_pairwise_cosine']:.3f}\neff. rank = {esm2_sanity['effective_rank']:.0f} / 1280",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=8,
+            bbox={"boxstyle": "round,pad=0.3", "fc": "white", "ec": "#cccccc", "alpha": 0.9},
         )
 
         # ---- Panel D: Baseline comparison ----
@@ -479,7 +484,7 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         if rsa_meta_diff is not None:
             conditions.append("Metadata")
             rsa_vals.append(rsa_meta_diff)
-            cka_vals.append(cka_meta)
+            cka_vals.append(cka_meta)  # type: ignore[arg-type]
             bar_colors.append("#fdae6b")
 
         conditions.append("Model")
@@ -490,19 +495,17 @@ class ESM2CrossModalAlignmentTask(BaseTask):
         x = np.arange(len(conditions))
         width = 0.32
 
-        bars_rsa = ax.bar(x - width / 2, rsa_vals, width, label="RSA $\\rho$ (diff. pep.)",
-                          color=bar_colors, edgecolor="white", linewidth=0.5)
-        bars_cka = ax.bar(x + width / 2, cka_vals, width, label="CKA (all spectra)",
-                          color=bar_colors, edgecolor="white", linewidth=0.5,
-                          alpha=0.5, hatch="///")
+        bars_rsa = ax.bar(x - width / 2, rsa_vals, width, label="RSA $\\rho$ (diff. pep.)", color=bar_colors, edgecolor="white", linewidth=0.5)
+        bars_cka = ax.bar(
+            x + width / 2, cka_vals, width, label="CKA (all spectra)", color=bar_colors, edgecolor="white", linewidth=0.5, alpha=0.5, hatch="///"
+        )
 
         for bars in [bars_rsa, bars_cka]:
             for bar in bars:
                 y = bar.get_height()
                 va = "bottom" if y >= 0 else "top"
                 offset = 0.003 if y >= 0 else -0.003
-                ax.text(bar.get_x() + bar.get_width() / 2, y + offset,
-                        f"{y:.3f}", ha="center", va=va, fontsize=7, fontweight="bold")
+                ax.text(bar.get_x() + bar.get_width() / 2, y + offset, f"{y:.3f}", ha="center", va=va, fontsize=7, fontweight="bold")
 
         ax.set_xticks(x)
         ax.set_xticklabels(conditions)
@@ -520,7 +523,9 @@ class ESM2CrossModalAlignmentTask(BaseTask):
             f"RSA $\\rho$ = {rsa_diff:.3f} (diff. peptide pairs)  "
             f"CKA = {cka_model:.3f}  |  "
             f"{esm2_sanity['n_unique_peptides']:.0f} unique peptides",
-            fontsize=11, fontweight="bold", y=1.01,
+            fontsize=11,
+            fontweight="bold",
+            y=1.01,
         )
 
         fig_path = out_dir / "esm2_cross_modal_alignment.png"
@@ -533,12 +538,17 @@ class ESM2CrossModalAlignmentTask(BaseTask):
     # Loggable metrics
     # ------------------------------------------------------------------
     def get_loggable_metrics(self, task_results: Dict[str, Any]) -> Dict[str, float]:
+        """Return loggable metrics."""
         if "error" in task_results:
             return {}
         keys = [
-            "rsa_diff_peptide_rho", "rsa_all_pairs_rho", "cka_score",
-            "baseline_shuffled_rsa_diff", "baseline_shuffled_cka",
-            "baseline_metadata_rsa_diff", "baseline_metadata_cka",
+            "rsa_diff_peptide_rho",
+            "rsa_all_pairs_rho",
+            "cka_score",
+            "baseline_shuffled_rsa_diff",
+            "baseline_shuffled_cka",
+            "baseline_metadata_rsa_diff",
+            "baseline_metadata_cka",
         ]
         return {k: task_results[k] for k in keys if task_results.get(k) is not None}
 

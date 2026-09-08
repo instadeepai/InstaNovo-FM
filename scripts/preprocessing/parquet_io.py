@@ -7,6 +7,7 @@ module is imported; it has no CLI.
 
 from __future__ import annotations
 
+import configparser
 import os
 import re
 import tempfile
@@ -258,13 +259,109 @@ def nan_string_to_null_expr(column: str) -> pl.Expr:
     )
 
 
-def atomic_write_parquet(df: pl.DataFrame, file_path: Path | str) -> None:
+def _find_aws_dir() -> str:
+    """Prefer a checkout ``.aws`` directory when present, otherwise the user home config."""
+    repo_root = Path(__file__).resolve().parents[2]
+    checkout = repo_root / ".aws"
+    if checkout.is_dir():
+        return str(checkout)
+    return os.path.expanduser("~/.aws")
+
+
+def _read_aws_credentials(aws_dir: str, profile: str, storage_opts: dict) -> None:
+    """Load access keys into Polars storage options for S3 I/O."""
+    creds_file = os.path.join(aws_dir, "credentials")
+    if not os.path.exists(creds_file):
+        return
+
+    creds = configparser.ConfigParser()
+    creds.read(creds_file)
+    if profile not in creds:
+        return
+
+    if "aws_access_key_id" in creds[profile]:
+        storage_opts["aws_access_key_id"] = creds[profile]["aws_access_key_id"]
+    if "aws_secret_access_key" in creds[profile]:
+        storage_opts["aws_secret_access_key"] = creds[profile]["aws_secret_access_key"]
+
+
+def _read_aws_config(aws_dir: str, profile: str, storage_opts: dict) -> None:
+    """Load region into Polars storage options for S3 I/O."""
+    config_file = os.path.join(aws_dir, "config")
+    if not os.path.exists(config_file):
+        return
+
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    profile_section = f"profile {profile}"
+    if profile_section in config and "region" in config[profile_section]:
+        storage_opts["aws_region"] = config[profile_section]["region"]
+
+
+def get_storage_options(aws_profile: Optional[str] = None) -> Optional[dict]:
+    """Build Polars S3 storage options from a named AWS profile.
+
+    Args:
+        aws_profile: Profile to read, or None for local files.
+
+    Returns:
+        Storage options dict, or None when unused or empty.
+    """
+    if not aws_profile:
+        return None
+
+    storage_opts: dict = {}
+    aws_dir = _find_aws_dir()
+    _read_aws_credentials(aws_dir, aws_profile, storage_opts)
+    _read_aws_config(aws_dir, aws_profile, storage_opts)
+    return storage_opts if storage_opts else None
+
+
+def _remote_parquet_uri(file_path: Path | str) -> Optional[str]:
+    """Return an ``s3://`` URI, or None for a local filesystem path."""
+    text = file_path if isinstance(file_path, str) else os.fspath(file_path)
+    if text.startswith("s3://"):
+        return text
+    # pathlib.Path("s3://bucket/key") becomes "s3:/bucket/key" on POSIX.
+    if text.startswith("s3:/"):
+        return "s3://" + text[len("s3:/") :]
+    return None
+
+
+def atomic_write_parquet(
+    df: pl.DataFrame,
+    file_path: Path | str,
+    storage_options: Optional[dict] = None,
+) -> None:
     """Avoid leaving a partial Parquet file when serialisation fails.
+
+    ``s3://`` destinations are written with Polars cloud I/O and require the
+    same profile-derived ``storage_options`` used for S3 reads.
 
     Args:
         df: Materialised table to persist.
-        file_path: Final Parquet destination.
+        file_path: Final Parquet destination (local path or ``s3://`` URI).
+        storage_options: Polars S3 options (access keys and region). Required
+            for remote URIs.
+
+    Raises:
+        ValueError: If a remote URI is given without profile-derived storage options.
+        OSError: If a remote write fails.
     """
+    remote_uri = _remote_parquet_uri(file_path)
+    if remote_uri is not None:
+        if not storage_options:
+            raise ValueError(
+                f"Refusing to write {remote_uri}: Polars storage_options from "
+                "--aws-profile are required (aws_access_key_id, "
+                "aws_secret_access_key, aws_region)"
+            )
+        try:
+            df.write_parquet(remote_uri, storage_options=storage_options)
+        except Exception as exc:
+            raise OSError(f"Failed to write Parquet to {remote_uri}") from exc
+        return
+
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=path.parent)

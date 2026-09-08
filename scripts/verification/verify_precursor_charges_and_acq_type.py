@@ -41,7 +41,7 @@ import typer
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_SEARCH_DATA
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import get_storage_options, search_data_lookup_key
 
 app = typer.Typer(
     help="Verify precursor charges against acquisition type",
@@ -227,72 +227,6 @@ def find_data_files_in_folder(
                 if file.endswith(".parquet"):
                     data_files.append(os.path.join(root, file))
         return data_files
-
-
-def _find_aws_dir() -> str:
-    """Prefer a checkout ``.aws`` directory when present, otherwise the user home config."""
-    repo_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    aws_dir = os.path.join(repo_root, ".aws")
-    if os.path.isdir(aws_dir):
-        return aws_dir
-    return os.path.expanduser("~/.aws")
-
-
-def _read_aws_credentials(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Load access keys into Polars storage options for S3 reads."""
-    import configparser
-
-    creds_file = os.path.join(aws_dir, "credentials")
-    if not os.path.exists(creds_file):
-        return
-
-    creds = configparser.ConfigParser()
-    creds.read(creds_file)
-    if profile not in creds:
-        return
-
-    if "aws_access_key_id" in creds[profile]:
-        storage_opts["aws_access_key_id"] = creds[profile]["aws_access_key_id"]
-    if "aws_secret_access_key" in creds[profile]:
-        storage_opts["aws_secret_access_key"] = creds[profile]["aws_secret_access_key"]
-
-
-def _read_aws_config(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Load region into Polars storage options for S3 reads."""
-    import configparser
-
-    config_file = os.path.join(aws_dir, "config")
-    if not os.path.exists(config_file):
-        return
-
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    profile_section = f"profile {profile}"
-    if profile_section in config and "region" in config[profile_section]:
-        storage_opts["aws_region"] = config[profile_section]["region"]
-
-
-def get_storage_options(aws_profile: Optional[str] = None) -> Optional[dict]:
-    """Build Polars S3 storage options from a named AWS profile.
-
-    Args:
-        aws_profile: Profile to read, or None for local files.
-
-    Returns:
-        Storage options dict, or None when unused or empty.
-    """
-    if not aws_profile:
-        return None
-
-    aws_dir = _find_aws_dir()
-    storage_opts: dict = {}
-
-    _read_aws_credentials(aws_dir, aws_profile, storage_opts)
-    _read_aws_config(aws_dir, aws_profile, storage_opts)
-
-    return storage_opts if storage_opts else None
 
 
 def _read_file_lazy(

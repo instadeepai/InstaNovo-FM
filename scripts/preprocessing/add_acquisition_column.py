@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_SEARCH_DATA
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import atomic_write_parquet, search_data_lookup_key
 
 logger = logging.getLogger(__name__)
 
@@ -247,25 +247,38 @@ def _process_data_file_with_acquisition(
         df = pl.read_parquet(file_path)
 
         if "acquisition" in df.columns:
-            if verbose:
-                existing_value = df["acquisition"][0] if len(df) > 0 else None
-                logger.debug(
-                    f"File {project}/{filename} already has acquisition column "
-                    f"(value: {existing_value})"
-                )
-            return "already_has_column"
+            existing_values = (
+                df["acquisition"].drop_nulls().unique().to_list() if len(df) > 0 else []
+            )
+            if existing_values == [acquisition] or (
+                len(existing_values) == 0 and len(df) == 0
+            ):
+                if verbose:
+                    existing_value = existing_values[0] if existing_values else None
+                    logger.debug(
+                        f"File {project}/{filename} already has acquisition column "
+                        f"(value: {existing_value})"
+                    )
+                return "already_has_column"
+
+            logger.warning(
+                f"File {project}/{filename} acquisition mismatch "
+                f"(existing={existing_values!r}, search_data={acquisition!r}); overwriting"
+            )
 
         df = df.with_columns(pl.lit(acquisition).alias("acquisition"))
 
         if dry_run:
             if verbose:
                 logger.debug(
-                    f"[DRY RUN] Would add acquisition={acquisition} to {project}/{filename}"
+                    f"[DRY RUN] Would set acquisition={acquisition} on {project}/{filename}"
                 )
         else:
-            df.write_parquet(file_path)
+            atomic_write_parquet(df, file_path)
             if verbose:
-                logger.debug(f"Added acquisition={acquisition} to {project}/{filename}")
+                logger.debug(
+                    f"Set acquisition={acquisition} on {project}/{filename}"
+                )
 
         return "updated"
 

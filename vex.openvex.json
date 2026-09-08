@@ -1,0 +1,334 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/instadeepai/InstaNovo-FM/vex/bf609f84-8dfd-58dc-83c7-55036d6642c3",
+  "author": "InstaNovo-FM maintainers",
+  "timestamp": "2026-09-01T00:00:00Z",
+  "version": 1,
+  "tooling": "hand-authored from an OSV querybatch audit; see SECURITY.md",
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "GHSA-vgrw-7cvw-pwgx"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2025-203"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2025-204"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2025-206"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-2286"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-qfhq-4f3w-5fph"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-rrmf-rvhw-rf47"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-139"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/torch@2.8.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Each requires attacker-controlled input to a specific tensor operation. This project feeds torch parquet it generated itself from PRIDE submissions, exposes no network service and no untrusted upload path, and calls none of the affected functions (linalg.lu, rot90, nan_to_num, lstm_cell, jit.script, unpack_sequence). torch is pinned to 2.8.0 because that is the version the published model was trained with and the range instanovo==1.2.2 supports."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-rgxp-2hwp-jwgg"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/pyarrow@22.0.0"
+            }
+          ]
+        }
+      ],
+      "status": "affected",
+      "impact_statement": "Reachable in principle: scripts/preprocessing/convert_ipc_to_parquet.py reads Arrow IPC files. Mitigated in practice because those files are produced by this same pipeline from PRIDE-hosted data, are never accepted from third parties, and are read in a batch conversion step rather than by a service. pyarrow is pinned to 22.0.0 because that is the version the published corpus was built with.",
+      "action_statement": "Upgrade to pyarrow>=23.0.1 before running the conversion pipeline over Arrow IPC files you did not produce yourself. Conversion output is unchanged."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-113"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/pyarrow@22.0.0"
+            }
+          ]
+        }
+      ],
+      "status": "affected",
+      "impact_statement": "Reachable in principle: scripts/preprocessing/convert_ipc_to_parquet.py reads Arrow IPC files. Mitigated in practice because those files are produced by this same pipeline from PRIDE-hosted data, are never accepted from third parties, and are read in a batch conversion step rather than by a service. pyarrow is pinned to 22.0.0 because that is the version the published corpus was built with.",
+      "action_statement": "Upgrade to pyarrow>=23.0.1 before running the conversion pipeline over Arrow IPC files you did not produce yourself. Conversion output is unchanged."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-h7x2-h6g9-p789"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/mlflow@3.15.2"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The advisory is in MLflow's AI Gateway, which this project never starts. MLflow is present only as an experiment-tracking sink and is disabled by default in the shipped configs. No fixed version has been released."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-g6cj-pr64-35w5"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/cryptography@49.0.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Nothing in this project performs PKCS#7 EnvelopedData decryption. cryptography arrives transitively via mlflow, which pins cryptography<50 and therefore blocks the 50.0.0 fix regardless of this project's pins."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-3552"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/cryptography@49.0.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Nothing in this project performs PKCS#7 EnvelopedData decryption. cryptography arrives transitively via mlflow, which pins cryptography<50 and therefore blocks the 50.0.0 fix regardless of this project's pins."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-6v7p-g79w-8964"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/msgpack@1.1.2"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "No code in this project uses msgpack. It is pinned exactly to 1.1.2 by signalrcore, itself a transitive mlflow dependency, so the 1.2.1 fix is not reachable through this project's own pins."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-3625"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/msgpack@1.1.2"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "No code in this project uses msgpack. It is pinned exactly to 1.1.2 by signalrcore, itself a transitive mlflow dependency, so the 1.2.1 fix is not reachable through this project's own pins."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-3716"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/datasets@4.0.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "datasets is used only to read local parquet that this pipeline produced. The path traversal requires a maliciously crafted dataset archive; no third-party archives are loaded."
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-6w46-j5rx-g56g"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/pytest@8.3.3"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "pytest is in the dev dependency group and is absent from any runtime install of this project."
+    },
+    {
+      "vulnerability": {
+        "name": "PYSEC-2026-1845"
+      },
+      "products": [
+        {
+          "@id": "pkg:github/instadeepai/InstaNovo-FM",
+          "subcomponents": [
+            {
+              "@id": "pkg:pypi/pytest@8.3.3"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "pytest is in the dev dependency group and is absent from any runtime install of this project."
+    }
+  ]
+}

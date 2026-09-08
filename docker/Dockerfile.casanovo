@@ -1,0 +1,23 @@
+# Casanovo baseline image.
+#
+# Casanovo pins numpy<2.0 while instanovo (and therefore InstaNovo-FM) requires
+# numpy>=2.0.2, so the two cannot share an environment. Baseline embeddings are
+# extracted here instead and written in the same HDF5 layout the evaluation
+# harness reads, so the comparison runs on identical downstream code.
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git build-essential curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Pin both the package and the checkpoint. The manuscript reports the v5.0.0
+# checkpoint loaded by package 5.1.2; keep them explicit so the pair is auditable.
+ARG CASANOVO_VERSION=5.1.2
+ARG CASANOVO_CHECKPOINT_URL=https://github.com/Noble-Lab/casanovo/releases/download/v5.0.0/casanovo_v5_0_0.ckpt
+RUN pip install --no-cache-dir "casanovo==${CASANOVO_VERSION}" h5py polars pyarrow
+RUN mkdir -p /checkpoints && curl -fsSL "$CASANOVO_CHECKPOINT_URL" -o /checkpoints/casanovo_v5_0_0.ckpt
+
+# Only the extractor is needed; it imports casanovo lazily and writes HDF5.
+COPY src/instanovo_fm/eval/extract_casanovo_embeddings.py /app/
+ENV PYTHONPATH=/app

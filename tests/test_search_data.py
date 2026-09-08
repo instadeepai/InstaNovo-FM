@@ -2,10 +2,15 @@
 
 Two things are checked:
 
-1. The file carries no internal filesystem paths. The upstream copy has a
-   ``file path`` column holding Windows UNC paths under an internal host.  Our
-   copy retains that column only as a raw-file-name lookup key: each value is
-   the basename of the upstream path, with no directory information.
+1. The file carries no internal filesystem paths. Upstream, the ``file path``
+   column held ~25.8k Windows UNC paths under an internal host, exposing an
+   internal hostname, a team's folder tree and a colleague's name. This
+   repository is public, so our copy is a deliberate sanitised derivative: the
+   column is reduced to ``<accession>/<filename>``. That is exactly what the
+   foundation model's ``_extract_lookup_key`` consumes (parent folder plus
+   filename) and every parent is a public repository accession, so behaviour is
+   preserved while the internal tree is gone. The file is therefore *not*
+   byte-identical to the Figshare original, by design.
 
 2. The analysis-relevant content still matches the Figshare original. Run with
    ``--figshare-search-data=<path>`` (or set FIGSHARE_SEARCH_DATA) pointing at
@@ -16,7 +21,6 @@ Two things are checked:
 
 from __future__ import annotations
 
-import ntpath
 import os
 import pathlib
 import re
@@ -40,7 +44,11 @@ USED_COLUMNS = [
     "organism",
 ]
 
-RAW_FILENAME_COLUMN = "file path"
+# Every column is retained; `file path` is kept but reduced to two segments.
+FORBIDDEN_COLUMNS: list[str] = []
+
+# `file path` must stay a bare <accession>/<filename>, never an absolute path.
+MAX_PATH_SEGMENTS = 2
 
 PATH_PATTERNS = [
     re.compile(r"\\\\[A-Za-z0-9._-]+\\"),  # \\host\share
@@ -60,14 +68,26 @@ def test_expected_columns_present(local: pd.DataFrame) -> None:
     assert not missing, f"columns the notebooks read are missing: {missing}"
 
 
-def test_raw_filename_column_is_present_and_sanitised(local: pd.DataFrame) -> None:
-    assert RAW_FILENAME_COLUMN in local.columns
-    filenames = local[RAW_FILENAME_COLUMN].dropna().astype(str)
-    assert not filenames.empty
-    assert (
-        filenames.map(ntpath.basename).eq(filenames).all()
-    ), "file path must contain only raw file names, never directory paths"
-    assert not filenames.str.contains(r"[\\\\/]", regex=True).any()
+def test_no_forbidden_columns(local: pd.DataFrame) -> None:
+    present = [c for c in FORBIDDEN_COLUMNS if c in local.columns]
+    assert not present, (
+        f"{present} must not be committed: it holds internal filesystem paths "
+        "and this repository is public"
+    )
+
+
+def test_file_path_is_relative_and_shallow(local: pd.DataFrame) -> None:
+    """`file path` must stay <accession>/<filename>, not an absolute path."""
+    if "file path" not in local.columns:
+        pytest.skip("no 'file path' column")
+    fp = local["file path"].astype(str)
+    too_deep = fp[fp.str.count("/") >= MAX_PATH_SEGMENTS]
+    assert too_deep.empty, (
+        f"{len(too_deep)} paths have more than {MAX_PATH_SEGMENTS} segments, "
+        f"e.g. {too_deep.iloc[0]!r} -- the directory tree must not be committed"
+    )
+    rooted = fp[fp.str.contains(r"^([A-Za-z]:|/|\\\\)", regex=True)]
+    assert rooted.empty, f"{len(rooted)} absolute paths, e.g. {rooted.iloc[0]!r}"
 
 
 def test_no_internal_paths_in_any_cell(local: pd.DataFrame) -> None:
@@ -113,8 +133,35 @@ def test_matches_figshare_original(request: pytest.FixtureRequest, local: pd.Dat
     b = other[shared].sort_values(shared).reset_index(drop=True).astype(str)
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
 
-    assert set(other.columns) == set(local.columns)
-    expected_filenames = other[RAW_FILENAME_COLUMN].map(ntpath.basename)
-    pd.testing.assert_series_equal(
-        local[RAW_FILENAME_COLUMN], expected_filenames, check_names=False
+    # Column sets should now agree; only cell contents were sanitised.
+    extra = sorted(set(other.columns) - set(local.columns))
+    assert not extra, f"columns present upstream but not locally: {extra}"
+
+
+# Table S1 in the manuscript declares the corpus. The search-data table is
+# restricted to those accessions: before filtering it carried rows for 104
+# projects, 12 of them considered during assembly but not part of the declared
+# corpus, so anyone counting distinct projects in the released table got 104
+# where the manuscript says 92.
+TABLE_S1 = REPO / "assets" / "table_s1_accessions.txt"
+
+
+@pytest.fixture(scope="module")
+def declared() -> set[str]:
+    assert TABLE_S1.is_file(), f"missing {TABLE_S1.relative_to(REPO)}"
+    return {line.strip() for line in TABLE_S1.read_text().splitlines() if line.strip()}
+
+
+def test_projects_match_the_declared_corpus(local: pd.DataFrame, declared: set[str]) -> None:
+    present = set(local["project"].astype(str))
+    extra = sorted(present - declared)
+    assert not extra, (
+        f"{len(extra)} project(s) are not in Table S1: {extra[:8]}. The released table "
+        "must not imply a larger corpus than the manuscript declares."
     )
+
+
+def test_every_declared_project_has_rows(local: pd.DataFrame, declared: set[str]) -> None:
+    present = set(local["project"].astype(str))
+    missing = sorted(declared - present)
+    assert not missing, f"{len(missing)} Table S1 project(s) have no rows: {missing[:8]}"

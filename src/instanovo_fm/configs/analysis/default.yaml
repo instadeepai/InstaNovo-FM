@@ -1,0 +1,216 @@
+# ============================================================================
+# Data Analysis Configuration
+# ============================================================================
+# Which tasks to run (null = all available tasks)
+# Valid tasks: metadata, theoretical, custom_ions, intensity, masking, binning
+tasks_to_run:
+  - metadata
+  - theoretical
+  - custom_ions
+  - masking
+  - intensity
+  - binning
+
+# Global settings
+max_samples: 200_000  # Maximum number of spectra to analyze (null for all)
+max_visualizations: 30  # Maximum number of individual spectrum plots
+n_workers: null  # null = cpu_count - 1
+output_dir: null  # null = default path
+
+# ============================================================================
+# Per-task configuration
+# ============================================================================
+task_configs:
+  metadata: {}
+
+  theoretical:
+    ppm_tol: 20.0  # PPM tolerance for theoretical fragment matching
+    cid_da_tol: 0.2  # Da tolerance for CID (ion-trap) spectra; null = always use ppm_tol
+    theoretical_engine: pyopenms  # options: pyopenms, annotator
+    keep_modifications: true  # Keep modifications in theoretical spectra (convert to PyOpenMS format)
+    use_conditional_annotation: true  # Use two-pass conditional annotation strategy
+    add_precursor: true  # Include precursor ion in theoretical spectrum (annotated as p^z, PSI mzPAF)
+    add_losses: true  # Include neutral losses (H2O, NH3)
+    loss_types: ["H2O", "NH3", "SO3", "H3PO4"]  # Types of neutral losses to check
+    add_isotopes: true  # Include isotopic peaks
+    isotope_intensity_threshold: 0.02  # Minimum relative intensity for isotope checking (2% of base peak)
+    max_isotope: 4  # Maximum isotope number (+1, +2/clear, +3)
+    min_backbone_coverage: 0.33  # Minimum backbone cleavage coverage (0-1)
+    min_fragment_groups: 7  # Minimum unique fragment ion groups
+    enable_mass_error_analysis: true  # Enable mass error vs m/z analysis
+    enable_stratified_analysis: true  # Per-fragmentation-type analysis (HCD, HCID, CID)
+    enable_modification_analysis: true  # Per-modification-type quality analysis
+    # Complementary b/y pair analysis (b_i + y_{n-i} = M + H2O)
+    enable_complementary_pair_analysis: true
+    # Mass gap validation against amino acid residue masses
+    enable_mass_gap_analysis: true
+    mass_gap_ppm_tol: 20.0  # PPM tolerance for matching gaps to AA masses
+    # m/z range classification thresholds (for error stratification)
+    mz_range_thresholds:
+      low: 200    # m/z < 200 = low range
+      mid: 800    # 200 <= m/z < 800 = mid range
+      high: 1500  # 800 <= m/z < 1500 = high range
+    # Quality gate analysis
+    theoretical_analysis:
+      enable_quality_gate_analysis: true
+      quality_gate_sequence_length_bins: [7, 10, 15, 20, 25, 30]
+      # When true (default), filter spectra by the quality gate
+      # (min_backbone_coverage / min_fragment_groups) BEFORE running the
+      # primary downstream analyses (coverage, signal composition, mass
+      # error, neutral loss, complementary pair, mass gap, blur sigma,
+      # custom ions, modification matching quality, stratified). The gate
+      # itself + its diagnostics (rejection-by-dimension, seq-len curve,
+      # cross-tab, modification rejection rate) always run on the full
+      # population so rejection statistics remain meaningful. Set false to
+      # restore the legacy behaviour where every analysis ran on every
+      # sequence-available spectrum.
+      apply_quality_gate_filter: true
+
+  custom_ions:
+    custom_ions: null  # Override ion library; null -> uses DEFAULT_CUSTOM_IONS (59 entries)
+
+  masking:
+    n_repeats: 1
+    # 6-strategy ablation set. gp<n> = target fraction of b/y (c/z for ETD)
+    # fragment groups fully-masked per spectrum. Exact for signal_aware;
+    # calibrated for peak-based strategies. Sigaw falls back to ts34_gp30_iso.
+    strategies:
+      unif_gp30:
+        type: uniform
+        mask_portion: 0.455
+
+      thom_gp30:
+        type: thompson
+        mask_portion: 0.44
+        alpha: 0.5
+        beta: 0.5
+        kappa: 8.0
+        gamma: 1.2
+
+      ts34_gp30_noiso:
+        type: thompson_span
+        mask_portion: 0.32
+        span_min: 3
+        span_max: 4
+        alpha: 0.5
+        beta: 0.5
+        kappa: 8.0
+        gamma: 1.2
+        bidirectional: false
+        include_isotopes: false
+        max_total_mask_ratio: 0.40
+
+      ts34_gp30_iso:
+        type: thompson_span
+        mask_portion: 0.26
+        span_min: 3
+        span_max: 4
+        alpha: 0.5
+        beta: 0.5
+        kappa: 8.0
+        gamma: 1.2
+        bidirectional: false
+        include_isotopes: true
+        isotope_ppm: 20.0
+        isotope_da_floor: 0.015
+        isotope_max_charge: 3
+        isotope_max_order: 3
+        max_total_mask_ratio: 1.0
+
+      ts34_gp25_iso:
+        type: thompson_span
+        mask_portion: 0.21
+        span_min: 3
+        span_max: 4
+        alpha: 0.5
+        beta: 0.5
+        kappa: 8.0
+        gamma: 1.2
+        bidirectional: false
+        include_isotopes: true
+        isotope_ppm: 20.0
+        isotope_da_floor: 0.015
+        isotope_max_charge: 3
+        isotope_max_order: 3
+        max_total_mask_ratio: 1.0
+
+      sigaw_gp30:
+        type: signal_aware_fragment
+        mask_portion: 0.34
+        min_backbone_coverage: 0.33
+        min_fragment_groups: 7
+        annotation_ppm: 20.0
+        annotation_cid_da_tol: 0.2
+        annotation_ion_types: ["b", "y"]
+        # Fallback (thompson_span) matches ts34_gp30_iso.
+        span_min: 3
+        span_max: 4
+        alpha: 0.5
+        beta: 0.5
+        kappa: 8.0
+        gamma: 1.2
+        bidirectional: false
+        include_isotopes: true
+        isotope_ppm: 20.0
+        isotope_da_floor: 0.015
+        isotope_max_charge: 3
+        isotope_max_order: 3
+        max_total_mask_ratio: 1.0
+
+  intensity:
+    intensity_bins: 100  # Number of bins for histograms
+    intensity_log_scale: true  # Use log scale for intensity histograms
+    compute_skewness_kurtosis: true  # Compute advanced distribution statistics (requires scipy)
+    # m/z range boundaries for stratification (align with binning analysis)
+    mz_range_boundaries:
+      immonium_internal: [0, 200]
+      core_fragment: [200, 800]
+      extended_fragment: [800, 1500]
+      high_mass_fragment: [1500, 2500]
+
+  binning:
+    min_ion_observations: 3  # Minimum observations required to compute jump rate
+    bin_jump_threshold: 0.10  # 10% threshold for acceptable binning
+    enable_resolution_information: true  # Quantify prediction entropy, physical resolvability
+    resolution_info_window_size: 100.0  # Da window for local entropy computation
+    resolution_info_min_peaks_per_window: 30  # Minimum peaks for stable entropy estimate
+    enable_group_size_sensitivity: true
+    group_size_candidates: [25, 50, 100, 200, 500]
+    group_size_max_offset_utilization: 0.85
+    group_size_min_offset_headroom: 1.0
+    group_size_max_n_groups: 10000
+    # Intra-spectrum collision analysis
+    enable_intra_collision_analysis: true
+    intra_collision_weight: 0.5
+    # Binning strategies for ablation studies.
+    # Fixed-Da only (constant bin width across m/z range). Fixed-ppm
+    # strategies were removed because the production model uses fixed-Da
+    # bins; including ppm strategies just doubled the binning report
+    # without informing decisions.
+    strategies:
+      fixed_da_0.01:
+        type: fixed_da
+        bin_width: 0.01
+      fixed_da_0.02:
+        type: fixed_da
+        bin_width: 0.02
+      fixed_da_0.05:
+        type: fixed_da
+        bin_width: 0.05
+      fixed_da_0.1:
+        type: fixed_da
+        bin_width: 0.1
+      fixed_da_0.2:
+        type: fixed_da
+        bin_width: 0.2
+      fixed_da_0.5:
+        type: fixed_da
+        bin_width: 0.5
+
+    # CID-specific analysis
+    enable_cid_analysis: false
+    # Fine error sweep: shows mismatch curve from sub-bin to CID-level errors
+    cid_error_sweep_da: [0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5]
+    # Literature CID error levels (used as reference markers on plots)
+    cid_literature_errors_da: [0.3, 0.4, 0.5]  # Ion trap fragment error (Da)
+    orbitrap_reference_errors_ppm: [5.0, 10.0]  # Orbitrap reference for comparison

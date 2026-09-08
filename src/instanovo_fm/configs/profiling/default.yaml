@@ -1,0 +1,10 @@
+# Simple profiling configuration — low overhead, actionable output
+# Profiles 7 non-overlapping components with percentage-of-step breakdown
+
+enabled: false
+use_component_timing: true
+cuda_sync: true
+warmup_steps: 5                # Skip first N steps from stats (avoids JIT/CUDA warmup distortion)
+use_torch_profiler: false      # No torch profiler overhead
+use_memory_profiling: false    # No per-step memory tracking
+tensorboard_profiling_interval: 0

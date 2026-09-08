@@ -1,0 +1,113 @@
+defaults:
+  - _self_
+  - model: foundation_base
+  - dataset: lcfm
+  - residues: default
+  - evaluation: default
+  - profiling: detailed
+  - analysis: default
+
+run_name: instanovo_foundational
+tags:
+  model: foundation
+  training: self-supervised
+
+# Overwritten when using Aichor
+tb_summarywriter: "./logs/instanovo/foundational"
+
+# Training parameters
+seed: 101
+learning_rate: 1e-4
+weight_decay: 0.0
+train_batch_size: 1024
+grad_accumulation: 1
+gradient_clip_val: 1.0
+predict_batch_size: 1024
+lr_scheduler: cosine_warmup_hold
+
+# Cosine Warmup Hold Scheduler parameters (used when lr_scheduler: "cosine_warmup_hold")
+warmup_frac: 0.05      # % of total steps for warmup
+lr_hold_frac: 0.3     # % of total steps hold at max LR
+min_lr_factor: 0.1    # floor = % of base LR
+
+# Data loading parameters
+num_workers: 8  # Match signal_num_workers; 24 CPUs available on H100 nodes
+pin_memory: True  # Enables async GPU transfers via non_blocking=True
+prefetch_factor: 2  # Each worker prefetches 2 batches = 8 total batches ready
+persistent_workers: True  # Keep workers alive between epochs for faster dataloading
+use_shuffle_buffer: False  # Disabled: SpectrumDataFrame already shuffles at shard level
+# shuffle_buffer_size: 100_000  # Not used when use_shuffle_buffer: False
+
+fp16: True
+compile_model: True
+
+# Logging parameters
+training_steps: 30_000
+num_sanity_val_steps: 10
+validate_before_training: False
+console_logging_steps: 1_000
+metrics_logging_steps: 1_000
+
+# MLFlow configuration
+mlflow_enabled: False  # Set to False to disable all MLFlow tracking
+mlflow_tracking_uri: ""  # set to your own MLflow server, or leave blank
+mlflow_experiment_name: Instanovo/foundation-model  # defaults to current git branch if blank
+mlflow_workspace: instanovo  # MLFlow workspace (must be lowercase)
+mlflow_allow_local_fallback: True  # Fall back to local ./mlruns on remote auth failure
+mlflow_log_system_metrics: True
+mlflow_log_datasets: True
+
+enable_verbose_logging: False
+enable_verbose_accelerate: True
+enable_verbose_s3: True
+
+# Training data parameters
+train_subset: 1.0
+valid_subset: 1.0
+perform_data_checks: False  # Skip residue/charge row-by-row filtering (27 min on 12.5M rows via Python lambdas)
+max_valid_steps: 250  # Cap validation at N batches (250 * 1024 = 256K spectra). null = full dataset.
+
+# Number of model updates between validations
+validation_interval: 10_000 # ~1 epoch; profiling shows validation = 50% of wall time at 5k interval
+# Number of model updates between validations
+embedding_evaluation:
+  enabled: True
+  interval: 10_000  # Run every N training steps (should align with training_steps for final eval)
+  batch_size: 128    # Batch size for embedding generation (smaller than training to avoid OOM with PA/ion_ladder)
+  tasks_to_run:
+    - embeddingstatisticstask  # Minimal task during training; full eval runs post-training
+    - duplicateretrievaltask
+
+# Post-training full evaluation on best checkpoint (runs once after training completes)
+post_training_evaluation:
+  enabled: True
+  tasks_to_run:
+    - embeddingstatisticstask
+    - duplicateretrievaltask
+    - linearprobetask
+    - confidencesignalanalysistask
+    - headanalysistask
+    - igattributiontask
+    - peaktypeclassificationtask
+    - umapvisualisationtask
+
+# Checkpointing parameters
+save_model: True
+model_save_folder_path: "checkpoints/instanovo-foundational-base"
+save_weights_only: False
+keep_model_every_interval: False  # Save timestamped checkpoints
+# Save full accelerator state (model + optimizer + scheduler + RNG + step counter)
+# at every checkpoint_interval. Required for clean resume via resume_accelerator_state.
+# ~1-2 min overhead per save; worth it for crash resilience on long LCFM runs.
+save_accelerator_state: True
+# Checkpoint based on validation loss (self-supervised)
+checkpoint_metric: "median_ae_ppm"  # "loss" or "mae_daltons" or "median_ae_ppm"
+checkpoint_metric_mode: "min"
+# Number of model updates between checkpoints
+checkpoint_interval: 10_000
+# Maximum number of checkpoints to keep
+max_checkpoints: 3
+# Accelerate checkpoint
+resume_accelerator_state:
+# Model checkpoint
+resume_checkpoint_path:

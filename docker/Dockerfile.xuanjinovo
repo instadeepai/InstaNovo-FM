@@ -1,0 +1,33 @@
+# XuanjiNovo image for the de novo benchmark.
+# Source lives in the MassNet-DDA repo (github.com/guomics-lab/MassNet-DDA).
+
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+WORKDIR /app
+RUN apt-get update && apt-get install -y gcc g++ ninja-build
+
+# --- fetch the upstream source (MassNet-DDA repo) ---
+ARG MASSNET_COMMIT=84105ec5d871efd4a8aa98e79b859ffd927d78cc
+RUN apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN git init /app && cd /app \
+ && git remote add origin https://github.com/guomics-lab/MassNet-DDA \
+ && git fetch --depth 1 origin "$MASSNET_COMMIT" \
+ && git checkout --detach FETCH_HEAD
+
+# --- upstream install chain ---
+RUN pip install -r /app/requirements-docker-cuda12.txt
+RUN cd /app/ctcdecode-master && pip install .
+RUN cd /app/imputer-pytorch && pip install -e .
+
+# --- cupy (beam-search PMC) + S3 staging tooling ---
+RUN pip install --no-cache-dir cupy-cuda12x==13.6.0 awscli s3fs rich
+
+# --- entrypoint ---
+# instanovo comes from PyPI rather than being copied in, so only our own adapter
+# modules are baked into the image. The closure test in
+# tests/foundational/test_xuanjinovo.py asserts this COPY list covers every
+# module the runner imports, so it fails if an import is added without updating.
+RUN pip install --no-cache-dir "instanovo==1.2.2"
+COPY src/instanovo_fm/__init__.py /xuanjinovo/instanovo_fm/
+COPY src/instanovo_fm/utils/__init__.py src/instanovo_fm/utils/checkpoints.py /xuanjinovo/instanovo_fm/utils/
+COPY src/instanovo_fm/eval/__init__.py src/instanovo_fm/eval/run_xuanjinovo.py /xuanjinovo/instanovo_fm/eval/
+ENV PYTHONPATH=/xuanjinovo

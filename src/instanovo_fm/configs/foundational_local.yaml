@@ -1,0 +1,90 @@
+defaults:
+  - _self_
+  - model: foundation_base
+  - dataset: mcfm_local
+  - residues: default
+  - evaluation: default
+  - profiling: default
+  - analysis: default
+
+run_name: instanovo_foundational
+tags:
+  - foundation
+  - self-supervised
+  - test
+
+# Overwritten when using Aichor
+tb_summarywriter: "./logs/instanovo/foundational"
+
+# Training parameters
+seed: 101
+learning_rate: 1e-4
+weight_decay: 0.0
+train_batch_size: 16
+grad_accumulation: 1
+gradient_clip_val: 1.0
+predict_batch_size: 16
+lr_scheduler: cosine_warmup_hold
+
+# Cosine Warmup Hold Scheduler parameters (used when lr_scheduler: "cosine_warmup_hold")
+warmup_frac: 0.05      # % of total steps for warmup
+lr_hold_frac: 0.3     # % of total steps hold at max LR
+min_lr_factor: 0.1    # floor = % of base LR
+
+# Data loading parameters
+num_workers: 0  # Set to 0 for Docker compatibility (avoids multiprocessing issues)
+pin_memory: True  # Enable for faster GPU transfer (small memory cost, big speed gain)
+prefetch_factor: 4  # Each worker prefetches 2 batches = 8 total batches ready
+persistent_workers: True  # Keep workers alive between epochs for faster dataloading
+use_shuffle_buffer: False  # Disabled: SpectrumDataFrame already shuffles at shard level
+# shuffle_buffer_size: 100_000  # Not used when use_shuffle_buffer: False
+
+fp16: True
+compile_model: False
+
+# Logging parameters
+training_steps: 500
+num_sanity_val_steps: 10
+validate_before_training: False
+console_logging_steps: 100
+metrics_logging_steps: 100
+
+# MLFlow configuration
+mlflow_enabled: False  # Set to False to disable all MLFlow tracking
+mlflow_tracking_uri: ""  # set to your own MLflow server, or leave blank  # Optional: defaults to local ./mlruns
+mlflow_experiment_name:  Instanovo/foundation-model # Optional: defaults to current git branch
+mlflow_log_system_metrics: True
+mlflow_log_datasets: True
+
+enable_verbose_logging: False
+enable_verbose_accelerate: True
+enable_verbose_s3: True
+
+# Training data parameters
+train_subset: 0.1
+valid_subset: 0.3
+max_valid_steps: 50  # Cap validation at N batches. null = full dataset.
+
+# Number of model updates between validations
+validation_interval: 500 # roughly half an epoch
+embedding_evaluation:
+  enabled: False
+  interval: 500  # Run every N training steps (should align with training_steps for final eval)
+  batch_size: 16  # Batch size for embedding generation
+
+# Checkpointing parameters
+save_model: False
+model_save_folder_path: "checkpoints/instanovo-foundational-base"
+save_weights_only: False
+keep_model_every_interval: False  # Save timestamped checkpoints
+# Checkpoint based on validation loss (self-supervised)
+checkpoint_metric: "median_ae_ppm"  # "loss" or "mae_daltons" or "median_ae_ppm"
+checkpoint_metric_mode: "min"
+# Number of model updates between checkpoints
+checkpoint_interval: 500
+# Maximum number of checkpoints to keep
+max_checkpoints: 3
+# Accelerate checkpoint
+resume_accelerator_state:
+# Model checkpoint
+resume_checkpoint_path:

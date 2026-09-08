@@ -1,0 +1,266 @@
+# InstaNovo Foundation Model Configuration
+# Encoder-only transformer for self-supervised learning
+
+# ===== Model Architecture =====
+dim_model: 768
+n_heads: 12
+dim_feedforward: 1024
+n_layers: 9
+dropout: 0.1
+max_charge: 10
+
+# ===== Spectrum Processing =====
+n_peaks: 200
+min_mz: 50.0
+max_mz: 2500.0
+min_intensity: 0.01
+remove_precursor_tol: 0.0
+use_spectrum_utils: False
+normalize_mz: True
+
+# ===== Peak Encoder =====
+# Options: "multiscale", "fourier", "rbf", or "linear"
+# All encoders expect normalized m/z input in [0, 1] when normalize_mz: True
+peak_encoder:
+  type: "multiscale"
+  config:
+    # MultiScale: learnable sinusoidal frequencies + MLP
+    dropout: 0.1
+
+    # Fourier (DreaMS-style): Voronov frequency spacing + dual MLP
+    # x_min/x_max define frequency range (must match input domain)
+    num_freqs: 192
+    strategy: "voronov_et_al"
+    trainable_fourier: True
+    x_min: 0.001     # Finest period (normalized m/z space)
+    x_max: 1.5       # Coarsest period (slightly above domain)
+
+    # RBF (SchNet-style): Gaussian soft binning
+    # Centers placed uniformly in normalized m/z domain
+    num_rbf: 1024
+
+# Thompson sampling with span masking - the key innovation for learning from noisy spectra
+masking:
+  # Baseline: ts34_gp30_iso (thompson_span with span=3-4, isotopes on) — selected
+  # via the masking-strategy ablation as the optimal default. Signal-aware variants
+  # inherit these same Thompson/span parameters for the fallback path when a
+  # spectrum fails the signal-aware quality gate.
+  strategy: "thompson_span"  # Options: "uniform", "thompson", "thompson_span", "signal_aware_fragment"
+  mask_portion: 0.26  # Target fraction of peaks to mask (~26%)
+  ordering_strategy: "sorted"  # Keep m/z order
+
+  # Thompson sampling parameters (intensity-aware probabilistic masking)
+  alpha: 0.5     # Beta prior alpha
+  beta: 0.5      # Beta prior beta
+  kappa: 8.0     # Intensity weighting concentration
+  gamma: 1.2     # Intensity tempering exponent
+
+  # Span masking parameters (preserves local spectral structure)
+  span_min: 3             # Minimum span length
+  span_max: 4             # Maximum span length
+  bidirectional: False    # Expand spans bidirectionally
+
+  # Isotope co-masking: extends span borders to include isotope envelope peaks.
+  # Spans are first generated at mask_portion (26%), then isotope neighbours at
+  # span borders are added up to max_total_mask_ratio. Isotope peaks are protected
+  # during hard-cap enforcement (non-isotope peaks removed first).
+  include_isotopes: True
+  isotope_ppm: 20.0
+  isotope_da_floor: 0.015
+  isotope_max_charge: 3
+  isotope_max_order: 3
+  max_total_mask_ratio: 1.0  # No hard cap — rely on mask_portion + isotope expansion (ablation optimum)
+
+  # Signal-aware fragment masking (only used when strategy="signal_aware_fragment")
+  # Requires annotated=true in data processing to have peptide sequences available
+  signal_min_backbone_coverage: 0.33  # Minimum backbone cleavage coverage (0-1) for signal-aware mode
+  signal_min_fragment_groups: 7      # Minimum unique fragment ion groups for signal-aware mode
+  signal_ppm: 20.0             # PPM tolerance for theoretical annotation
+  signal_cid_da_tol: 0.2       # Da tolerance for CID (ion-trap) spectra; null = always use ppm
+  signal_ion_types: ["b", "y"] # Fragment ion types for annotation
+  signal_num_workers: 8        # Number of multiprocessing workers for parallel annotation
+
+  # Gaussian-blurred mask encoding: instead of a generic [MASK] token,
+  # each masked peak gets its m/z (+ Gaussian noise) fed through the peak
+  # encoder, with the learned mask_token added as an "I am masked" bias.
+  blur_sigma_da: 10.0
+  mask_intensity: false       # false = keep intensity visible at masked positions (ablation optimum)
+
+# ===== Ion Ladder Encoder (optional) =====
+ion_ladder:
+  enabled: false  # Ion ladder encoder
+  window_k: 40              # Number of neighbours on each side (total window = 2k+1)
+  sigma: 0.35               # Gaussian kernel width for soft matching (Da)
+  charge_states: [1, 2]     # Charge hypotheses for mass-difference scaling
+  neutral_losses:
+    enabled: false           # Expand reference masses with neutral-loss-shifted variants
+    loss_types: ["H2O", "NH3"]  # H₂O (18.011 Da) and NH₃ (17.027 Da)
+
+# ===== M/Z Prediction Head =====
+# Simple classification-based m/z prediction
+mz_head:
+  task: "classification"  # Classification-based binning
+
+  # Binning: fixed_da | fixed_ppm | adaptive (see binning.py)
+  binning:
+    strategy: "fixed_da"
+    bin_size: 0.2
+  bin_group_size: 50
+
+  # Offset conditioning: condition offset head on group prediction
+  # "none" = independent heads (default), "teacher_force" = true group at train, predicted at eval
+  offset_conditioning: "teacher_force"
+  group_embed_dim: 64          # Embedding dim for group conditioning
+  eval_topk_groups: 3          # 1 = greedy, >1 = joint top-k decoding at eval
+
+  # Loss weights
+  w_group: 0.5               # Weight for group classification loss
+  w_offset: 0.5              # Weight for offset classification loss
+
+  # Heteroscedastic regression (only used when task: "regression")
+  # Predicts per-peak uncertainty (sigma) alongside mean m/z
+  heteroscedastic: false
+  mu_law_k: 25   # μ-law compression parameter for regression (lower k = less edge amplification)
+  huber_delta: 1.0  # Huber loss delta (1.0 = MSE-like for errors < 1.0 in μ-law space)
+
+  # Confidence scoring (for evaluation)
+  # Emits conf_joint_mean (Tier 1) and ECE_group/ECE_offset during validation.
+  # Joint confidence is always the product conf_group * conf_offset.
+  confidence:
+    enabled: True
+
+# ===== Meta Token Configuration =====
+meta_token:
+  enabled: False  # Use meta token for precursor/metadata encoding
+  n_freq: 16     # Number of Fourier frequencies for continuous features
+
+  # Continuous feature bounds
+  precursor_mass_max: 6500.0  # Maximum precursor mass in Da (observed max in data)
+
+  # Feature inclusion flags
+  include_frag_type: True           # Fragmentation type (HCD, CID, ETD, HCID)
+  include_instrument: True          # Instrument model (20 categories)
+  include_collision_energy: True   # Collision energy (continuous, NCE 0-100)
+  include_precursor_charge: True   # Precursor charge (binned 2-6)
+  include_precursor_mass: True     # Precursor mass (continuous, neutral mass in Da)
+  include_acquisition: False         # Acquisition mode (DDA/DIA)
+  include_detector: False            # Detector type (Orbitrap, TOF, etc.)
+  include_enzyme: False              # Enzyme (trypsin, etc.)
+  include_quant: False               # Quantification method (TMT, iTRAQ, etc.)
+
+
+# ===== Auxiliary Tasks =====
+auxiliary:
+  enabled: True  # Enable auxiliary prediction tasks
+
+  # Task weights (set to 0.0 to disable individual tasks)
+  lambda_charge: 0.0      # Charge state classification
+  lambda_rt: 0.0          # Retention time prediction (MDN)
+  lambda_dmz: 0.0         # Δm/z classification
+  lambda_ptm: 0.0         # PTM presence classification
+  lambda_intensity: 0.2   # Intensity prediction
+
+  # Charge classification
+  n_charge_classes: 10    # Number of charge classes
+
+  # Retention time prediction (MDN)
+  n_rt_components: 3      # Number of Gaussian components
+  max_log_rt: 10.5        # Maximum log(RT+1) value
+
+  # Δm/z classification
+  dmz_focal_gamma: 2.0
+  dmz_focal_alpha: 0.25
+
+  # PTM classification
+  ptm_focal_gamma: 2.0
+  ptm_focal_alpha: 0.25
+
+# ===== Intensity Prediction Head (Regression) =====
+intensity_head:
+  max_intensity: 0.7     # Maximum intensity value
+                         # Based on data: actual max=0.603, p99=0.197
+                         # Using 0.7 provides safety margin while better matching data range
+  huber_delta: 0.05      # Huber loss delta parameter
+                         # Controls transition from L2 to L1 penalty
+                         # Set to ~1.5x std (0.034) to handle high kurtosis (11.3)
+                         # Smaller delta = more robust to outliers in skewed intensity distribution
+
+# ===== Gradient Checkpointing =====
+# Trades ~30% more compute for ~40% less activation memory.
+# Useful for larger batch sizes or deeper models.
+gradient_checkpointing: True
+
+# ===== Noise Injection (DreaMS-style) =====
+noise:
+  mz_noise_ppm: 0.0            # PPM-based m/z noise on masked peaks
+  intensity_noise_pct: 0.0     # Proportional intensity noise
+  intensity_noise_floor: 0.001 # Noise floor for intensity
+
+architecture:
+  # Positional encoding options
+  positional_encoding:
+    type: "none"  # Options: "sinusoidal", "rope", "none"
+    config:
+      # Sinusoidal positional encoding parameters (used if type="sinusoidal")
+      max_len: 512           # Maximum sequence length
+      dropout: 0.1           # Dropout after positional encoding
+
+      # RoPE (Rotary Position Embedding) parameters (used if type="rope")
+      rotary_pct: 0.25       # Percentage of dimensions to apply rotation (1.0 = all)
+      base: 10000.0          # Base for frequency calculation
+
+  # Relative bias options
+  relative_bias:
+    type: "none"  # Options: "pa", "alibi", "rpe", "none"
+    config:
+      # ALiBi (Attention with Linear Biases) parameters (used if type="alibi")
+      max_seq_len: 256       # Maximum sequence length for bias computation
+
+      # RPE (Relative Position Encoding) parameters (used if type="rpe")
+      max_relative_position: 32  # Maximum relative distance to encode
+
+      # Pairwise Attention (PA) parameters (used if type="pa")
+      pw_num_freqs: 64            # Fourier frequencies for Δm/z encoding (16 → 32-dim Fourier)
+      pw_hidden_dim: 64           # Hidden dimension of f_pw MLP (projects to n_heads per layer)
+      per_layer_pw: true         # Per-layer g^(l) projections
+      lambda_min: 0.001          # Min wavelength (sub-Dalton resolution)
+      lambda_max: 10000.0        # Max wavelength (full precursor mass range)
+      blur_masked_pa: false      # Use blurred m/z for PA at masked positions (requires blur_sigma_da > 0)
+      pa_mask_to_mask: false   # Keep exact PA between masked peaks (safe — only Δm/z, no absolute position)
+
+  # Attention backend - MAIN SETTING for attention mechanism selection
+  attention:
+    backend: "flash"  # Options: "flash" (PyTorch SDPA), "math" (manual attention)
+    # Flash uses SDPA: pure flash kernel when no bias, memory-efficient kernel when bias present
+    # Math uses manual matmul→softmax (slower, use for debugging or weight inspection)
+    config:
+      verbose: true  # Enable verbose logging for attention operations
+
+# ===== Experiment Tracking Tags =====
+# These tags are automatically interpolated from config values above
+# Useful for MLOps platforms like Neptune, W&B, MLflow
+tags:
+  # Architecture components
+  pos_encoding_type: ${architecture.positional_encoding.type}
+  relative_bias_type: ${architecture.relative_bias.type}
+  attention_backend: ${architecture.attention.backend}
+
+  # Model architecture
+  dim_model: ${dim_model}
+  n_heads: ${n_heads}
+  n_layers: ${n_layers}
+
+  # Masking strategy
+  masking_strategy: ${masking.strategy}
+  ordering_strategy: ${masking.ordering_strategy}
+
+  # Peak processing
+  peak_encoder_type: ${peak_encoder.type}
+
+  # Task configuration
+  mz_head_task: ${mz_head.task}
+
+  # Optional features
+  meta_token_enabled: ${meta_token.enabled}
+  auxiliary_enabled: ${auxiliary.enabled}
+  ion_ladder_enabled: ${ion_ladder.enabled}

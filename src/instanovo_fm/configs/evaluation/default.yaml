@@ -1,0 +1,350 @@
+enabled: True  # Enable evaluation
+split: valid  # Dataset split to evaluate: "valid" or "test"
+random_state: 42  # Global seed for chunked data loading and project assignment
+# Embedding pooling strategies to evaluate (runs tasks on each independently)
+# Options: "cls" (CLS token), "mean_pool" (uniform mean), "confidence" (confidence-weighted)
+embedding_pooling:
+  - mean_pool
+#  - cls
+#  - confidence
+confidence_temperature: 1.0     # Softmax temperature for confidence pooling (lower = sharper, higher = smoother)
+batch_size: 128
+device: cuda  # "auto", "cuda", or "cpu"
+output_dir: "instanovo/foundational/eval/embed_eval_results"  # Where to save results (automatically uploaded to S3 on Aichor)
+max_samples: 20_000  # Maximum number of samples to use (null = use all data)
+save_embeddings: False  # Save embeddings to disk (default: False for speed and space savings)
+force_regenerate_embeddings: False  # Set to True to regenerate cached embeddings (only relevant if save_embeddings=True)
+compute_spectrum_confidence: True  # Compute per-spectrum confidence scores (requires classification model)
+
+# Global theoretical spectrum generation configuration
+# These settings are used by embedding_io.py to precompute theoretical spectra for all evaluation tasks
+theoretical_spectrum:
+  enabled: True                     # Enable theoretical spectrum generation during embedding generation
+  ppm_tol: 20.0                     # PPM tolerance for theoretical matching
+  cid_da_tol: 0.2                   # Da tolerance for CID (ion-trap) spectra; null = always use ppm_tol
+  ion_types: ["a", "b", "y"]        # Fragment ion types (null = auto-detect from fragmentation type)
+
+  # Conditional annotation (two-pass strategy) - RECOMMENDED
+  use_conditional_annotation: True  # Use improved two-pass conditional annotation (reduces false positives)
+  add_losses: True                  # Include neutral losses (H2O, NH3) - only for matched base ions
+  loss_types: ["H2O", "NH3", "SO3", "H3PO4"]  # Types of neutral losses to check
+  add_isotopes: True                # Include isotopic peaks - only for matched base ions
+  isotope_intensity_threshold: 0.02 # Minimum relative intensity for isotope checking (2% of base peak)
+  max_isotope: 4                    # Maximum isotope number (+1, +2, +3, +4)
+  add_precursor: True               # Include precursor ion (with isotopes if matched)
+
+  # Custom ions (diagnostic, reporter, immonium, etc.) - NEW
+  add_custom_ions: True             # Include custom ion detection (immonium, glycan, phospho, reporter ions)
+  custom_ions: null                 # Custom ion library (null = use DEFAULT_CUSTOM_IONS from theoretical_spectra.py)
+
+  # Quality gate defaults (backbone coverage, aligned with data analysis framework)
+  # Tasks can override these per-task; set to 0 to disable quality gating
+  min_backbone_coverage: 0.33       # Minimum backbone cleavage coverage (0-1)
+  min_fragment_groups: 7            # Minimum unique fragment ion groups
+
+  # General parameters
+  keep_modifications: True          # Try modified sequences first, fallback to unmodified
+  max_mz: 2500.0                    # Maximum m/z for denormalization (must match model config)
+  min_peaks_per_spectrum: 10         # Minimum peaks required per spectrum for theoretical generation
+
+# Path to checkpoint to evaluate (supports local paths and s3:// URLs for Aichor)
+# Local example: "checkpoints/instanovo-foundational-base/model_best.ckpt"
+# S3 example: "s3://bucket-name/checkpoints/model.ckpt"
+# Overridden automatically by post-training evaluation; set manually for standalone runs.
+checkpoint_path: null
+
+# Multi-checkpoint evaluation: list of checkpoint paths to evaluate sequentially
+# When set, each checkpoint gets its own output subdirectory under a shared timestamped parent
+# checkpoint_paths takes precedence over checkpoint_path when both are set
+# Only used by standalone embed_evaluation.py runs, never by post-training evaluation.
+checkpoint_paths: null
+
+# Sequence similarity clustering (optional preprocessing using MMseqs2)
+# This computes sequence-level clusters and stores them in metadata['seq_cluster_id']
+# Tasks like UMAPVisualisationTask can use this for coloring/grouping
+sequence_clustering:
+  enable: False  # Set to True to enable MMseqs2 clustering
+  identity_threshold: 0.9  # Sequence identity threshold (0.0-1.0)
+  sequence_key: null  # Metadata key with sequences (null = auto-detect from 'sequence', 'peptides', 'peptide', 'seq')
+
+# Tasks to run (null = all tasks, or specify list of task names)
+tasks_to_run:
+  - embeddingstatisticstask
+  - duplicateretrievaltask
+  - linearprobetask
+  - confidencesignalanalysistask
+  - headanalysistask
+  - igattributiontask
+  - peaktypeclassificationtask
+  - umapvisualisationtask
+  - evocclusteringtask
+#  - glassboxattributiontask       # opt-in: requires the optional 'glassbox' extra (uv sync --extra glassbox)
+#  - cosinehyperscorecorrelationtask
+#  - esm2crossmodalalignmenttask
+
+# Task-specific configurations
+task_configs:
+  embeddingstatisticstask:
+    n_components_pca: 512  # Covers ~67% of 768-dim spectrum; auto-increases to 2x if 95% threshold hits ceiling
+    compute_pca: True
+    compute_similarity_dist: True
+    num_pairs_similarity: 200000
+    uniformity_t: 2.0  # Temperature for uniformity metric (Wang & Isola, 2020)
+    seed: 42  # Deterministic RNG for reproducibility
+    create_dashboard: True  # Enable quality dashboard visualization
+    dashboard_figsize: [16, 10]
+    dashboard_dpi: 150
+
+  duplicateretrievaltask:
+    k_values: [1, 5, 10, 20]
+    peptide_key: peptides  # Note: collate_fn saves sequences as "peptides" (plural)
+    max_samples: 20_000
+    sample_seed: 42
+    # Instrument-conditional evaluation — run retrieval within filtered subsets
+    enable_conditional_eval: true
+    conditional_min_samples: 200
+    conditional_subsets:
+      - name: "hcd_orbitrap"
+        frag_types: ["HCD", "HCID"]
+        detectors: ["Orbitrap"]
+        instruments: null
+      - name: "cid"
+        frag_types: ["CID"]
+        detectors: null
+        instruments: null
+
+  linearprobetask:
+    targets: ["precursor_charge", "precursor_mz", "precursor_mass", "hydrophobicity",
+              "ptm_present", "modification_class", "search_instrument", "frag_type",
+              "collision_energy", "spectrum_confidence"]
+
+    # Project-disjoint splitting (disabled: model splits used directly as probe splits)
+    use_project_split: false
+    project_key: search_project        # Metadata key for project identifiers
+    train_samples: 100_000              # Target training samples (with project caps)
+    val_samples: 10_000                 # Target validation samples (for L2 tuning)
+    test_samples: 10_000                # Target test samples (final one-shot report)
+    max_per_project_frac: 0.15         # No single project contributes >15% of a split
+    min_project_samples: 5             # Drop projects with fewer total samples
+
+    # Stratified enrichment for rare, project-clustered modification targets
+    # (phospho / glyco). Null (default) => normal sampling, behaviour unchanged.
+    # Set to a list of binary target fields (e.g. [mod_phospho, mod_glyco]) to
+    # select, per model split, up to enrich_pos_per_class positives per target
+    # plus enrich_neg_per_split negatives — guaranteeing enough positives for a
+    # stable per-modification detection AUROC.
+    enrich_targets: null
+    enrich_multiclass: null            # e.g. glyco_class -> per-family stratified sample
+    enrich_pos_per_class: 5000
+    enrich_neg_per_split: 10000
+
+    # Within-backbone paired control (e.g. deamidation-of-N). Null (default) =>
+    # standard test enrichment. Set to a binary target field to build the TEST split
+    # from backbones seen BOTH with and without the modification, so the probe reports
+    # a within-backbone AUROC isolating the modification signal from sequence priors.
+    paired_test_target: null
+    paired_backbones_cap: 2000         # max paired backbones sampled into the test set
+    paired_per_state_cap: 10           # max spectra per backbone per (+/-) state
+    paired_backbone_control: null      # binary target for the within-backbone paired AUROC metric
+    # Per-target class exclusion, e.g. {precursor_charge: ["0"]}. Charge 0 is the
+    # "charge unknown" sentinel and maps exactly onto DIA acquisition, so excluding it
+    # keeps the charge probe a charge classifier rather than a DDA-vs-DIA classifier.
+    exclude_target_values: null
+
+    # L2 regularization tuning (explicit train/val, replaces GridSearchCV)
+    c_values: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]     # LogisticRegression C values
+    alpha_values: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]  # Ridge alpha values
+
+    # Classification parameters
+    max_iter: 500
+    solver: lbfgs                      # lbfgs supports multinomial classification
+    class_weight: balanced             # Handle class imbalance
+
+    # General
+    random_state: 42
+    # Multi-seed evaluation: run probe with different project-disjoint splits per seed
+    # When set, overrides random_state and runs the full probe pipeline for each seed,
+    # then aggregates results (mean ± std). Leave null for single-seed (uses random_state).
+    random_states: [42]
+    probe_type: auto                   # 'auto', 'classification', or 'regression'
+    max_classes_for_classification: 20
+
+    # Optional in-domain baseline (overlapping projects)
+    run_in_domain_baseline: false
+
+    # Legacy parameters (used when use_project_split=false)
+    max_samples: 10_000
+    test_size: 0.2
+    use_grid_search: true
+
+  cosinehyperscorecorrelationtask:
+    peptide_key: peptide
+    hyperscore_key: hyperscore
+    max_samples: 10_000
+    min_peptide_spectra: 2
+    use_log_expectation: False
+
+  umapvisualisationtask:
+    # Sampling and output
+    max_samples: 20_000              # Maximum samples to visualize
+    random_state: 42                # For reproducibility
+    # Core UMAP parameters
+    n_neighbors: 30                 # Local vs global balance (5-100): higher = better global topology
+    min_dist: 0.1                   # Minimum distance between points (0.0-1.0): low = tighter local clusters
+    metric: cosine                  # Distance metric (cosine, euclidean, manhattan)
+    spread: 1.0                     # Effective scale of embedding (default=1.0)
+    repulsion_strength: 1.0         # How strongly non-neighbor points are pushed apart (default=1.0)
+    # Visualization settings
+    create_multiple_plots: true     # Create visualizations for all metadata fields
+    dpi: 300                        # Output resolution (100-300)
+    plot_size: [10, 8]              # Figure size [width, height] in inches
+    alpha: 0.5                      # Point transparency (0.0-1.0)
+    point_size: 5                   # Marker size
+    # Legend management
+    max_categories: 15              # Maximum categories to show in legend
+    collapse_rare_categories: true  # Group rare categories into "Other"
+    # Quality metrics
+    compute_quality_metrics: true   # Compute trustworthiness and kNN preservation (adds ~10s)
+    # Summary panel
+    create_summary_panel: true      # Create a multi-panel summary figure
+    # Instrument-conditional UMAPs — run separate UMAPs per instrument condition
+    # Removes fragmentation-type / detector confounds to reveal peptide-level structure
+    enable_conditional_umaps: true
+    conditional_min_samples: 500     # Minimum samples to run a conditional UMAP
+    conditional_subsets:
+      - name: "hcd_orbitrap"
+        frag_types: ["HCD", "HCID"]
+        detectors: ["Orbitrap"]
+        instruments: null
+      - name: "cid"
+        frag_types: ["CID"]
+        detectors: null
+        instruments: null
+
+  confidencesignalanalysistask:
+    max_samples: 10_000              # Maximum spectra to analyze (null = all)
+    create_plots: True              # Create visualization plots
+    max_individual_plots: 20        # Maximum number of individual spectrum plots to create
+    min_backbone_coverage: 0.33     # Minimum backbone cleavage coverage
+    min_fragment_groups: 7          # Minimum unique fragment ion groups
+
+  headanalysistask:
+    sample_n: 5_000                          # Number of spectra to analyze
+    save_figures: true                       # Whether to save visualization figures
+    # Quality gates for theoretical spectrum matching
+    min_backbone_coverage: 0.33              # Minimum backbone cleavage coverage (0 = disabled)
+    min_fragment_groups: 7                   # Minimum unique fragment ion groups (0 = disabled)
+    # Mass-based relationship detection
+    da_tol: 0.3                              # Da tolerance for m/z-based relationship masks
+    # Pattern categorization thresholds
+    mz_local_window_da: 5.0                  # Da window for 'local' pattern detection
+    entropy_diffuse_threshold: 0.9           # Normalized entropy threshold for 'global' category
+    sparse_gini_threshold: 0.8               # Gini coefficient threshold for 'sparse' category
+    structural_enrichment_threshold: 2.0     # Enrichment ratio threshold for 'structural' category
+    # Annotation routing
+    min_annotated_peaks: 5                   # Minimum annotated peaks for routing analysis
+    # Hero spectra
+    n_hero_spectra: 10                       # Number of full attention matrices saved for visualization
+    # Cross-layer
+    analyze_all_layers: false                # If true, analyze all layers (not just last)
+    dpi: 300                                 # DPI for saved figures
+
+  peaktypeclassificationtask:
+    enable_classification: true      # Train linear probe classifiers (set false to only run UMAP)
+    max_samples: 3_500               # Maximum spectra to use (peaks will be much more)
+    create_plots: true                # Create visualization plots
+    # Quality gates for theoretical spectrum matching
+    min_backbone_coverage: 0.33       # Minimum backbone cleavage coverage (0 = disabled)
+    min_fragment_groups: 7            # Minimum unique fragment ion groups (0 = disabled)
+    # Peak-level UMAP visualizations
+    enable_peak_umap: true            # All-peak UMAP (raw + residual)
+    enable_fragment_umap: true        # Fragment-only UMAP (b/y ions, filtered by instrument)
+    max_umap_samples: 30_000          # Max peaks for UMAP (subsampled by spectrum)
+    # Instrument filtering for fragment-only UMAPs (null = no filtering)
+    # Removes instrument-driven structure to isolate peptide-level signal
+    fragment_umap_frag_types: ["HCD", "HCID"]
+    fragment_umap_detectors: ["Orbitrap"]
+    fragment_umap_instruments:
+      - "Q Exactive HF"
+      - "Q Exactive"
+      - "Q Exactive HFX"
+      - "Orbitrap Q Exactive"
+      - "Orbitrap Exploris 480"
+      - "Orbitrap Fusion"
+      - "Orbitrap Fusion Lumos"
+      - "Orbitrap Eclipse"
+
+  esm2crossmodalalignmenttask:
+    max_samples: 10_000               # Maximum spectra to use
+    esm2_model: "esm2_t33_650M_UR50D" # ESM2 model name
+    esm2_batch_size: 32               # Batch size for ESM2 inference
+    esm2_pooling: mean                # ESM2 pooling strategy: 'mean' or 'cls'
+    random_state: 42                  # Random seed
+    min_sequence_length: 7            # Minimum peptide length to include
+    max_sequence_length: 50           # Maximum peptide length to include
+    max_pairs: 100_000                # Maximum pairs for RSA computation
+    create_plots: true                # Create publication figure
+    dpi: 300                          # Figure DPI
+    device: null                      # Device for ESM2 inference (null = auto)
+
+  igattributiontask:
+    # Analysis toggles
+    enable_prediction_attribution: true   # IG attribution on masked peak predictions
+    enable_pa_dissection: true          # PA module response spectrum (auto-skips if model has no PA)
+    # Quality gates for theoretical spectrum matching
+    min_backbone_coverage: 0.33           # Minimum backbone cleavage coverage (0 = disabled)
+    min_fragment_groups: 7                # Minimum unique fragment ion groups (0 = disabled)
+    # Prediction attribution settings
+    ig_n_steps: 50                        # Captum IG integration steps (50 sufficient; 150 tested with no improvement)
+    max_spectra: 500                      # Maximum spectra to analyze
+    max_groups_per_spectrum: 3            # Fragment ion groups to mask per spectrum (IG pass each)
+    max_hero_plots: 20                    # Hero spectrum visualizations to generate
+    # PA dissection settings
+    pa_dmz_min: -250.0                    # Sweep range minimum (Da)
+    pa_dmz_max: 250.0                     # Sweep range maximum (Da)
+    pa_resolution: 0.01                   # Sweep resolution (Da)
+    # Visualization
+    dpi: 300                              # DPI for saved figures
+    # Novel chemistry discovery probe
+    enable_novel_chemistry: true           # Enable extended chemistry matching for unannotated peaks
+    novel_chemistry_max_internal_length: 6 # Max subsequence length for internal fragments
+    novel_chemistry_ppm_tol: 10.0          # PPM tolerance for HCD extended matching
+    novel_chemistry_da_tol: 0.5            # Da tolerance for CID extended matching
+
+  evocclusteringtask:
+    # Cluster the 768-d embeddings directly with EVōC (better than UMAP+HDBSCAN, no 2-D
+    # distortion), then report cluster-vs-metadata enrichment and hierarchical zoom.
+    max_samples: 20_000              # Maximum embeddings to cluster
+    random_state: 42
+    normalize: true                  # L2-normalise rows (cosine geometry)
+    # EVōC hyperparameters (forwarded to evoc.EVoC; empty = library defaults)
+    evoc_params: {}
+    # Hierarchical zoom cascade — level coloring is DATA-DRIVEN (max-NMI field per split)
+    enable_zoom_cascade: true
+    zoom_candidate_fields:           # pool the per-level selector may choose from
+      - frag_type
+      - search_detector
+      - precursor_charge
+      - search_instrument
+      - search_organism
+      - modification_types
+    zoom_depth: 4                    # Max levels to descend (root -> largest child)
+    n_resolution_layers: 4           # Panels in the multi-resolution layer figure
+    silhouette_max_samples: 5_000    # Cap for O(n^2) silhouette score
+    dpi: 200
+
+  glassboxattributiontask:
+    # Fit Glass Box UMAP on interpretable chemical descriptors (NOT the 768-d vectors) to
+    # get exact per-feature contributions; overlay EVōC clusters and render the usual
+    # metadata-colored views on the Glass Box embedding. Requires the 'glassbox' extra.
+    max_samples: 20_000
+    random_state: 42
+    normalize: true                  # L2-normalise embeddings for the EVōC bridge
+    create_metadata_views: true      # Also render the full metadata-colored set (glassbox_figs/metadata_views)
+    glassbox_params:
+      n_neighbors: 30
+      min_dist: 0.1
+      n_components: 2
+      epochs: 200                    # Glass Box training epochs (lower = faster, less faithful)
+    evoc_params: {}
+    dpi: 200

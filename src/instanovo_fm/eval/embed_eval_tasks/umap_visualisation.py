@@ -694,7 +694,7 @@ class UMAPVisualisationTask(BaseTask):
         """
         # Use full colormap (not truncated to len(labels)) so colors stay saturated
         n_fg = max(1, len(labels) - len(background_indices))
-        cmap_obj = plt.cm.get_cmap(cmap_name, max(n_fg, 8))
+        cmap_obj = plt.get_cmap(cmap_name).resampled(max(n_fg, 8))
         handles: List[plt.Artist] = []
 
         # Background layer first (gray, lower alpha)

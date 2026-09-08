@@ -143,9 +143,9 @@ def _load_eval_task_configs(config_name: str) -> Dict[str, Dict[str, Any]]:
     """
     from omegaconf import OmegaConf
 
-    import instanovo
+    from instanovo_fm.utils.hydra_config import FM_CONFIG_DIR
 
-    cfg_path = Path(instanovo.__file__).parent / "configs" / "evaluation" / f"{config_name}.yaml"
+    cfg_path = FM_CONFIG_DIR / "evaluation" / f"{config_name}.yaml"
     if not cfg_path.exists():
         raise FileNotFoundError(f"Evaluation config not found: {cfg_path}")
     cfg = OmegaConf.load(cfg_path)
@@ -175,9 +175,9 @@ def _load_dataset_paths(dataset_name: str) -> Dict[str, Optional[str]]:
     """
     from omegaconf import OmegaConf
 
-    import instanovo
+    from instanovo_fm.utils.hydra_config import FM_CONFIG_DIR
 
-    cfg_path = Path(instanovo.__file__).parent / "configs" / "dataset" / f"{dataset_name}.yaml"
+    cfg_path = FM_CONFIG_DIR / "dataset" / f"{dataset_name}.yaml"
     if not cfg_path.exists():
         raise FileNotFoundError(f"Dataset config not found: {cfg_path}")
     cfg = OmegaConf.load(cfg_path)
@@ -205,9 +205,9 @@ def _load_foundation_max_mz(config_name: str = "foundation_base") -> float:
     """
     from omegaconf import OmegaConf
 
-    import instanovo
+    from instanovo_fm.utils.hydra_config import FM_CONFIG_DIR
 
-    cfg_path = Path(instanovo.__file__).parent / "configs" / "model" / f"{config_name}.yaml"
+    cfg_path = FM_CONFIG_DIR / "model" / f"{config_name}.yaml"
     if not cfg_path.exists():
         raise FileNotFoundError(f"Model config not found: {cfg_path}")
     cfg = OmegaConf.load(cfg_path)

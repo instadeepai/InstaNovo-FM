@@ -124,7 +124,7 @@ class GlassBoxAttributionTask(BaseTask):
             if noise.any():
                 ax.scatter(emb2d[noise, 0], emb2d[noise, 1], c="lightgray", s=self.point_size, alpha=0.4, edgecolors="none")
             uniq = [c for c in np.unique(labels) if c >= 0]
-            cmap = plt.cm.get_cmap("tab20", max(len(uniq), 1))
+            cmap = plt.get_cmap("tab20").resampled(max(len(uniq), 1))
             for i, c in enumerate(uniq):
                 m = labels == c
                 ax.scatter(emb2d[m, 0], emb2d[m, 1], c=[cmap(i % cmap.N)], s=self.point_size, alpha=self.alpha, edgecolors="none")

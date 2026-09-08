@@ -1,0 +1,3254 @@
+{
+  "spectrum": {
+    "_spec_idx": 13,
+    "sequence": "KIEGNLIFDPNNYLPK",
+    "precursor_charge": 3,
+    "precursor_mass": 1874.0009381132813,
+    "n_peaks": 200,
+    "n_annotated_visible": 55,
+    "instrument": "Orbitrap Fusion",
+    "fragmentation": "HCD",
+    "acquisition": "DDA",
+    "collision_energy": null,
+    "modifications": "Unmodified",
+    "quality": {
+      "backbone_coverage": 0.9333333333333333,
+      "n_fragment_groups": 20,
+      "n_cleavage_sites": 14
+    }
+  },
+  "masked_group": {
+    "group_key": "y6+",
+    "ion_type": "y",
+    "base_mz": 748.4070211648941,
+    "base_idx": 177,
+    "n_peaks": 2,
+    "peak_indices": [
+      177,
+      178
+    ],
+    "peak_annotations": [
+      "y6+",
+      "y6+[+1]"
+    ],
+    "peak_mz": [
+      748.4070211648941,
+      749.3969053030014
+    ],
+    "peak_intensity": [
+      0.0810321792960167,
+      0.04595933482050896
+    ],
+    "rank_position": 177
+  },
+  "sequence_context": {
+    "peptide_length": 16,
+    "cleavage_position": 11,
+    "cleavage_left_residue": "P",
+    "cleavage_right_residue": "N",
+    "residues_spanned": "NNYLPK",
+    "expected_ladder_left": {
+      "annotation": "y5+",
+      "expected_mz": 634.3641,
+      "gap_residue": "N",
+      "gap_mass": 114.0429
+    },
+    "expected_ladder_right": {
+      "annotation": "y7+",
+      "expected_mz": 845.4598,
+      "gap_residue": "P",
+      "gap_mass": 97.0528
+    },
+    "expected_complementary": {
+      "annotation": "b10+",
+      "expected_mz_z1": 1127.6085,
+      "expected_mz_z2": 564.3079,
+      "expected_mz_z3": 376.541
+    }
+  },
+  "charge_state_variants": [
+    {
+      "annotation": "y6+++ (inferred)",
+      "charge_state": 3,
+      "mz": 250.11876598000526,
+      "expected_mz": 250.1405,
+      "attribution_for_this_group": 0.010719993151724339,
+      "rank_distance": 105
+    }
+  ],
+  "prediction": {
+    "bin_correct": false,
+    "group_bin_accuracy": 0.0,
+    "base_predicted_mz": 748.2999877929688,
+    "base_true_mz": 748.4070211648941,
+    "base_error_da": 0.107033371925354,
+    "mean_log_prob": -0.6291291886154795,
+    "per_peak": [
+      {
+        "annotation": "y6+",
+        "true_mz": 748.4070211648941,
+        "predicted_mz": 748.2999877929688,
+        "correct_bin": false,
+        "log_prob": -0.6874329401471186,
+        "correct_bin_rank": 1,
+        "predicted_group_bin": 69,
+        "predicted_offset_bin": 41,
+        "true_group_bin": 69,
+        "true_offset_bin": 42,
+        "group_bin_distance": 0,
+        "top5_candidates": [
+          {
+            "group_bin": 69,
+            "offset_bin": 41,
+            "mz": 748.2999877929688,
+            "log_prob": -0.6874329401471186
+          },
+          {
+            "group_bin": 68,
+            "offset_bin": 41,
+            "mz": 738.2999877929688,
+            "log_prob": -10.554665386676788
+          },
+          {
+            "group_bin": 71,
+            "offset_bin": 41,
+            "mz": 768.2999877929688,
+            "log_prob": -11.115296185016632
+          },
+          {
+            "group_bin": 70,
+            "offset_bin": 41,
+            "mz": 758.2999877929688,
+            "log_prob": -11.863782703876495
+          },
+          {
+            "group_bin": 67,
+            "offset_bin": 41,
+            "mz": 728.2999877929688,
+            "log_prob": -15.294173061847687
+          }
+        ]
+      },
+      {
+        "annotation": "y6+[+1]",
+        "true_mz": 749.3969053030014,
+        "predicted_mz": 749.5,
+        "correct_bin": false,
+        "log_prob": -0.5708254370838404,
+        "correct_bin_rank": 1,
+        "predicted_group_bin": 69,
+        "predicted_offset_bin": 47,
+        "true_group_bin": 69,
+        "true_offset_bin": 46,
+        "group_bin_distance": 0,
+        "top5_candidates": [
+          {
+            "group_bin": 69,
+            "offset_bin": 47,
+            "mz": 749.5,
+            "log_prob": -0.5708254370838404
+          },
+          {
+            "group_bin": 70,
+            "offset_bin": 47,
+            "mz": 759.5,
+            "log_prob": -4.768958806991577
+          },
+          {
+            "group_bin": 71,
+            "offset_bin": 47,
+            "mz": 769.5,
+            "log_prob": -8.31673789024353
+          },
+          {
+            "group_bin": 68,
+            "offset_bin": 47,
+            "mz": 739.5,
+            "log_prob": -8.360339403152466
+          },
+          {
+            "group_bin": 76,
+            "offset_bin": 47,
+            "mz": 819.5,
+            "log_prob": -11.989534616470337
+          }
+        ]
+      }
+    ]
+  },
+  "attribution": {
+    "convergence_delta": 1.030646800994873,
+    "top1_category": "ladder_neighbor",
+    "top1_annotation": "y7++",
+    "ladder_neighbors_present": 3,
+    "ladder_neighbors_in_top5": 3,
+    "ladder_best_rank": 1,
+    "top5_concentration": 0.2084527313709259,
+    "top10_concentration": 0.33386197686195374,
+    "gini": 0.6282149287669354,
+    "ranked_groups": [
+      {
+        "rank": 1,
+        "annotation": "y7+",
+        "mz": 845.4523235559464,
+        "category": "ladder_neighbor",
+        "attribution_for_this_group": 0.612476259469986,
+        "is_group": true,
+        "rank_distance": 11,
+        "gap_da": 97.0453,
+        "gap_residues": "P",
+        "resolved_by": "sequence",
+        "gap_residue": "P",
+        "gap_residue_mass": 97.05276
+      },
+      {
+        "rank": 2,
+        "annotation": "y7++",
+        "mz": 423.2301190495491,
+        "category": "ladder_neighbor",
+        "attribution_for_this_group": 0.5246942266821861,
+        "is_group": true,
+        "rank_distance": 68,
+        "gap_da": 325.1769,
+        "gap_residues": "P",
+        "resolved_by": "sequence",
+        "gap_residue": "P",
+        "gap_residue_mass": 97.05276
+      },
+      {
+        "rank": 3,
+        "annotation": "y5+",
+        "mz": 634.35398042202,
+        "category": "ladder_neighbor",
+        "attribution_for_this_group": 0.4598941057920456,
+        "is_group": true,
+        "rank_distance": 12,
+        "gap_da": 114.053,
+        "gap_residues": "N",
+        "resolved_by": "sequence",
+        "gap_residue": "N",
+        "gap_residue_mass": 114.04293
+      },
+      {
+        "rank": 4,
+        "annotation": "b6+",
+        "mz": 655.3786993026733,
+        "category": "opposite_series",
+        "attribution_for_this_group": 0.4232107996940613,
+        "is_group": true,
+        "rank_distance": 10
+      },
+      {
+        "rank": 5,
+        "annotation": "a6+",
+        "mz": 627.383291721344,
+        "category": "other_annotated",
+        "attribution_for_this_group": 0.2915329337120056,
+        "is_group": true,
+        "rank_distance": 15
+      },
+      {
+        "rank": 6,
+        "annotation": "y2+",
+        "mz": 244.16573345661163,
+        "category": "distant_same_series",
+        "attribution_for_this_group": 0.21533146500587463,
+        "is_group": true,
+        "rank_distance": 108
+      },
+      {
+        "rank": 7,
+        "annotation": "y9+",
+        "mz": 1107.5418442487717,
+        "category": "near_ladder",
+        "attribution_for_this_group": 0.20643500238656998,
+        "is_group": true,
+        "rank_distance": 21,
+        "gap_da": 359.1348,
+        "gap_residues": "FDP",
+        "resolved_by": "sequence"
+      },
+      {
+        "rank": 8,
+        "annotation": "m/z=604.24",
+        "mz": 604.2355298995972,
+        "category": "internal_fragment",
+        "attribution_for_this_group": 0.16185545921325684,
+        "is_group": false,
+        "rank_distance": 23,
+        "novel_chemistry_matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,9-13,DPNNY)",
+            "expected_mz": 604.23617,
+            "error_da": 0.00064,
+            "error_ppm": 1.05,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "rank": 9,
+        "annotation": "y1+",
+        "mz": 147.1130084246397,
+        "category": "distant_same_series",
+        "attribution_for_this_group": 0.12254881113767624,
+        "is_group": true,
+        "rank_distance": 162
+      },
+      {
+        "rank": 10,
+        "annotation": "m/z=751.30",
+        "mz": 751.3035833835602,
+        "category": "internal_fragment",
+        "attribution_for_this_group": 0.1170419231057167,
+        "is_group": false,
+        "rank_distance": 2,
+        "novel_chemistry_matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,8-13,FDPNNY)",
+            "expected_mz": 751.30458,
+            "error_da": 0.00099,
+            "error_ppm": 1.32,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "rank": 11,
+        "annotation": "m/z=489.21",
+        "mz": 489.2101138830185,
+        "category": "internal_fragment",
+        "attribution_for_this_group": 0.10112438350915909,
+        "is_group": false,
+        "rank_distance": 54,
+        "novel_chemistry_matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,10-13,PNNY)",
+            "expected_mz": 489.20923,
+            "error_da": 0.00089,
+            "error_ppm": 1.81,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "rank": 12,
+        "annotation": "b7+",
+        "mz": 768.4651762247086,
+        "category": "opposite_series",
+        "attribution_for_this_group": 0.09944711625576019,
+        "is_group": true,
+        "rank_distance": 7
+      },
+      {
+        "rank": 13,
+        "annotation": "y8+",
+        "mz": 960.4813903570175,
+        "category": "near_ladder",
+        "attribution_for_this_group": 0.09871435910463333,
+        "is_group": true,
+        "rank_distance": 17,
+        "gap_da": 212.0744,
+        "gap_residues": "DP",
+        "resolved_by": "sequence"
+      },
+      {
+        "rank": 14,
+        "annotation": "custom:immonium_Phe@120.0810",
+        "mz": 120.08103542029858,
+        "category": "other_annotated",
+        "attribution_for_this_group": 0.09540857374668121,
+        "is_group": true,
+        "rank_distance": 173
+      },
+      {
+        "rank": 15,
+        "annotation": "m/z=587.22",
+        "mz": 587.2153863310814,
+        "category": "unannotated",
+        "attribution_for_this_group": 0.08872552961111069,
+        "is_group": false,
+        "rank_distance": 28
+      }
+    ]
+  },
+  "visible_peaks": [
+    {
+      "peak_idx": 109,
+      "mz": 423.2301190495491,
+      "intensity": 0.1316128820180893,
+      "annotation": "y7++",
+      "attribution_for_this_group": 0.32751667499542236,
+      "confidence": 0.6652366518974304,
+      "rank_position": 109,
+      "rank_distance": 68
+    },
+    {
+      "peak_idx": 188,
+      "mz": 845.4523235559464,
+      "intensity": 0.17110563814640045,
+      "annotation": "y7+",
+      "attribution_for_this_group": 0.3208831250667572,
+      "confidence": 0.9621849656105042,
+      "rank_position": 188,
+      "rank_distance": 11
+    },
+    {
+      "peak_idx": 189,
+      "mz": 846.4545011520386,
+      "intensity": 0.10951968282461166,
+      "annotation": "y7+[+1]",
+      "attribution_for_this_group": 0.29159313440322876,
+      "confidence": 0.6905916929244995,
+      "rank_position": 189,
+      "rank_distance": 12
+    },
+    {
+      "peak_idx": 167,
+      "mz": 638.3555382490158,
+      "intensity": 0.13224925100803375,
+      "annotation": "b6+-NH3",
+      "attribution_for_this_group": 0.26255685091018677,
+      "confidence": 0.582145094871521,
+      "rank_position": 167,
+      "rank_distance": 10
+    },
+    {
+      "peak_idx": 69,
+      "mz": 244.16573345661163,
+      "intensity": 0.20914700627326965,
+      "annotation": "y2+",
+      "attribution_for_this_group": 0.21533146500587463,
+      "confidence": 0.9988740682601929,
+      "rank_position": 69,
+      "rank_distance": 108
+    },
+    {
+      "peak_idx": 165,
+      "mz": 635.3532522916794,
+      "intensity": 0.05290732532739639,
+      "annotation": "y5+[+1]",
+      "attribution_for_this_group": 0.19880014657974243,
+      "confidence": 0.09907984733581543,
+      "rank_position": 165,
+      "rank_distance": 12
+    },
+    {
+      "peak_idx": 162,
+      "mz": 627.383291721344,
+      "intensity": 0.14045222103595734,
+      "annotation": "a6+",
+      "attribution_for_this_group": 0.1677502542734146,
+      "confidence": 0.7517759799957275,
+      "rank_position": 162,
+      "rank_distance": 15
+    },
+    {
+      "peak_idx": 198,
+      "mz": 1107.5418442487717,
+      "intensity": 0.0765761286020279,
+      "annotation": "y9+",
+      "attribution_for_this_group": 0.16396526992321014,
+      "confidence": 0.35768139362335205,
+      "rank_position": 198,
+      "rank_distance": 21
+    },
+    {
+      "peak_idx": 154,
+      "mz": 604.2355298995972,
+      "intensity": 0.08832050859928131,
+      "annotation": null,
+      "attribution_for_this_group": 0.16185545921325684,
+      "confidence": 0.7543719410896301,
+      "rank_position": 154,
+      "rank_distance": 23
+    },
+    {
+      "peak_idx": 170,
+      "mz": 655.3786993026733,
+      "intensity": 0.23119816184043884,
+      "annotation": "b6+",
+      "attribution_for_this_group": 0.1606539487838745,
+      "confidence": 0.995843231678009,
+      "rank_position": 170,
+      "rank_distance": 7
+    },
+    {
+      "peak_idx": 164,
+      "mz": 634.35398042202,
+      "intensity": 0.0656774491071701,
+      "annotation": "y5+",
+      "attribution_for_this_group": 0.1186373308300972,
+      "confidence": 0.12425252795219421,
+      "rank_position": 164,
+      "rank_distance": 13
+    },
+    {
+      "peak_idx": 179,
+      "mz": 751.3035833835602,
+      "intensity": 0.07361175864934921,
+      "annotation": null,
+      "attribution_for_this_group": 0.1170419231057167,
+      "confidence": 0.12651515007019043,
+      "rank_position": 179,
+      "rank_distance": 2
+    },
+    {
+      "peak_idx": 123,
+      "mz": 489.2101138830185,
+      "intensity": 0.1544709950685501,
+      "annotation": null,
+      "attribution_for_this_group": 0.10112438350915909,
+      "confidence": 0.9114252924919128,
+      "rank_position": 123,
+      "rank_distance": 54
+    },
+    {
+      "peak_idx": 110,
+      "mz": 423.73161762952805,
+      "intensity": 0.07179619371891022,
+      "annotation": "y7++[+1]",
+      "attribution_for_this_group": 0.10053882002830505,
+      "confidence": 0.5079696178436279,
+      "rank_position": 110,
+      "rank_distance": 67
+    },
+    {
+      "peak_idx": 184,
+      "mz": 768.4651762247086,
+      "intensity": 0.12154023349285126,
+      "annotation": "b7+",
+      "attribution_for_this_group": 0.09944711625576019,
+      "confidence": 0.7563695907592773,
+      "rank_position": 184,
+      "rank_distance": 7
+    },
+    {
+      "peak_idx": 166,
+      "mz": 637.3696029186249,
+      "intensity": 0.06300490349531174,
+      "annotation": "y5+[+3]",
+      "attribution_for_this_group": 0.09888255596160889,
+      "confidence": 0.24926725029945374,
+      "rank_position": 166,
+      "rank_distance": 11
+    },
+    {
+      "peak_idx": 194,
+      "mz": 960.4813903570175,
+      "intensity": 0.07188396900892258,
+      "annotation": "y8+",
+      "attribution_for_this_group": 0.09871435910463333,
+      "confidence": 0.6420053839683533,
+      "rank_position": 194,
+      "rank_distance": 17
+    },
+    {
+      "peak_idx": 106,
+      "mz": 414.71797972917557,
+      "intensity": 0.05445019155740738,
+      "annotation": "y7++-NH3",
+      "attribution_for_this_group": 0.09663873165845871,
+      "confidence": 0.38847339153289795,
+      "rank_position": 106,
+      "rank_distance": 71
+    },
+    {
+      "peak_idx": 4,
+      "mz": 120.08103542029858,
+      "intensity": 0.2268032431602478,
+      "annotation": "custom:immonium_Phe@120.0810",
+      "attribution_for_this_group": 0.09540857374668121,
+      "confidence": 0.999742329120636,
+      "rank_position": 4,
+      "rank_distance": 173
+    },
+    {
+      "peak_idx": 149,
+      "mz": 587.2153863310814,
+      "intensity": 0.045812416821718216,
+      "annotation": null,
+      "attribution_for_this_group": 0.08872552961111069,
+      "confidence": 0.13009433448314667,
+      "rank_position": 149,
+      "rank_distance": 28
+    },
+    {
+      "peak_idx": 124,
+      "mz": 490.20789563655853,
+      "intensity": 0.0539994090795517,
+      "annotation": null,
+      "attribution_for_this_group": 0.08830124884843826,
+      "confidence": 0.6052786111831665,
+      "rank_position": 124,
+      "rank_distance": 53
+    },
+    {
+      "peak_idx": 148,
+      "mz": 585.2657556533813,
+      "intensity": 0.07914219051599503,
+      "annotation": null,
+      "attribution_for_this_group": 0.08721467852592468,
+      "confidence": 0.4302029311656952,
+      "rank_position": 148,
+      "rank_distance": 29
+    },
+    {
+      "peak_idx": 15,
+      "mz": 147.1130084246397,
+      "intensity": 0.12735070288181305,
+      "annotation": "y1+",
+      "attribution_for_this_group": 0.08533471077680588,
+      "confidence": 0.9999023675918579,
+      "rank_position": 15,
+      "rank_distance": 162
+    },
+    {
+      "peak_idx": 132,
+      "mz": 520.3118175268173,
+      "intensity": 0.06345779448747635,
+      "annotation": "y4+",
+      "attribution_for_this_group": 0.08446992933750153,
+      "confidence": 0.3285108506679535,
+      "rank_position": 132,
+      "rank_distance": 45
+    },
+    {
+      "peak_idx": 197,
+      "mz": 1061.8856549263,
+      "intensity": 0.03873061388731003,
+      "annotation": null,
+      "attribution_for_this_group": 0.08446045964956284,
+      "confidence": 0.04736792668700218,
+      "rank_position": 197,
+      "rank_distance": 20
+    },
+    {
+      "peak_idx": 157,
+      "mz": 610.3548035025597,
+      "intensity": 0.079954594373703,
+      "annotation": "a6+-NH3",
+      "attribution_for_this_group": 0.08441101759672165,
+      "confidence": 0.7137986421585083,
+      "rank_position": 157,
+      "rank_distance": 20
+    },
+    {
+      "peak_idx": 175,
+      "mz": 723.4430313110352,
+      "intensity": 0.04510493949055672,
+      "annotation": "a7+-NH3",
+      "attribution_for_this_group": 0.06812090426683426,
+      "confidence": 0.6344572901725769,
+      "rank_position": 175,
+      "rank_distance": 2
+    },
+    {
+      "peak_idx": 158,
+      "mz": 611.3561987876892,
+      "intensity": 0.04265005514025688,
+      "annotation": null,
+      "attribution_for_this_group": 0.06627773493528366,
+      "confidence": 0.49024903774261475,
+      "rank_position": 158,
+      "rank_distance": 19
+    },
+    {
+      "peak_idx": 133,
+      "mz": 525.2680554986,
+      "intensity": 0.14979997277259827,
+      "annotation": "b5+-NH3",
+      "attribution_for_this_group": 0.06253927201032639,
+      "confidence": 0.7435657382011414,
+      "rank_position": 133,
+      "rank_distance": 44
+    },
+    {
+      "peak_idx": 153,
+      "mz": 603.2927334308624,
+      "intensity": 0.05733497068285942,
+      "annotation": null,
+      "attribution_for_this_group": 0.059548310935497284,
+      "confidence": 0.19154007732868195,
+      "rank_position": 153,
+      "rank_distance": 24
+    },
+    {
+      "peak_idx": 190,
+      "mz": 847.3783731460571,
+      "intensity": 0.039556488394737244,
+      "annotation": null,
+      "attribution_for_this_group": 0.054354872554540634,
+      "confidence": 0.10358316451311111,
+      "rank_position": 190,
+      "rank_distance": 13
+    },
+    {
+      "peak_idx": 192,
+      "mz": 865.3869479894638,
+      "intensity": 0.04640460014343262,
+      "annotation": null,
+      "attribution_for_this_group": 0.0533335879445076,
+      "confidence": 0.14891572296619415,
+      "rank_position": 192,
+      "rank_distance": 15
+    },
+    {
+      "peak_idx": 105,
+      "mz": 414.1978546977043,
+      "intensity": 0.11221130937337875,
+      "annotation": null,
+      "attribution_for_this_group": 0.050541169941425323,
+      "confidence": 0.6176323294639587,
+      "rank_position": 105,
+      "rank_distance": 72
+    },
+    {
+      "peak_idx": 114,
+      "mz": 442.3156753182411,
+      "intensity": 0.03688184544444084,
+      "annotation": null,
+      "attribution_for_this_group": 0.050008200109004974,
+      "confidence": 0.07546857744455338,
+      "rank_position": 114,
+      "rank_distance": 63
+    },
+    {
+      "peak_idx": 181,
+      "mz": 752.3086667060852,
+      "intensity": 0.051002949476242065,
+      "annotation": null,
+      "attribution_for_this_group": 0.0498221181333065,
+      "confidence": 0.1385228931903839,
+      "rank_position": 181,
+      "rank_distance": 4
+    },
+    {
+      "peak_idx": 196,
+      "mz": 1030.5546969175339,
+      "intensity": 0.07141855359077454,
+      "annotation": "b9+",
+      "attribution_for_this_group": 0.0485917404294014,
+      "confidence": 0.7499645352363586,
+      "rank_position": 196,
+      "rank_distance": 19
+    },
+    {
+      "peak_idx": 31,
+      "mz": 178.23250964283943,
+      "intensity": 0.06922256201505661,
+      "annotation": null,
+      "attribution_for_this_group": 0.04758879914879799,
+      "confidence": 0.34270769357681274,
+      "rank_position": 31,
+      "rank_distance": 146
+    },
+    {
+      "peak_idx": 159,
+      "mz": 617.3243373632431,
+      "intensity": 0.03870349004864693,
+      "annotation": "y5+-NH3",
+      "attribution_for_this_group": 0.043574072420597076,
+      "confidence": 0.10593558102846146,
+      "rank_position": 159,
+      "rank_distance": 18
+    },
+    {
+      "peak_idx": 174,
+      "mz": 717.3226028680801,
+      "intensity": 0.07699345052242279,
+      "annotation": null,
+      "attribution_for_this_group": 0.04321719706058502,
+      "confidence": 0.5140122771263123,
+      "rank_position": 174,
+      "rank_distance": 3
+    },
+    {
+      "peak_idx": 155,
+      "mz": 605.233870446682,
+      "intensity": 0.04760695621371269,
+      "annotation": null,
+      "attribution_for_this_group": 0.04278339818120003,
+      "confidence": 0.49589061737060547,
+      "rank_position": 155,
+      "rank_distance": 22
+    },
+    {
+      "peak_idx": 172,
+      "mz": 697.3943114280701,
+      "intensity": 0.03995135799050331,
+      "annotation": null,
+      "attribution_for_this_group": 0.04250650107860565,
+      "confidence": 0.047468289732933044,
+      "rank_position": 172,
+      "rank_distance": 5
+    },
+    {
+      "peak_idx": 199,
+      "mz": 1108.5471510887146,
+      "intensity": 0.054138101637363434,
+      "annotation": "y9+[+1]",
+      "attribution_for_this_group": 0.04246973246335983,
+      "confidence": 0.1881258487701416,
+      "rank_position": 199,
+      "rank_distance": 22
+    },
+    {
+      "peak_idx": 121,
+      "mz": 480.2461713552475,
+      "intensity": 0.051428161561489105,
+      "annotation": null,
+      "attribution_for_this_group": 0.04092995822429657,
+      "confidence": 0.1354217380285263,
+      "rank_position": 121,
+      "rank_distance": 56
+    },
+    {
+      "peak_idx": 152,
+      "mz": 602.2925302386284,
+      "intensity": 0.11317048221826553,
+      "annotation": null,
+      "attribution_for_this_group": 0.0406898632645607,
+      "confidence": 0.40766143798828125,
+      "rank_position": 152,
+      "rank_distance": 25
+    },
+    {
+      "peak_idx": 169,
+      "mz": 655.2532315254211,
+      "intensity": 0.051291413605213165,
+      "annotation": null,
+      "attribution_for_this_group": 0.04036865383386612,
+      "confidence": 0.4176972806453705,
+      "rank_position": 169,
+      "rank_distance": 8
+    },
+    {
+      "peak_idx": 163,
+      "mz": 628.3847987651825,
+      "intensity": 0.07605969160795212,
+      "annotation": "a6+[+1]",
+      "attribution_for_this_group": 0.039371661841869354,
+      "confidence": 0.4335103929042816,
+      "rank_position": 163,
+      "rank_distance": 14
+    },
+    {
+      "peak_idx": 117,
+      "mz": 461.2153396010399,
+      "intensity": 0.10812252014875412,
+      "annotation": null,
+      "attribution_for_this_group": 0.03918018564581871,
+      "confidence": 0.7863098978996277,
+      "rank_position": 117,
+      "rank_distance": 60
+    },
+    {
+      "peak_idx": 16,
+      "mz": 148.1163315474987,
+      "intensity": 0.034132082015275955,
+      "annotation": "y1+[+1]",
+      "attribution_for_this_group": 0.03721410036087036,
+      "confidence": 0.04297974333167076,
+      "rank_position": 16,
+      "rank_distance": 161
+    },
+    {
+      "peak_idx": 95,
+      "mz": 357.25027322769165,
+      "intensity": 0.08623355627059937,
+      "annotation": "y3+",
+      "attribution_for_this_group": 0.03702342137694359,
+      "confidence": 0.566631019115448,
+      "rank_position": 95,
+      "rank_distance": 82
+    },
+    {
+      "peak_idx": 66,
+      "mz": 242.1519160270691,
+      "intensity": 0.035400647670030594,
+      "annotation": null,
+      "attribution_for_this_group": 0.036447811871767044,
+      "confidence": 0.028282631188631058,
+      "rank_position": 66,
+      "rank_distance": 111
+    },
+    {
+      "peak_idx": 30,
+      "mz": 178.21241170167923,
+      "intensity": 0.0801306739449501,
+      "annotation": null,
+      "attribution_for_this_group": 0.03609982505440712,
+      "confidence": 0.3961198329925537,
+      "rank_position": 30,
+      "rank_distance": 147
+    },
+    {
+      "peak_idx": 83,
+      "mz": 284.08342972397804,
+      "intensity": 0.03564867004752159,
+      "annotation": null,
+      "attribution_for_this_group": 0.03539165109395981,
+      "confidence": 0.06235233694314957,
+      "rank_position": 83,
+      "rank_distance": 94
+    },
+    {
+      "peak_idx": 193,
+      "mz": 905.4955095052719,
+      "intensity": 0.042440369725227356,
+      "annotation": null,
+      "attribution_for_this_group": 0.033456239849328995,
+      "confidence": 0.43305566906929016,
+      "rank_position": 193,
+      "rank_distance": 16
+    },
+    {
+      "peak_idx": 173,
+      "mz": 700.3127038478851,
+      "intensity": 0.04191312938928604,
+      "annotation": null,
+      "attribution_for_this_group": 0.032935723662376404,
+      "confidence": 0.09103328734636307,
+      "rank_position": 173,
+      "rank_distance": 4
+    },
+    {
+      "peak_idx": 75,
+      "mz": 260.1965330541134,
+      "intensity": 0.05404362827539444,
+      "annotation": null,
+      "attribution_for_this_group": 0.032060276716947556,
+      "confidence": 0.13171787559986115,
+      "rank_position": 75,
+      "rank_distance": 102
+    },
+    {
+      "peak_idx": 186,
+      "mz": 785.4397594928741,
+      "intensity": 0.041633158922195435,
+      "annotation": null,
+      "attribution_for_this_group": 0.031235428526997566,
+      "confidence": 0.14343556761741638,
+      "rank_position": 186,
+      "rank_distance": 9
+    },
+    {
+      "peak_idx": 33,
+      "mz": 183.14888700842857,
+      "intensity": 0.04537118226289749,
+      "annotation": null,
+      "attribution_for_this_group": 0.03121066279709339,
+      "confidence": 0.3646424114704132,
+      "rank_position": 33,
+      "rank_distance": 144
+    },
+    {
+      "peak_idx": 58,
+      "mz": 227.17522457242012,
+      "intensity": 0.056546736508607864,
+      "annotation": null,
+      "attribution_for_this_group": 0.031168121844530106,
+      "confidence": 0.14079256355762482,
+      "rank_position": 58,
+      "rank_distance": 119
+    },
+    {
+      "peak_idx": 80,
+      "mz": 278.1159617006779,
+      "intensity": 0.046556878834962845,
+      "annotation": null,
+      "attribution_for_this_group": 0.030926041305065155,
+      "confidence": 0.5030732154846191,
+      "rank_position": 80,
+      "rank_distance": 97
+    },
+    {
+      "peak_idx": 9,
+      "mz": 130.08669950067997,
+      "intensity": 0.09291061758995056,
+      "annotation": "y1+-NH3",
+      "attribution_for_this_group": 0.030483616515994072,
+      "confidence": 0.9990549087524414,
+      "rank_position": 9,
+      "rank_distance": 168
+    },
+    {
+      "peak_idx": 52,
+      "mz": 212.10338920354843,
+      "intensity": 0.1059318482875824,
+      "annotation": null,
+      "attribution_for_this_group": 0.030322879552841187,
+      "confidence": 0.7653319835662842,
+      "rank_position": 52,
+      "rank_distance": 125
+    },
+    {
+      "peak_idx": 180,
+      "mz": 751.4390349388123,
+      "intensity": 0.057800427079200745,
+      "annotation": "b7+-NH3",
+      "attribution_for_this_group": 0.029434945434331894,
+      "confidence": 0.13433493673801422,
+      "rank_position": 180,
+      "rank_distance": 3
+    },
+    {
+      "peak_idx": 160,
+      "mz": 625.3788620233536,
+      "intensity": 0.052975572645664215,
+      "annotation": null,
+      "attribution_for_this_group": 0.029433920979499817,
+      "confidence": 0.14623072743415833,
+      "rank_position": 160,
+      "rank_distance": 17
+    },
+    {
+      "peak_idx": 187,
+      "mz": 828.4274488687515,
+      "intensity": 0.04513063281774521,
+      "annotation": "y7+-NH3",
+      "attribution_for_this_group": 0.028819143772125244,
+      "confidence": 0.3659633994102478,
+      "rank_position": 187,
+      "rank_distance": 10
+    },
+    {
+      "peak_idx": 0,
+      "mz": 102.05504484474659,
+      "intensity": 0.03641374036669731,
+      "annotation": "custom:immonium_Glu@102.0550",
+      "attribution_for_this_group": 0.028566667810082436,
+      "confidence": 0.3870947062969208,
+      "rank_position": 0,
+      "rank_distance": 177
+    },
+    {
+      "peak_idx": 38,
+      "mz": 186.12390384078026,
+      "intensity": 0.0385160855948925,
+      "annotation": null,
+      "attribution_for_this_group": 0.028430625796318054,
+      "confidence": 0.23498976230621338,
+      "rank_position": 38,
+      "rank_distance": 139
+    },
+    {
+      "peak_idx": 113,
+      "mz": 441.1735385656357,
+      "intensity": 0.06159336864948273,
+      "annotation": null,
+      "attribution_for_this_group": 0.028166281059384346,
+      "confidence": 0.5140259861946106,
+      "rank_position": 113,
+      "rank_distance": 64
+    },
+    {
+      "peak_idx": 99,
+      "mz": 371.2320700287819,
+      "intensity": 0.056305207312107086,
+      "annotation": "b3+",
+      "attribution_for_this_group": 0.02806403860449791,
+      "confidence": 0.6807289123535156,
+      "rank_position": 99,
+      "rank_distance": 78
+    },
+    {
+      "peak_idx": 10,
+      "mz": 130.10510243475437,
+      "intensity": 0.042595274746418,
+      "annotation": "custom:related_K_129@129.1024[+1]",
+      "attribution_for_this_group": 0.027764104306697845,
+      "confidence": 0.5554729104042053,
+      "rank_position": 10,
+      "rank_distance": 167
+    },
+    {
+      "peak_idx": 8,
+      "mz": 129.1024312376976,
+      "intensity": 0.20012381672859192,
+      "annotation": "y1+-H2O",
+      "attribution_for_this_group": 0.027748065069317818,
+      "confidence": 0.9979488253593445,
+      "rank_position": 8,
+      "rank_distance": 169
+    },
+    {
+      "peak_idx": 77,
+      "mz": 263.1019242107868,
+      "intensity": 0.09369475394487381,
+      "annotation": null,
+      "attribution_for_this_group": 0.027591627091169357,
+      "confidence": 0.4272248148918152,
+      "rank_position": 77,
+      "rank_distance": 100
+    },
+    {
+      "peak_idx": 98,
+      "mz": 369.1759705543518,
+      "intensity": 0.045215338468551636,
+      "annotation": null,
+      "attribution_for_this_group": 0.027509473264217377,
+      "confidence": 0.06562618911266327,
+      "rank_position": 98,
+      "rank_distance": 79
+    },
+    {
+      "peak_idx": 46,
+      "mz": 199.10816103219986,
+      "intensity": 0.03941163793206215,
+      "annotation": null,
+      "attribution_for_this_group": 0.02742430381476879,
+      "confidence": 0.41404595971107483,
+      "rank_position": 46,
+      "rank_distance": 131
+    },
+    {
+      "peak_idx": 2,
+      "mz": 112.07586154341698,
+      "intensity": 0.054078537970781326,
+      "annotation": "custom:related_K_112@112.0759",
+      "attribution_for_this_group": 0.02508128620684147,
+      "confidence": 0.4768010377883911,
+      "rank_position": 2,
+      "rank_distance": 175
+    },
+    {
+      "peak_idx": 67,
+      "mz": 242.18669161200523,
+      "intensity": 0.06198999285697937,
+      "annotation": "b2+",
+      "attribution_for_this_group": 0.024606753140687943,
+      "confidence": 0.5444151759147644,
+      "rank_position": 67,
+      "rank_distance": 110
+    },
+    {
+      "peak_idx": 176,
+      "mz": 740.4682785272598,
+      "intensity": 0.07369422912597656,
+      "annotation": "a7+",
+      "attribution_for_this_group": 0.023049840703606606,
+      "confidence": 0.8313429951667786,
+      "rank_position": 176,
+      "rank_distance": 1
+    },
+    {
+      "peak_idx": 86,
+      "mz": 294.1814251244068,
+      "intensity": 0.049244172871112823,
+      "annotation": null,
+      "attribution_for_this_group": 0.02283727191388607,
+      "confidence": 0.5921730995178223,
+      "rank_position": 86,
+      "rank_distance": 91
+    },
+    {
+      "peak_idx": 171,
+      "mz": 656.3811749219894,
+      "intensity": 0.11779902130365372,
+      "annotation": "b6+[+1]",
+      "attribution_for_this_group": 0.022175418213009834,
+      "confidence": 0.847552478313446,
+      "rank_position": 171,
+      "rank_distance": 6
+    },
+    {
+      "peak_idx": 142,
+      "mz": 568.2425573468208,
+      "intensity": 0.05547528713941574,
+      "annotation": null,
+      "attribution_for_this_group": 0.0218043252825737,
+      "confidence": 0.1960776448249817,
+      "rank_position": 142,
+      "rank_distance": 35
+    },
+    {
+      "peak_idx": 191,
+      "mz": 864.3939346075058,
+      "intensity": 0.06641847640275955,
+      "annotation": null,
+      "attribution_for_this_group": 0.02164732851088047,
+      "confidence": 0.22785060107707977,
+      "rank_position": 191,
+      "rank_distance": 14
+    },
+    {
+      "peak_idx": 18,
+      "mz": 155.1171112805605,
+      "intensity": 0.04099911451339722,
+      "annotation": null,
+      "attribution_for_this_group": 0.0215669646859169,
+      "confidence": 0.23067927360534668,
+      "rank_position": 18,
+      "rank_distance": 159
+    },
+    {
+      "peak_idx": 151,
+      "mz": 600.2815067768097,
+      "intensity": 0.03884122520685196,
+      "annotation": null,
+      "attribution_for_this_group": 0.021285060793161392,
+      "confidence": 0.09483567625284195,
+      "rank_position": 151,
+      "rank_distance": 26
+    },
+    {
+      "peak_idx": 195,
+      "mz": 1024.5370864868164,
+      "intensity": 0.041434407234191895,
+      "annotation": null,
+      "attribution_for_this_group": 0.021165937185287476,
+      "confidence": 0.14337019622325897,
+      "rank_position": 195,
+      "rank_distance": 18
+    },
+    {
+      "peak_idx": 39,
+      "mz": 187.10842356085777,
+      "intensity": 0.039444342255592346,
+      "annotation": null,
+      "attribution_for_this_group": 0.02068043313920498,
+      "confidence": 0.2653821110725403,
+      "rank_position": 39,
+      "rank_distance": 138
+    },
+    {
+      "peak_idx": 111,
+      "mz": 427.16026306152344,
+      "intensity": 0.03887748345732689,
+      "annotation": null,
+      "attribution_for_this_group": 0.020658716559410095,
+      "confidence": 0.41251763701438904,
+      "rank_position": 111,
+      "rank_distance": 66
+    },
+    {
+      "peak_idx": 87,
+      "mz": 298.14889654517174,
+      "intensity": 0.04709284007549286,
+      "annotation": null,
+      "attribution_for_this_group": 0.01958959363400936,
+      "confidence": 0.3211457133293152,
+      "rank_position": 87,
+      "rank_distance": 90
+    },
+    {
+      "peak_idx": 127,
+      "mz": 498.2702061533928,
+      "intensity": 0.04365673288702965,
+      "annotation": null,
+      "attribution_for_this_group": 0.019301701337099075,
+      "confidence": 0.21356458961963654,
+      "rank_position": 127,
+      "rank_distance": 50
+    },
+    {
+      "peak_idx": 26,
+      "mz": 172.07177355885506,
+      "intensity": 0.05281537026166916,
+      "annotation": null,
+      "attribution_for_this_group": 0.018982846289873123,
+      "confidence": 0.1739082634449005,
+      "rank_position": 26,
+      "rank_distance": 151
+    },
+    {
+      "peak_idx": 84,
+      "mz": 284.1220796108246,
+      "intensity": 0.04391538351774216,
+      "annotation": null,
+      "attribution_for_this_group": 0.01871451735496521,
+      "confidence": 0.15786603093147278,
+      "rank_position": 84,
+      "rank_distance": 93
+    },
+    {
+      "peak_idx": 125,
+      "mz": 496.28518521785736,
+      "intensity": 0.03609852492809296,
+      "annotation": "a5+-H2O",
+      "attribution_for_this_group": 0.017615359276533127,
+      "confidence": 0.4332699179649353,
+      "rank_position": 125,
+      "rank_distance": 52
+    },
+    {
+      "peak_idx": 145,
+      "mz": 575.3087624907494,
+      "intensity": 0.04544591158628464,
+      "annotation": null,
+      "attribution_for_this_group": 0.017491091042757034,
+      "confidence": 0.2667395770549774,
+      "rank_position": 145,
+      "rank_distance": 32
+    },
+    {
+      "peak_idx": 60,
+      "mz": 229.09346967935562,
+      "intensity": 0.0704510435461998,
+      "annotation": null,
+      "attribution_for_this_group": 0.017336446791887283,
+      "confidence": 0.5401349067687988,
+      "rank_position": 60,
+      "rank_distance": 117
+    },
+    {
+      "peak_idx": 119,
+      "mz": 472.17994928359985,
+      "intensity": 0.07830090820789337,
+      "annotation": null,
+      "attribution_for_this_group": 0.017211653292179108,
+      "confidence": 0.4895942211151123,
+      "rank_position": 119,
+      "rank_distance": 58
+    },
+    {
+      "peak_idx": 13,
+      "mz": 141.10200107097626,
+      "intensity": 0.035782694816589355,
+      "annotation": null,
+      "attribution_for_this_group": 0.01634891889989376,
+      "confidence": 0.20800775289535522,
+      "rank_position": 13,
+      "rank_distance": 164
+    },
+    {
+      "peak_idx": 62,
+      "mz": 230.11412471532822,
+      "intensity": 0.03861433267593384,
+      "annotation": null,
+      "attribution_for_this_group": 0.01628766767680645,
+      "confidence": 0.5107414126396179,
+      "rank_position": 62,
+      "rank_distance": 115
+    },
+    {
+      "peak_idx": 6,
+      "mz": 121.08404189348221,
+      "intensity": 0.050034113228321075,
+      "annotation": "custom:immonium_Phe@120.0810[+1]",
+      "attribution_for_this_group": 0.016064971685409546,
+      "confidence": 0.5693725347518921,
+      "rank_position": 6,
+      "rank_distance": 171
+    },
+    {
+      "peak_idx": 156,
+      "mz": 609.3709543347359,
+      "intensity": 0.05954192951321602,
+      "annotation": "a6+-H2O",
+      "attribution_for_this_group": 0.01603461056947708,
+      "confidence": 0.3041898012161255,
+      "rank_position": 156,
+      "rank_distance": 21
+    },
+    {
+      "peak_idx": 134,
+      "mz": 526.2701585888863,
+      "intensity": 0.05791487544775009,
+      "annotation": null,
+      "attribution_for_this_group": 0.015572847798466682,
+      "confidence": 0.3326472342014313,
+      "rank_position": 134,
+      "rank_distance": 43
+    },
+    {
+      "peak_idx": 96,
+      "mz": 361.25224083662033,
+      "intensity": 0.040752120316028595,
+      "annotation": null,
+      "attribution_for_this_group": 0.015547436662018299,
+      "confidence": 0.06746400892734528,
+      "rank_position": 96,
+      "rank_distance": 81
+    },
+    {
+      "peak_idx": 120,
+      "mz": 474.19093549251556,
+      "intensity": 0.04099355638027191,
+      "annotation": null,
+      "attribution_for_this_group": 0.015356389805674553,
+      "confidence": 0.0633421540260315,
+      "rank_position": 120,
+      "rank_distance": 57
+    },
+    {
+      "peak_idx": 12,
+      "mz": 140.07064513862133,
+      "intensity": 0.038215264678001404,
+      "annotation": null,
+      "attribution_for_this_group": 0.01532102283090353,
+      "confidence": 0.4707396328449249,
+      "rank_position": 12,
+      "rank_distance": 165
+    },
+    {
+      "peak_idx": 140,
+      "mz": 557.2778359055519,
+      "intensity": 0.05854903161525726,
+      "annotation": null,
+      "attribution_for_this_group": 0.015015429817140102,
+      "confidence": 0.2136305868625641,
+      "rank_position": 140,
+      "rank_distance": 37
+    },
+    {
+      "peak_idx": 108,
+      "mz": 420.1558977365494,
+      "intensity": 0.05434773862361908,
+      "annotation": null,
+      "attribution_for_this_group": 0.014520126394927502,
+      "confidence": 0.06458575278520584,
+      "rank_position": 108,
+      "rank_distance": 69
+    },
+    {
+      "peak_idx": 129,
+      "mz": 507.25795328617096,
+      "intensity": 0.0562916174530983,
+      "annotation": null,
+      "attribution_for_this_group": 0.014172859489917755,
+      "confidence": 0.08935356140136719,
+      "rank_position": 129,
+      "rank_distance": 48
+    },
+    {
+      "peak_idx": 182,
+      "mz": 752.447322010994,
+      "intensity": 0.043161969631910324,
+      "annotation": null,
+      "attribution_for_this_group": 0.013078926131129265,
+      "confidence": 0.08859806507825851,
+      "rank_position": 182,
+      "rank_distance": 5
+    },
+    {
+      "peak_idx": 93,
+      "mz": 343.1723639369011,
+      "intensity": 0.04196770861744881,
+      "annotation": null,
+      "attribution_for_this_group": 0.01307654194533825,
+      "confidence": 0.09589843451976776,
+      "rank_position": 93,
+      "rank_distance": 84
+    },
+    {
+      "peak_idx": 146,
+      "mz": 576.2387812137604,
+      "intensity": 0.04278901219367981,
+      "annotation": null,
+      "attribution_for_this_group": 0.012989419512450695,
+      "confidence": 0.26330840587615967,
+      "rank_position": 146,
+      "rank_distance": 31
+    },
+    {
+      "peak_idx": 34,
+      "mz": 184.10881981253624,
+      "intensity": 0.043171174824237823,
+      "annotation": null,
+      "attribution_for_this_group": 0.012779032811522484,
+      "confidence": 0.2980796992778778,
+      "rank_position": 34,
+      "rank_distance": 143
+    },
+    {
+      "peak_idx": 65,
+      "mz": 240.1348389685154,
+      "intensity": 0.05697992444038391,
+      "annotation": null,
+      "attribution_for_this_group": 0.012647520750761032,
+      "confidence": 0.23499806225299835,
+      "rank_position": 65,
+      "rank_distance": 112
+    },
+    {
+      "peak_idx": 21,
+      "mz": 159.11273658275604,
+      "intensity": 0.03875536471605301,
+      "annotation": null,
+      "attribution_for_this_group": 0.012600968591868877,
+      "confidence": 0.2529396414756775,
+      "rank_position": 21,
+      "rank_distance": 156
+    },
+    {
+      "peak_idx": 91,
+      "mz": 326.14540308713913,
+      "intensity": 0.12345854192972183,
+      "annotation": null,
+      "attribution_for_this_group": 0.012288357131183147,
+      "confidence": 0.7028641700744629,
+      "rank_position": 91,
+      "rank_distance": 86
+    },
+    {
+      "peak_idx": 59,
+      "mz": 228.13403978943825,
+      "intensity": 0.03729547560214996,
+      "annotation": null,
+      "attribution_for_this_group": 0.01208578236401081,
+      "confidence": 0.5238790512084961,
+      "rank_position": 59,
+      "rank_distance": 118
+    },
+    {
+      "peak_idx": 49,
+      "mz": 201.1234126985073,
+      "intensity": 0.05949706584215164,
+      "annotation": null,
+      "attribution_for_this_group": 0.011936672031879425,
+      "confidence": 0.2800540328025818,
+      "rank_position": 49,
+      "rank_distance": 128
+    },
+    {
+      "peak_idx": 102,
+      "mz": 392.1537846326828,
+      "intensity": 0.0807294026017189,
+      "annotation": null,
+      "attribution_for_this_group": 0.011586594395339489,
+      "confidence": 0.7788529396057129,
+      "rank_position": 102,
+      "rank_distance": 75
+    },
+    {
+      "peak_idx": 94,
+      "mz": 353.21928560733795,
+      "intensity": 0.05121399834752083,
+      "annotation": "b3+-H2O",
+      "attribution_for_this_group": 0.011491656303405762,
+      "confidence": 0.16602274775505066,
+      "rank_position": 94,
+      "rank_distance": 83
+    },
+    {
+      "peak_idx": 150,
+      "mz": 592.3422798514366,
+      "intensity": 0.04319515824317932,
+      "annotation": null,
+      "attribution_for_this_group": 0.011225108988583088,
+      "confidence": 0.1641191691160202,
+      "rank_position": 150,
+      "rank_distance": 27
+    },
+    {
+      "peak_idx": 71,
+      "mz": 249.16129186749458,
+      "intensity": 0.04319463297724724,
+      "annotation": null,
+      "attribution_for_this_group": 0.011221412569284439,
+      "confidence": 0.23947344720363617,
+      "rank_position": 71,
+      "rank_distance": 106
+    },
+    {
+      "peak_idx": 44,
+      "mz": 197.13081419467926,
+      "intensity": 0.049408700317144394,
+      "annotation": null,
+      "attribution_for_this_group": 0.011118480935692787,
+      "confidence": 0.3721805512905121,
+      "rank_position": 44,
+      "rank_distance": 133
+    },
+    {
+      "peak_idx": 72,
+      "mz": 250.11876598000526,
+      "intensity": 0.050617754459381104,
+      "annotation": null,
+      "attribution_for_this_group": 0.010719993151724339,
+      "confidence": 0.12861481308937073,
+      "rank_position": 72,
+      "rank_distance": 105
+    },
+    {
+      "peak_idx": 101,
+      "mz": 391.1982849240303,
+      "intensity": 0.059569161385297775,
+      "annotation": null,
+      "attribution_for_this_group": 0.010450668632984161,
+      "confidence": 0.5173417329788208,
+      "rank_position": 101,
+      "rank_distance": 76
+    },
+    {
+      "peak_idx": 107,
+      "mz": 415.2071475982666,
+      "intensity": 0.06042150408029556,
+      "annotation": null,
+      "attribution_for_this_group": 0.010427993722259998,
+      "confidence": 0.15364164113998413,
+      "rank_position": 107,
+      "rank_distance": 70
+    },
+    {
+      "peak_idx": 118,
+      "mz": 462.2166231274605,
+      "intensity": 0.045031365007162094,
+      "annotation": null,
+      "attribution_for_this_group": 0.010335502214729786,
+      "confidence": 0.44339779019355774,
+      "rank_position": 118,
+      "rank_distance": 59
+    },
+    {
+      "peak_idx": 74,
+      "mz": 258.14516469836235,
+      "intensity": 0.03844975307583809,
+      "annotation": null,
+      "attribution_for_this_group": 0.010121346451342106,
+      "confidence": 0.45975610613822937,
+      "rank_position": 74,
+      "rank_distance": 103
+    },
+    {
+      "peak_idx": 55,
+      "mz": 217.09801629185677,
+      "intensity": 0.05142377316951752,
+      "annotation": null,
+      "attribution_for_this_group": 0.00966192688792944,
+      "confidence": 0.3299817442893982,
+      "rank_position": 55,
+      "rank_distance": 122
+    },
+    {
+      "peak_idx": 64,
+      "mz": 235.10757833719254,
+      "intensity": 0.0912751704454422,
+      "annotation": null,
+      "attribution_for_this_group": 0.009529937990009785,
+      "confidence": 0.15623430907726288,
+      "rank_position": 64,
+      "rank_distance": 113
+    },
+    {
+      "peak_idx": 1,
+      "mz": 110.07141321897507,
+      "intensity": 0.039130158722400665,
+      "annotation": "custom:immonium_His@110.0714",
+      "attribution_for_this_group": 0.00947262067347765,
+      "confidence": 0.4552084505558014,
+      "rank_position": 1,
+      "rank_distance": 176
+    },
+    {
+      "peak_idx": 131,
+      "mz": 514.2982304096222,
+      "intensity": 0.03907229006290436,
+      "annotation": "a5+",
+      "attribution_for_this_group": 0.00933851022273302,
+      "confidence": 0.13401971757411957,
+      "rank_position": 131,
+      "rank_distance": 46
+    },
+    {
+      "peak_idx": 51,
+      "mz": 211.14319562911987,
+      "intensity": 0.05548536777496338,
+      "annotation": null,
+      "attribution_for_this_group": 0.009323307313024998,
+      "confidence": 0.8324047923088074,
+      "rank_position": 51,
+      "rank_distance": 126
+    },
+    {
+      "peak_idx": 128,
+      "mz": 499.28706139326096,
+      "intensity": 0.04431159421801567,
+      "annotation": null,
+      "attribution_for_this_group": 0.009309733286499977,
+      "confidence": 0.10442794114351273,
+      "rank_position": 128,
+      "rank_distance": 49
+    },
+    {
+      "peak_idx": 41,
+      "mz": 190.13259559869766,
+      "intensity": 0.03524361923336983,
+      "annotation": null,
+      "attribution_for_this_group": 0.009005111642181873,
+      "confidence": 0.19137299060821533,
+      "rank_position": 41,
+      "rank_distance": 136
+    },
+    {
+      "peak_idx": 48,
+      "mz": 200.1391537487507,
+      "intensity": 0.046810589730739594,
+      "annotation": null,
+      "attribution_for_this_group": 0.008890810422599316,
+      "confidence": 0.39657437801361084,
+      "rank_position": 48,
+      "rank_distance": 129
+    },
+    {
+      "peak_idx": 24,
+      "mz": 169.13419589400291,
+      "intensity": 0.04027744382619858,
+      "annotation": null,
+      "attribution_for_this_group": 0.00877956859767437,
+      "confidence": 0.20772291719913483,
+      "rank_position": 24,
+      "rank_distance": 153
+    },
+    {
+      "peak_idx": 47,
+      "mz": 199.18091595172882,
+      "intensity": 0.07957705110311508,
+      "annotation": null,
+      "attribution_for_this_group": 0.008752144873142242,
+      "confidence": 0.1269708126783371,
+      "rank_position": 47,
+      "rank_distance": 130
+    },
+    {
+      "peak_idx": 5,
+      "mz": 120.09112164378166,
+      "intensity": 0.03974340483546257,
+      "annotation": null,
+      "attribution_for_this_group": 0.008697140961885452,
+      "confidence": 0.39886993169784546,
+      "rank_position": 5,
+      "rank_distance": 172
+    },
+    {
+      "peak_idx": 57,
+      "mz": 226.155836135149,
+      "intensity": 0.09302627295255661,
+      "annotation": "y2+-H2O",
+      "attribution_for_this_group": 0.008579435758292675,
+      "confidence": 0.9099167585372925,
+      "rank_position": 57,
+      "rank_distance": 120
+    },
+    {
+      "peak_idx": 122,
+      "mz": 482.26382583379745,
+      "intensity": 0.060971081256866455,
+      "annotation": null,
+      "attribution_for_this_group": 0.008534803986549377,
+      "confidence": 0.31464773416519165,
+      "rank_position": 122,
+      "rank_distance": 55
+    },
+    {
+      "peak_idx": 137,
+      "mz": 532.815009355545,
+      "intensity": 0.03877594694495201,
+      "annotation": null,
+      "attribution_for_this_group": 0.008258861489593983,
+      "confidence": 0.01896197721362114,
+      "rank_position": 137,
+      "rank_distance": 40
+    },
+    {
+      "peak_idx": 32,
+      "mz": 183.11284482479095,
+      "intensity": 0.039264485239982605,
+      "annotation": null,
+      "attribution_for_this_group": 0.008019606582820415,
+      "confidence": 0.029931379482150078,
+      "rank_position": 32,
+      "rank_distance": 145
+    },
+    {
+      "peak_idx": 185,
+      "mz": 769.4651186466217,
+      "intensity": 0.07443173974752426,
+      "annotation": "b7+[+1]",
+      "attribution_for_this_group": 0.007983735762536526,
+      "confidence": 0.44623714685440063,
+      "rank_position": 185,
+      "rank_distance": 8
+    },
+    {
+      "peak_idx": 97,
+      "mz": 368.19014698266983,
+      "intensity": 0.054336417466402054,
+      "annotation": null,
+      "attribution_for_this_group": 0.007825138978660107,
+      "confidence": 0.12469463795423508,
+      "rank_position": 97,
+      "rank_distance": 80
+    },
+    {
+      "peak_idx": 61,
+      "mz": 229.11958396434784,
+      "intensity": 0.04414065554738045,
+      "annotation": null,
+      "attribution_for_this_group": 0.007702623028308153,
+      "confidence": 0.15351775288581848,
+      "rank_position": 61,
+      "rank_distance": 116
+    },
+    {
+      "peak_idx": 63,
+      "mz": 233.16478356719017,
+      "intensity": 0.055941831320524216,
+      "annotation": null,
+      "attribution_for_this_group": 0.007459570653736591,
+      "confidence": 0.2077586054801941,
+      "rank_position": 63,
+      "rank_distance": 114
+    },
+    {
+      "peak_idx": 56,
+      "mz": 217.13340654969215,
+      "intensity": 0.04591170698404312,
+      "annotation": null,
+      "attribution_for_this_group": 0.007233566138893366,
+      "confidence": 0.24635638296604156,
+      "rank_position": 56,
+      "rank_distance": 121
+    },
+    {
+      "peak_idx": 81,
+      "mz": 281.1235748231411,
+      "intensity": 0.04000852629542351,
+      "annotation": null,
+      "attribution_for_this_group": 0.006949069909751415,
+      "confidence": 0.14225484430789948,
+      "rank_position": 81,
+      "rank_distance": 96
+    },
+    {
+      "peak_idx": 54,
+      "mz": 215.13929590582848,
+      "intensity": 0.042313504964113235,
+      "annotation": null,
+      "attribution_for_this_group": 0.006708845030516386,
+      "confidence": 0.23450668156147003,
+      "rank_position": 54,
+      "rank_distance": 123
+    },
+    {
+      "peak_idx": 53,
+      "mz": 214.19137716293335,
+      "intensity": 0.051783666014671326,
+      "annotation": "a2+",
+      "attribution_for_this_group": 0.00670809717848897,
+      "confidence": 0.2923727333545685,
+      "rank_position": 53,
+      "rank_distance": 124
+    },
+    {
+      "peak_idx": 116,
+      "mz": 444.19050216674805,
+      "intensity": 0.05608614906668663,
+      "annotation": null,
+      "attribution_for_this_group": 0.006572608835995197,
+      "confidence": 0.16860094666481018,
+      "rank_position": 116,
+      "rank_distance": 61
+    },
+    {
+      "peak_idx": 7,
+      "mz": 129.0912739932537,
+      "intensity": 0.03604133799672127,
+      "annotation": null,
+      "attribution_for_this_group": 0.00656950194388628,
+      "confidence": 0.31802845001220703,
+      "rank_position": 7,
+      "rank_distance": 170
+    },
+    {
+      "peak_idx": 29,
+      "mz": 177.86532640457153,
+      "intensity": 0.03865392506122589,
+      "annotation": null,
+      "attribution_for_this_group": 0.00644660834223032,
+      "confidence": 0.14947567880153656,
+      "rank_position": 29,
+      "rank_distance": 148
+    },
+    {
+      "peak_idx": 28,
+      "mz": 176.4148473739624,
+      "intensity": 0.0357075110077858,
+      "annotation": null,
+      "attribution_for_this_group": 0.006017042323946953,
+      "confidence": 0.05867020785808563,
+      "rank_position": 28,
+      "rank_distance": 149
+    },
+    {
+      "peak_idx": 70,
+      "mz": 245.16936391592026,
+      "intensity": 0.05761491507291794,
+      "annotation": "y2+[+1]",
+      "attribution_for_this_group": 0.0060161324217915535,
+      "confidence": 0.8492643237113953,
+      "rank_position": 70,
+      "rank_distance": 107
+    },
+    {
+      "peak_idx": 27,
+      "mz": 173.12847077846527,
+      "intensity": 0.04417794197797775,
+      "annotation": null,
+      "attribution_for_this_group": 0.00593571225181222,
+      "confidence": 0.38699597120285034,
+      "rank_position": 27,
+      "rank_distance": 150
+    },
+    {
+      "peak_idx": 78,
+      "mz": 268.1652270257473,
+      "intensity": 0.04459984973073006,
+      "annotation": null,
+      "attribution_for_this_group": 0.005891859997063875,
+      "confidence": 0.1823321431875229,
+      "rank_position": 78,
+      "rank_distance": 99
+    },
+    {
+      "peak_idx": 89,
+      "mz": 309.1213293373585,
+      "intensity": 0.0498642660677433,
+      "annotation": null,
+      "attribution_for_this_group": 0.00558744790032506,
+      "confidence": 0.0895952358841896,
+      "rank_position": 89,
+      "rank_distance": 88
+    },
+    {
+      "peak_idx": 104,
+      "mz": 398.2406482100487,
+      "intensity": 0.05404748395085335,
+      "annotation": null,
+      "attribution_for_this_group": 0.005493948236107826,
+      "confidence": 0.14030016958713531,
+      "rank_position": 104,
+      "rank_distance": 73
+    },
+    {
+      "peak_idx": 90,
+      "mz": 314.1966834664345,
+      "intensity": 0.05712404102087021,
+      "annotation": "a6++",
+      "attribution_for_this_group": 0.005386372096836567,
+      "confidence": 0.11852912604808807,
+      "rank_position": 90,
+      "rank_distance": 87
+    },
+    {
+      "peak_idx": 23,
+      "mz": 169.09636557102203,
+      "intensity": 0.045035962015390396,
+      "annotation": null,
+      "attribution_for_this_group": 0.005365927238017321,
+      "confidence": 0.1455478072166443,
+      "rank_position": 23,
+      "rank_distance": 154
+    },
+    {
+      "peak_idx": 82,
+      "mz": 283.1033058464527,
+      "intensity": 0.06353044509887695,
+      "annotation": null,
+      "attribution_for_this_group": 0.005187710747122765,
+      "confidence": 0.19713227450847626,
+      "rank_position": 82,
+      "rank_distance": 95
+    },
+    {
+      "peak_idx": 68,
+      "mz": 243.11361834406853,
+      "intensity": 0.07536856830120087,
+      "annotation": null,
+      "attribution_for_this_group": 0.005155170802026987,
+      "confidence": 0.5228812098503113,
+      "rank_position": 68,
+      "rank_distance": 109
+    },
+    {
+      "peak_idx": 45,
+      "mz": 197.16469570994377,
+      "intensity": 0.07789236307144165,
+      "annotation": "a2+-NH3",
+      "attribution_for_this_group": 0.0051085795275866985,
+      "confidence": 0.6753185987472534,
+      "rank_position": 45,
+      "rank_distance": 132
+    },
+    {
+      "peak_idx": 76,
+      "mz": 261.15918532013893,
+      "intensity": 0.03975047916173935,
+      "annotation": null,
+      "attribution_for_this_group": 0.005093703977763653,
+      "confidence": 0.4590718448162079,
+      "rank_position": 76,
+      "rank_distance": 101
+    },
+    {
+      "peak_idx": 37,
+      "mz": 185.1646602153778,
+      "intensity": 0.044640276581048965,
+      "annotation": null,
+      "attribution_for_this_group": 0.004689002875238657,
+      "confidence": 0.3425842821598053,
+      "rank_position": 37,
+      "rank_distance": 140
+    },
+    {
+      "peak_idx": 43,
+      "mz": 195.1136253774166,
+      "intensity": 0.037045642733573914,
+      "annotation": null,
+      "attribution_for_this_group": 0.004575639497488737,
+      "confidence": 0.18556909263134003,
+      "rank_position": 43,
+      "rank_distance": 134
+    },
+    {
+      "peak_idx": 19,
+      "mz": 157.0974476635456,
+      "intensity": 0.035312581807374954,
+      "annotation": null,
+      "attribution_for_this_group": 0.004403231665492058,
+      "confidence": 0.21722625195980072,
+      "rank_position": 19,
+      "rank_distance": 158
+    },
+    {
+      "peak_idx": 36,
+      "mz": 185.12828275561333,
+      "intensity": 0.05075983330607414,
+      "annotation": null,
+      "attribution_for_this_group": 0.004361509345471859,
+      "confidence": 0.42654797434806824,
+      "rank_position": 36,
+      "rank_distance": 141
+    },
+    {
+      "peak_idx": 135,
+      "mz": 527.2810533642769,
+      "intensity": 0.07542576640844345,
+      "annotation": null,
+      "attribution_for_this_group": 0.004204230383038521,
+      "confidence": 0.4727637469768524,
+      "rank_position": 135,
+      "rank_distance": 42
+    },
+    {
+      "peak_idx": 136,
+      "mz": 528.2895639538765,
+      "intensity": 0.039043400436639786,
+      "annotation": null,
+      "attribution_for_this_group": 0.003965797834098339,
+      "confidence": 0.14657875895500183,
+      "rank_position": 136,
+      "rank_distance": 41
+    },
+    {
+      "peak_idx": 17,
+      "mz": 155.0818793475628,
+      "intensity": 0.04477792605757713,
+      "annotation": null,
+      "attribution_for_this_group": 0.0038828193210065365,
+      "confidence": 0.17723391950130463,
+      "rank_position": 17,
+      "rank_distance": 160
+    },
+    {
+      "peak_idx": 144,
+      "mz": 574.297308921814,
+      "intensity": 0.08666245639324188,
+      "annotation": null,
+      "attribution_for_this_group": 0.003877627197653055,
+      "confidence": 0.48187828063964844,
+      "rank_position": 144,
+      "rank_distance": 33
+    },
+    {
+      "peak_idx": 138,
+      "mz": 542.2938987612724,
+      "intensity": 0.1271304339170456,
+      "annotation": "b5+",
+      "attribution_for_this_group": 0.003867342136800289,
+      "confidence": 0.7360381484031677,
+      "rank_position": 138,
+      "rank_distance": 39
+    },
+    {
+      "peak_idx": 73,
+      "mz": 256.13268837332726,
+      "intensity": 0.04053307697176933,
+      "annotation": null,
+      "attribution_for_this_group": 0.0037736408412456512,
+      "confidence": 0.1593174934387207,
+      "rank_position": 73,
+      "rank_distance": 104
+    },
+    {
+      "peak_idx": 35,
+      "mz": 185.09265035390854,
+      "intensity": 0.05577104166150093,
+      "annotation": null,
+      "attribution_for_this_group": 0.0036303976085036993,
+      "confidence": 0.5835461020469666,
+      "rank_position": 35,
+      "rank_distance": 142
+    },
+    {
+      "peak_idx": 143,
+      "mz": 573.3115971088409,
+      "intensity": 0.04054586589336395,
+      "annotation": null,
+      "attribution_for_this_group": 0.003479023464024067,
+      "confidence": 0.07298538833856583,
+      "rank_position": 143,
+      "rank_distance": 34
+    },
+    {
+      "peak_idx": 112,
+      "mz": 428.25154960155487,
+      "intensity": 0.049149710685014725,
+      "annotation": "b4+",
+      "attribution_for_this_group": 0.0034488518722355366,
+      "confidence": 0.12283255904912949,
+      "rank_position": 112,
+      "rank_distance": 65
+    },
+    {
+      "peak_idx": 79,
+      "mz": 270.1818570494652,
+      "intensity": 0.04295092448592186,
+      "annotation": null,
+      "attribution_for_this_group": 0.0033330933656543493,
+      "confidence": 0.14550019800662994,
+      "rank_position": 79,
+      "rank_distance": 98
+    },
+    {
+      "peak_idx": 42,
+      "mz": 191.11823290586472,
+      "intensity": 0.04024524614214897,
+      "annotation": null,
+      "attribution_for_this_group": 0.003308073151856661,
+      "confidence": 0.3136083781719208,
+      "rank_position": 42,
+      "rank_distance": 135
+    },
+    {
+      "peak_idx": 115,
+      "mz": 443.2089626789093,
+      "intensity": 0.04436980187892914,
+      "annotation": null,
+      "attribution_for_this_group": 0.00309117347933352,
+      "confidence": 0.08329728990793228,
+      "rank_position": 115,
+      "rank_distance": 62
+    },
+    {
+      "peak_idx": 147,
+      "mz": 579.2826414108276,
+      "intensity": 0.03990357369184494,
+      "annotation": null,
+      "attribution_for_this_group": 0.0025063520297408104,
+      "confidence": 0.06022467091679573,
+      "rank_position": 147,
+      "rank_distance": 30
+    },
+    {
+      "peak_idx": 161,
+      "mz": 626.3697147369385,
+      "intensity": 0.04761567339301109,
+      "annotation": null,
+      "attribution_for_this_group": 0.0023697931319475174,
+      "confidence": 0.15046103298664093,
+      "rank_position": 161,
+      "rank_distance": 16
+    },
+    {
+      "peak_idx": 141,
+      "mz": 561.2984672188759,
+      "intensity": 0.040434133261442184,
+      "annotation": null,
+      "attribution_for_this_group": 0.002267188159748912,
+      "confidence": 0.06336204707622528,
+      "rank_position": 141,
+      "rank_distance": 36
+    },
+    {
+      "peak_idx": 20,
+      "mz": 157.1337692439556,
+      "intensity": 0.05026474967598915,
+      "annotation": null,
+      "attribution_for_this_group": 0.0022343588061630726,
+      "confidence": 0.5020837783813477,
+      "rank_position": 20,
+      "rank_distance": 157
+    },
+    {
+      "peak_idx": 139,
+      "mz": 543.2979017496109,
+      "intensity": 0.044016655534505844,
+      "annotation": "b5+[+1]",
+      "attribution_for_this_group": 0.0020459708757698536,
+      "confidence": 0.33542993664741516,
+      "rank_position": 139,
+      "rank_distance": 38
+    },
+    {
+      "peak_idx": 14,
+      "mz": 143.11783947050571,
+      "intensity": 0.05120626464486122,
+      "annotation": null,
+      "attribution_for_this_group": 0.0018768571317195892,
+      "confidence": 0.5993201732635498,
+      "rank_position": 14,
+      "rank_distance": 163
+    },
+    {
+      "peak_idx": 130,
+      "mz": 510.2657154202461,
+      "intensity": 0.06044740229845047,
+      "annotation": null,
+      "attribution_for_this_group": 0.001565597951412201,
+      "confidence": 0.14269360899925232,
+      "rank_position": 130,
+      "rank_distance": 47
+    },
+    {
+      "peak_idx": 100,
+      "mz": 386.20389997959137,
+      "intensity": 0.07163430750370026,
+      "annotation": null,
+      "attribution_for_this_group": 0.0015009064227342606,
+      "confidence": 0.18377648293972015,
+      "rank_position": 100,
+      "rank_distance": 77
+    },
+    {
+      "peak_idx": 92,
+      "mz": 327.27714627981186,
+      "intensity": 0.043540824204683304,
+      "annotation": null,
+      "attribution_for_this_group": 0.0013712275540456176,
+      "confidence": 0.13073194026947021,
+      "rank_position": 92,
+      "rank_distance": 85
+    },
+    {
+      "peak_idx": 103,
+      "mz": 396.185964345932,
+      "intensity": 0.043408650904893875,
+      "annotation": null,
+      "attribution_for_this_group": 0.001205913140438497,
+      "confidence": 0.1827569603919983,
+      "rank_position": 103,
+      "rank_distance": 74
+    },
+    {
+      "peak_idx": 126,
+      "mz": 497.2720518708229,
+      "intensity": 0.05493888631463051,
+      "annotation": "a5+-NH3",
+      "attribution_for_this_group": 0.0011831290321424603,
+      "confidence": 0.3413999080657959,
+      "rank_position": 126,
+      "rank_distance": 51
+    },
+    {
+      "peak_idx": 22,
+      "mz": 167.08103939890862,
+      "intensity": 0.04328601434826851,
+      "annotation": null,
+      "attribution_for_this_group": 0.0007868733955547214,
+      "confidence": 0.2076783925294876,
+      "rank_position": 22,
+      "rank_distance": 155
+    },
+    {
+      "peak_idx": 50,
+      "mz": 204.1342668235302,
+      "intensity": 0.04761672019958496,
+      "annotation": null,
+      "attribution_for_this_group": 0.0007599599775858223,
+      "confidence": 0.15510083734989166,
+      "rank_position": 50,
+      "rank_distance": 127
+    },
+    {
+      "peak_idx": 11,
+      "mz": 136.07600703835487,
+      "intensity": 0.11129643768072128,
+      "annotation": "custom:immonium_Tyr@136.0760",
+      "attribution_for_this_group": 0.000653348455671221,
+      "confidence": 0.9926449060440063,
+      "rank_position": 11,
+      "rank_distance": 166
+    },
+    {
+      "peak_idx": 183,
+      "mz": 757.4152201414108,
+      "intensity": 0.03769826889038086,
+      "annotation": null,
+      "attribution_for_this_group": 0.000621287152171135,
+      "confidence": 0.09535875171422958,
+      "rank_position": 183,
+      "rank_distance": 6
+    },
+    {
+      "peak_idx": 85,
+      "mz": 285.15689074993134,
+      "intensity": 0.06941302865743637,
+      "annotation": null,
+      "attribution_for_this_group": 0.0006133307470008731,
+      "confidence": 0.6439023613929749,
+      "rank_position": 85,
+      "rank_distance": 92
+    },
+    {
+      "peak_idx": 88,
+      "mz": 301.1157922446728,
+      "intensity": 0.08713088184595108,
+      "annotation": null,
+      "attribution_for_this_group": 0.0005957693792879581,
+      "confidence": 0.32828158140182495,
+      "rank_position": 88,
+      "rank_distance": 89
+    },
+    {
+      "peak_idx": 40,
+      "mz": 189.12680447101593,
+      "intensity": 0.06209941580891609,
+      "annotation": null,
+      "attribution_for_this_group": 0.0005726521485485137,
+      "confidence": 0.645458996295929,
+      "rank_position": 40,
+      "rank_distance": 137
+    },
+    {
+      "peak_idx": 168,
+      "mz": 639.3584609031677,
+      "intensity": 0.06770331412553787,
+      "annotation": null,
+      "attribution_for_this_group": 0.00025799241848289967,
+      "confidence": 0.41360703110694885,
+      "rank_position": 168,
+      "rank_distance": 9
+    },
+    {
+      "peak_idx": 3,
+      "mz": 120.07104232907295,
+      "intensity": 0.03575201705098152,
+      "annotation": null,
+      "attribution_for_this_group": 0.0002297286846442148,
+      "confidence": 0.3986245393753052,
+      "rank_position": 3,
+      "rank_distance": 174
+    },
+    {
+      "peak_idx": 25,
+      "mz": 171.11286520957947,
+      "intensity": 0.04110291227698326,
+      "annotation": null,
+      "attribution_for_this_group": 3.836893301922828e-05,
+      "confidence": 0.39723724126815796,
+      "rank_position": 25,
+      "rank_distance": 152
+    }
+  ],
+  "ig_config": {
+    "n_steps": 50,
+    "baseline": "zero_intensity",
+    "internal_batch_size": 5
+  },
+  "model_config": {
+    "dim_model": 768,
+    "n_heads": 12,
+    "n_layers": 12,
+    "peak_encoder_type": "multiscale",
+    "positional_encoding": "none",
+    "rope_rotary_pct": 0.25,
+    "relative_bias": "none",
+    "pa_num_freqs": 64,
+    "pa_lambda_min": 0.001,
+    "pa_lambda_max": 10000.0,
+    "ion_ladder_enabled": false,
+    "meta_token_enabled": false,
+    "masking_strategy": "thompson_span"
+  },
+  "novel_chemistry": {
+    "n_unannotated": 143,
+    "n_unannotated_deleakage": 136,
+    "n_charge_variant_peaks": 7,
+    "n_matched": 40,
+    "candidates": [
+      {
+        "peak_idx": 14,
+        "mz": 143.11783947050571,
+        "intensity": 0.05120626464486122,
+        "confidence": 0.5993201732635498,
+        "attribution_max_over_groups": 0.0197257362306118,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "d_ion",
+            "label": "d3++(E,-C2H3O2)",
+            "expected_mz": 143.11788,
+            "error_da": 4e-05,
+            "error_ppm": 0.31,
+            "residue": "E",
+            "position": 3,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 26,
+        "mz": 172.07177355885506,
+        "intensity": 0.05281537026166916,
+        "confidence": 0.1739082634449005,
+        "attribution_max_over_groups": 0.0314919613301754,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,4-5,GN)",
+            "expected_mz": 172.07167,
+            "error_da": 0.00011,
+            "error_ppm": 0.63,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 33,
+        "mz": 183.14888700842857,
+        "intensity": 0.04537118226289749,
+        "confidence": 0.3646424114704132,
+        "attribution_max_over_groups": 0.055380091071128845,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,14-15,LP)",
+            "expected_mz": 183.14918,
+            "error_da": 0.00029,
+            "error_ppm": 1.61,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 34,
+        "mz": 184.10881981253624,
+        "intensity": 0.043171174824237823,
+        "confidence": 0.2980796992778778,
+        "attribution_max_over_groups": 0.022982798516750336,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,10-11,PN)",
+            "expected_mz": 184.10805,
+            "error_da": 0.00077,
+            "error_ppm": 4.18,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 35,
+        "mz": 185.09265035390854,
+        "intensity": 0.05577104166150093,
+        "confidence": 0.5835461020469666,
+        "attribution_max_over_groups": 0.029182804748415947,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,9-10,DP)",
+            "expected_mz": 185.09206,
+            "error_da": 0.00059,
+            "error_ppm": 3.18,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 47,
+        "mz": 199.18091595172882,
+        "intensity": 0.07957705110311508,
+        "confidence": 0.1269708126783371,
+        "attribution_max_over_groups": 0.04969117417931557,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,6-7,LI)",
+            "expected_mz": 199.18048,
+            "error_da": 0.00043,
+            "error_ppm": 2.18,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 48,
+        "mz": 200.1391537487507,
+        "intensity": 0.046810589730739594,
+        "confidence": 0.39657437801361084,
+        "attribution_max_over_groups": 0.05427805706858635,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,5-6,NL)",
+            "expected_mz": 200.13935,
+            "error_da": 0.0002,
+            "error_ppm": 0.99,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 51,
+        "mz": 211.14319562911987,
+        "intensity": 0.05548536777496338,
+        "confidence": 0.8324047923088074,
+        "attribution_max_over_groups": 0.048620011657476425,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,14-15,LP)",
+            "expected_mz": 211.1441,
+            "error_da": 0.0009,
+            "error_ppm": 4.26,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 52,
+        "mz": 212.10338920354843,
+        "intensity": 0.1059318482875824,
+        "confidence": 0.7653319835662842,
+        "attribution_max_over_groups": 0.14311069250106812,
+        "is_charge_variant_of_masked": true,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,10-11,PN)",
+            "expected_mz": 212.10297,
+            "error_da": 0.00042,
+            "error_ppm": 2.0,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 54,
+        "mz": 215.13929590582848,
+        "intensity": 0.042313504964113235,
+        "confidence": 0.23450668156147003,
+        "attribution_max_over_groups": 0.04410023242235184,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,2-3,IE)",
+            "expected_mz": 215.13901,
+            "error_da": 0.00028,
+            "error_ppm": 1.32,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 58,
+        "mz": 227.17522457242012,
+        "intensity": 0.056546736508607864,
+        "confidence": 0.14079256355762482,
+        "attribution_max_over_groups": 0.04615331068634987,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,6-7,LI)",
+            "expected_mz": 227.1754,
+            "error_da": 0.00017,
+            "error_ppm": 0.75,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 59,
+        "mz": 228.13403978943825,
+        "intensity": 0.03729547560214996,
+        "confidence": 0.5238790512084961,
+        "attribution_max_over_groups": 0.05055874586105347,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,5-6,NL)",
+            "expected_mz": 228.13427,
+            "error_da": 0.00023,
+            "error_ppm": 0.99,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 60,
+        "mz": 229.09346967935562,
+        "intensity": 0.0704510435461998,
+        "confidence": 0.5401349067687988,
+        "attribution_max_over_groups": 0.02424437738955021,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,11-12,NN)",
+            "expected_mz": 229.09314,
+            "error_da": 0.00033,
+            "error_ppm": 1.46,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 63,
+        "mz": 233.16478356719017,
+        "intensity": 0.055941831320524216,
+        "confidence": 0.2077586054801941,
+        "attribution_max_over_groups": 0.043832626193761826,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,7-8,IF)",
+            "expected_mz": 233.16483,
+            "error_da": 5e-05,
+            "error_ppm": 0.2,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 64,
+        "mz": 235.10757833719254,
+        "intensity": 0.0912751704454422,
+        "confidence": 0.15623430907726288,
+        "attribution_max_over_groups": 0.054030641913414,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,8-9,FD)",
+            "expected_mz": 235.10771,
+            "error_da": 0.00013,
+            "error_ppm": 0.56,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 71,
+        "mz": 249.16129186749458,
+        "intensity": 0.04319463297724724,
+        "confidence": 0.23947344720363617,
+        "attribution_max_over_groups": 0.019956879317760468,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,13-14,YL)",
+            "expected_mz": 249.15975,
+            "error_da": 0.00154,
+            "error_ppm": 6.18,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 72,
+        "mz": 250.11876598000526,
+        "intensity": 0.050617754459381104,
+        "confidence": 0.12861481308937073,
+        "attribution_max_over_groups": 0.019107934087514877,
+        "is_charge_variant_of_masked": true,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,12-13,NY)",
+            "expected_mz": 250.11862,
+            "error_da": 0.00014,
+            "error_ppm": 0.58,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 76,
+        "mz": 261.15918532013893,
+        "intensity": 0.03975047916173935,
+        "confidence": 0.4590718448162079,
+        "attribution_max_over_groups": 0.018560253083705902,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,7-8,IF)",
+            "expected_mz": 261.15975,
+            "error_da": 0.00056,
+            "error_ppm": 2.15,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 77,
+        "mz": 263.1019242107868,
+        "intensity": 0.09369475394487381,
+        "confidence": 0.4272248148918152,
+        "attribution_max_over_groups": 0.06874412298202515,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,8-9,FD)",
+            "expected_mz": 263.10263,
+            "error_da": 0.0007,
+            "error_ppm": 2.67,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 80,
+        "mz": 278.1159617006779,
+        "intensity": 0.046556878834962845,
+        "confidence": 0.5030732154846191,
+        "attribution_max_over_groups": 0.04446481540799141,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,12-13,NY)",
+            "expected_mz": 278.11354,
+            "error_da": 0.00243,
+            "error_ppm": 8.72,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 85,
+        "mz": 285.15689074993134,
+        "intensity": 0.06941302865743637,
+        "confidence": 0.6439023613929749,
+        "attribution_max_over_groups": 0.010055513121187687,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,4-6,GNL)",
+            "expected_mz": 285.15573,
+            "error_da": 0.00116,
+            "error_ppm": 4.08,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 87,
+        "mz": 298.14889654517174,
+        "intensity": 0.04709284007549286,
+        "confidence": 0.3211457133293152,
+        "attribution_max_over_groups": 0.04494548961520195,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,10-12,PNN)",
+            "expected_mz": 298.15098,
+            "error_da": 0.00208,
+            "error_ppm": 6.99,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 88,
+        "mz": 301.1157922446728,
+        "intensity": 0.08713088184595108,
+        "confidence": 0.32828158140182495,
+        "attribution_max_over_groups": 0.022040192037820816,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,3-5,EGN)",
+            "expected_mz": 301.11426,
+            "error_da": 0.00154,
+            "error_ppm": 5.1,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 91,
+        "mz": 326.14540308713913,
+        "intensity": 0.12345854192972183,
+        "confidence": 0.7028641700744629,
+        "attribution_max_over_groups": 0.015233892016112804,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,10-12,PNN)",
+            "expected_mz": 326.1459,
+            "error_da": 0.00049,
+            "error_ppm": 1.51,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 100,
+        "mz": 386.20389997959137,
+        "intensity": 0.07163430750370026,
+        "confidence": 0.18377648293972015,
+        "attribution_max_over_groups": 0.01613076590001583,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,2-5,IEGN)",
+            "expected_mz": 386.2034,
+            "error_da": 0.0005,
+            "error_ppm": 1.29,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(a,3-6,EGNL)",
+            "expected_mz": 386.2034,
+            "error_da": 0.0005,
+            "error_ppm": 1.29,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 101,
+        "mz": 391.1982849240303,
+        "intensity": 0.059569161385297775,
+        "confidence": 0.5173417329788208,
+        "attribution_max_over_groups": 0.03570856153964996,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,12-14,NYL)",
+            "expected_mz": 391.1976,
+            "error_da": 0.00069,
+            "error_ppm": 1.76,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 102,
+        "mz": 392.1537846326828,
+        "intensity": 0.0807294026017189,
+        "confidence": 0.7788529396057129,
+        "attribution_max_over_groups": 0.017617981880903244,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,11-13,NNY)",
+            "expected_mz": 392.15647,
+            "error_da": 0.00268,
+            "error_ppm": 6.84,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 104,
+        "mz": 398.2406482100487,
+        "intensity": 0.05404748395085335,
+        "confidence": 0.14030016958713531,
+        "attribution_max_over_groups": 0.09996424615383148,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,4-7,GNLI)",
+            "expected_mz": 398.23979,
+            "error_da": 0.00086,
+            "error_ppm": 2.17,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 105,
+        "mz": 414.1978546977043,
+        "intensity": 0.11221130937337875,
+        "confidence": 0.6176323294639587,
+        "attribution_max_over_groups": 0.8948004841804504,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,2-5,IEGN)",
+            "expected_mz": 414.19832,
+            "error_da": 0.00046,
+            "error_ppm": 1.11,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(b,3-6,EGNL)",
+            "expected_mz": 414.19832,
+            "error_da": 0.00046,
+            "error_ppm": 1.11,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 113,
+        "mz": 441.1735385656357,
+        "intensity": 0.06159336864948273,
+        "confidence": 0.5140259861946106,
+        "attribution_max_over_groups": 0.2753196954727173,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,9-12,DPNN)",
+            "expected_mz": 441.17284,
+            "error_da": 0.0007,
+            "error_ppm": 1.59,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 117,
+        "mz": 461.2153396010399,
+        "intensity": 0.10812252014875412,
+        "confidence": 0.7863098978996277,
+        "attribution_max_over_groups": 0.11394644528627396,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,10-13,PNNY)",
+            "expected_mz": 461.21431,
+            "error_da": 0.00103,
+            "error_ppm": 2.23,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 123,
+        "mz": 489.2101138830185,
+        "intensity": 0.1544709950685501,
+        "confidence": 0.9114252924919128,
+        "attribution_max_over_groups": 0.10112438350915909,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,10-13,PNNY)",
+            "expected_mz": 489.20923,
+            "error_da": 0.00089,
+            "error_ppm": 1.81,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 128,
+        "mz": 499.28706139326096,
+        "intensity": 0.04431159421801567,
+        "confidence": 0.10442794114351273,
+        "attribution_max_over_groups": 0.03300242871046066,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,2-6,IEGNL)",
+            "expected_mz": 499.28746,
+            "error_da": 0.0004,
+            "error_ppm": 0.8,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(a,3-7,EGNLI)",
+            "expected_mz": 499.28746,
+            "error_da": 0.0004,
+            "error_ppm": 0.8,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 135,
+        "mz": 527.2810533642769,
+        "intensity": 0.07542576640844345,
+        "confidence": 0.4727637469768524,
+        "attribution_max_over_groups": 0.1943877935409546,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,2-6,IEGNL)",
+            "expected_mz": 527.28238,
+            "error_da": 0.00132,
+            "error_ppm": 2.51,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(b,3-7,EGNLI)",
+            "expected_mz": 527.28238,
+            "error_da": 0.00132,
+            "error_ppm": 2.51,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 144,
+        "mz": 574.297308921814,
+        "intensity": 0.08666245639324188,
+        "confidence": 0.48187828063964844,
+        "attribution_max_over_groups": 0.018698832020163536,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,10-14,PNNYL)",
+            "expected_mz": 574.29837,
+            "error_da": 0.00106,
+            "error_ppm": 1.85,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(a,11-15,NNYLP)",
+            "expected_mz": 574.29837,
+            "error_da": 0.00106,
+            "error_ppm": 1.85,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 146,
+        "mz": 576.2387812137604,
+        "intensity": 0.04278901219367981,
+        "confidence": 0.26330840587615967,
+        "attribution_max_over_groups": 0.012989419512450695,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(a,9-13,DPNNY)",
+            "expected_mz": 576.24125,
+            "error_da": 0.00247,
+            "error_ppm": 4.29,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 152,
+        "mz": 602.2925302386284,
+        "intensity": 0.11317048221826553,
+        "confidence": 0.40766143798828125,
+        "attribution_max_over_groups": 0.1355815827846527,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,10-14,PNNYL)",
+            "expected_mz": 602.29329,
+            "error_da": 0.00076,
+            "error_ppm": 1.25,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          },
+          {
+            "type": "internal_fragment",
+            "label": "int(b,11-15,NNYLP)",
+            "expected_mz": 602.29329,
+            "error_da": 0.00076,
+            "error_ppm": 1.25,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 154,
+        "mz": 604.2355298995972,
+        "intensity": 0.08832050859928131,
+        "confidence": 0.7543719410896301,
+        "attribution_max_over_groups": 0.16185545921325684,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,9-13,DPNNY)",
+            "expected_mz": 604.23617,
+            "error_da": 0.00064,
+            "error_ppm": 1.05,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 174,
+        "mz": 717.3226028680801,
+        "intensity": 0.07699345052242279,
+        "confidence": 0.5140122771263123,
+        "attribution_max_over_groups": 0.04321719706058502,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,9-14,DPNNYL)",
+            "expected_mz": 717.32023,
+            "error_da": 0.00238,
+            "error_ppm": 3.31,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      },
+      {
+        "peak_idx": 179,
+        "mz": 751.3035833835602,
+        "intensity": 0.07361175864934921,
+        "confidence": 0.12651515007019043,
+        "attribution_max_over_groups": 0.1924746334552765,
+        "is_charge_variant_of_masked": false,
+        "matches": [
+          {
+            "type": "internal_fragment",
+            "label": "int(b,8-13,FDPNNY)",
+            "expected_mz": 751.30458,
+            "error_da": 0.00099,
+            "error_ppm": 1.32,
+            "residue": null,
+            "position": null,
+            "discriminates_leu_ile": false
+          }
+        ]
+      }
+    ]
+  }
+}

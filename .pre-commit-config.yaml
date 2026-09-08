@@ -1,0 +1,24 @@
+# ruff subsumes the flake8 plugin stack used in the internal repo; keeping the
+# public repo's config lean makes it likelier to stay green. Line length 100 is
+# carried over so ported code needs no reflowing.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]
+        exclude: ^(notebooks/|tests/)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: [--maxkb=25000]   # data/umap_coordinates.parquet is 22 MB
+      - id: detect-private-key

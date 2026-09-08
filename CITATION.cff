@@ -1,0 +1,127 @@
+cff-version: 1.2.0
+message: >-
+  If you use InstaNovo-FM, please cite the preprint below rather than this
+  repository. The software entry exists so that citation tooling can resolve the
+  code as well.
+title: InstaNovo-FM
+abstract: >-
+  A self-supervised foundation model for proteomics tandem mass spectra. An
+  encoder-only transformer trained to reconstruct masked regions of MS/MS spectra
+  without peptide-sequence labels, whose frozen embeddings transfer across
+  datasets, instruments and acquisition methods.
+type: software
+version: 0.1.0.dev0
+license: Apache-2.0
+repository-code: https://github.com/instadeepai/InstaNovo-FM
+url: https://instadeepai.github.io/InstaNovo-FM
+keywords:
+  - proteomics
+  - mass spectrometry
+  - foundation model
+  - self-supervised learning
+  - de novo peptide sequencing
+authors:
+  - family-names: Nieuwoudt
+    given-names: Mechiel
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Reverenna
+    given-names: Marco
+    affiliation: >-
+      Novo Nordisk Foundation Biotechnology Research Institute for the Green
+      Transition, Technical University of Denmark, Kongens Lyngby, Denmark
+  - family-names: Patel
+    given-names: Divanisha
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Catzel
+    given-names: Rachel
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Houngue
+    given-names: Isaac H. J.
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Daniel
+    given-names: Jemma
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Eloff
+    given-names: Kevin
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Santos
+    given-names: Alberto
+    affiliation: >-
+      Novo Nordisk Foundation Biotechnology Research Institute for the Green
+      Transition, Technical University of Denmark, Kongens Lyngby, Denmark
+  - family-names: Lopez Carranza
+    given-names: Nicolas
+    affiliation: InstaDeep Ltd, London, UK
+  - family-names: Jenkins
+    given-names: Timothy P.
+    affiliation: >-
+      Department of Biotechnology and Biomedicine, Technical University of
+      Denmark, Kongens Lyngby, Denmark
+  - family-names: Van Goey
+    given-names: Jeroen
+    affiliation: InstaDeep Ltd, London, UK
+    email: j.vangoey@instadeep.com
+  - family-names: Kalogeropoulos
+    given-names: Konstantinos
+    affiliation: >-
+      Department of Biotechnology and Biomedicine, Technical University of
+      Denmark, Kongens Lyngby, Denmark
+    email: konka@dtu.dk
+preferred-citation:
+  type: article
+  title: >-
+    Learning from tandem mass spectra at scale with a self-supervised foundation
+    model for proteomics
+  journal: bioRxiv
+  year: 2026
+  month: 9
+  doi: 10.64898/2026.09.03.747733
+  url: https://www.biorxiv.org/content/10.64898/2026.09.03.747733v1
+  notes: Preprint
+  authors:
+    - family-names: Nieuwoudt
+      given-names: Mechiel
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Reverenna
+      given-names: Marco
+      affiliation: >-
+        Novo Nordisk Foundation Biotechnology Research Institute for the Green
+        Transition, Technical University of Denmark, Kongens Lyngby, Denmark
+    - family-names: Patel
+      given-names: Divanisha
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Catzel
+      given-names: Rachel
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Houngue
+      given-names: Isaac H. J.
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Daniel
+      given-names: Jemma
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Eloff
+      given-names: Kevin
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Santos
+      given-names: Alberto
+      affiliation: >-
+        Novo Nordisk Foundation Biotechnology Research Institute for the Green
+        Transition, Technical University of Denmark, Kongens Lyngby, Denmark
+    - family-names: Lopez Carranza
+      given-names: Nicolas
+      affiliation: InstaDeep Ltd, London, UK
+    - family-names: Jenkins
+      given-names: Timothy P.
+      affiliation: >-
+        Department of Biotechnology and Biomedicine, Technical University of
+        Denmark, Kongens Lyngby, Denmark
+    - family-names: Van Goey
+      given-names: Jeroen
+      affiliation: InstaDeep Ltd, London, UK
+      email: j.vangoey@instadeep.com
+    - family-names: Kalogeropoulos
+      given-names: Konstantinos
+      affiliation: >-
+        Department of Biotechnology and Biomedicine, Technical University of
+        Denmark, Kongens Lyngby, Denmark
+      email: konka@dtu.dk

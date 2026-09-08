@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --python 3.11
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group figures --group dev --python 3.11
+      - run: uv run pytest tests/ -v
+
+  # The committed data must never carry internal infrastructure. tests/ checks
+  # the spreadsheets; this checks everything else, including anything a future
+  # port drags in from the internal repo.
+  no-internal-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan the working tree
+        run: |
+          # The scanner and the test that enforces the same rule both have to
+          # name the patterns, so exclude them rather than weaken the pattern.
+          if grep -rniE 'ait-pdfs|dtu-denovo-s-|mass-spec-foundation-model-|FOUNDATION_MODEL_AWS|id-platformhub|iam\.gserviceaccount' \
+               --exclude-dir=.git --exclude-dir=.venv \
+               --exclude='ci.yml' --exclude='test_search_data.py' . ; then
+            echo "::error::internal infrastructure identifiers found in the tree"
+            exit 1
+          fi
+          echo "clean"

@@ -1,0 +1,5380 @@
+{
+  "config": {
+    "root": "/app/fm_mount",
+    "tiers": [
+      "acfm_splits"
+    ],
+    "workers": 24,
+    "per_project": true,
+    "progress": true,
+    "catalog": "/app/search_data.csv",
+    "batch_size": 65536,
+    "keep_top_categories": null,
+    "enabled_metrics": [
+      "spectra",
+      "projects",
+      "runs",
+      "fragmentation",
+      "acquisition",
+      "collision_energy",
+      "charge",
+      "precursor_mz",
+      "analyzer_class",
+      "organism",
+      "instrument",
+      "detector",
+      "enzyme"
+    ],
+    "identity": {
+      "project_source": "path",
+      "run_source": "auto",
+      "project_path_index": null,
+      "run_path_index": null,
+      "project_pattern": "(PXD\\d+|MSV\\d+|JPST\\d+)",
+      "run_pattern": null
+    },
+    "field_map": {}
+  },
+  "files_processed": 4256,
+  "files_failed": 0,
+  "tiers": {
+    "acfm_splits": {
+      "spectra": 849929998,
+      "projects": 70,
+      "runs": 19421,
+      "fragmentation": {
+        "unique": 5,
+        "counts": {
+          "HCID": 430769520,
+          "CID": 191616851,
+          "HCD": 134980472,
+          "Unknown": 68428182,
+          "ETD": 24134973
+        }
+      },
+      "acquisition": {
+        "unique": 2,
+        "counts": {
+          "DDA": 824447592,
+          "DIA": 25482406
+        }
+      },
+      "charge": {
+        "unique": 7,
+        "counts": {
+          "2": 445513913,
+          "3": 263135972,
+          "4": 82879157,
+          "5": 27445798,
+          "1": 22276547,
+          "6": 6952494,
+          "7": 1726117
+        }
+      },
+      "analyzer_class": {
+        "unique": 3,
+        "counts": {
+          "FTMS": 485927457,
+          "ITMS": 275266792,
+          "UNKNOWN": 88735749
+        }
+      },
+      "organism": {
+        "unique": 84,
+        "counts": {
+          "Homo Sapiens": 685321855,
+          "Arabidopsis Thaliana": 62498009,
+          "Saccharomyces Cerevisiae": 14332588,
+          "Plasmodium Yoelii": 14067517,
+          "Mycobacterium Smegmatis": 5923733,
+          "Corynebacterium Glutamicum": 5923733,
+          "Magnaporthe Oryzae": 5542666,
+          "Mus Musculus": 5460898,
+          "Gallus Gallus": 4889558,
+          "Bacillus Subtilis": 3791438,
+          "Methanosarcina Mazei": 3406220,
+          "Zea Mays": 2365250,
+          "Canis Lupus": 2046031,
+          "Bos Taurus": 1838261,
+          "Escherichia Coli": 1714547,
+          "Spongilla Lacustris": 1654794,
+          "Ovis Aries": 1408483,
+          "Guillardia Theta": 1371034,
+          "Fusarium Oxysporum": 1307151,
+          "Oryctolagus Cuniculus": 1271889,
+          "Thalassiosira Pseudonana": 1255557,
+          "Rattus Norvegicus": 1254776,
+          "Drosophila Melanogaster": 1248851,
+          "Gossypium Hirsutum": 1231740,
+          "Danio Rerio": 1230451,
+          "Glycine Max": 1216414,
+          "Hypsibius Exemplaris": 1200576,
+          "Vitis Vinifera": 1158648,
+          "Oncorhynchus Mykiss": 1155879,
+          "Stentor Coeruleus": 1098156,
+          "Chlamydomonas Reinhardtii": 977043,
+          "Chromera Velia": 929922,
+          "Dictyostelium Discoideum": 909553,
+          "Didelphidae": 901651,
+          "Vigna Radiata": 892688,
+          "Emiliania Huxleyi": 885527,
+          "Caenorhabditis Elegans": 883183,
+          "Phaeodactylum Tricornutum": 851594,
+          "Crisetulus Griseus": 838382,
+          "Sus Scrofa": 748267,
+          "Neurospora Crassa": 695148,
+          "Triticum Aestivum": 690713,
+          "Porphyra Umbilicalis": 690028,
+          "Oryzias Melastigma": 681427,
+          "Solanum Lycopersicum": 593971,
+          "Serpentes": 592054,
+          "Apis Mellifera": 581483,
+          "Symbiodinium Microadriaticum": 452072,
+          "Candida Auris": 400102,
+          "Bacteriodes": 367655,
+          "Clam Bacteria": 347790,
+          "Encephalomyocarditis Virus": 339585,
+          "Synechocystis Nigrescens": 333233,
+          "Zika Virus": 323781,
+          "Vaccinia Virus": 307832,
+          "Thauera Aromatica": 304409,
+          "Pseudomonas Putida": 304409,
+          "Trypanosoma Cruzi": 256902,
+          "Parabacteriodes Distasonis": 184335,
+          "Ruminococcus Gnavus": 183536,
+          "Parabacterioides Merdae": 182572,
+          "Streptococcus Parasanguinis": 182045,
+          "Ruminococcus Torques": 181961,
+          "Eggerthella Lenta": 181801,
+          "Veillonella Parvula": 181728,
+          "Fusobacterium Nucleatum": 181542,
+          "Clostridium Bolteae": 181046,
+          "Prevotella": 180771,
+          "Ruminococcus Bromii": 180526,
+          "Blautia Obeum": 180423,
+          "Bifidobacterium Longum": 178001,
+          "Dorea Formicigenerans": 177206,
+          "Halobacterium": 176174,
+          "Thogotovirus": 172945,
+          "Rift Valley Fever Virus": 172924,
+          "Roseburia Intestinalis": 172890,
+          "Vesicular Stomatitis Virus": 171097,
+          "Mycoplasma Mycoides": 170650,
+          "Mouse Hepatitis Virus": 168463,
+          "Herpes Simplex Virus": 167984,
+          "Semliki Forest Virus": 167819,
+          "Sars Coronavirus": 159534,
+          "Capra Hircus": 62377,
+          "Halobacterium Marismortui": 19777
+        }
+      },
+      "instrument": {
+        "unique": 16,
+        "counts": {
+          "Orbitrap Fusion": 375753979,
+          "Q Exactive Hf": 110081537,
+          "Q Exactive Hfx": 80873737,
+          "Q Exactive": 61167536,
+          "Timstof Pro 2": 41827198,
+          "Orbitrap Exploris 480": 38528728,
+          "Timstof Scp": 31594731,
+          "Orbitrap Velos": 28271343,
+          "Orbitrap Elite": 22228019,
+          "Orbitrap Fusion Lumos": 20556683,
+          "Orbitrap Q Exactive": 17741428,
+          "Orbitrap Eclipse": 16346621,
+          "Q Exactive Plus": 1654794,
+          "Orbitrap Exploris 240": 1563201,
+          "Orbitrap Astral": 1246303,
+          "Orbitrap Ascend": 494160
+        }
+      },
+      "detector": {
+        "unique": 4,
+        "counts": {
+          "Orbitrap": 774911286,
+          "Iontrap": 75949580,
+          "Tof": 73421929,
+          "Astral": 1246303
+        }
+      },
+      "enzyme": {
+        "unique": 7,
+        "counts": {
+          "Trypsin": 600328732,
+          "Unspecific": 90872781,
+          "Chymotrypsin": 40909518,
+          "Lysn": 33994554,
+          "Aspn": 31813877,
+          "Gluc": 27667121,
+          "Lysc": 24343415
+        }
+      },
+      "collision_energy": {
+        "count": 757366843,
+        "mean": 33.69119980779294,
+        "std": 13.999880153924922,
+        "min": 8.563620567322,
+        "max": 150.0
+      },
+      "precursor_mz": {
+        "count": 849929998,
+        "mean": 700.6998531125166,
+        "std": 259.71886402130195,
+        "min": 145.487380981445,
+        "max": 1999.97802734375
+      },
+      "projects_detail": {
+        "MSV000090792": {
+          "spectra": 2408853,
+          "projects": 1,
+          "runs": 170,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 2408853
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DIA": 2408853
+            }
+          },
+          "charge": {
+            "unique": 1,
+            "counts": {
+              "2": 2408853
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 2058373,
+              "ITMS": 350480
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 2408853
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Eclipse": 2408853
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 2058373,
+              "Iontrap": 350480
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 2408853
+            }
+          },
+          "collision_energy": {
+            "count": 2408853,
+            "mean": 33.0,
+            "std": 0.0,
+            "min": 33.0,
+            "max": 33.0
+          },
+          "precursor_mz": {
+            "count": 2408853,
+            "mean": 700.3393070406532,
+            "std": 147.72898064255142,
+            "min": 402.5,
+            "max": 1111.0
+          }
+        },
+        "PXD000561": {
+          "spectra": 24974440,
+          "projects": 1,
+          "runs": 2204,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 24974440
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 24974440
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 14746892,
+              "3": 6790192,
+              "4": 1821660,
+              "1": 973277,
+              "5": 485396,
+              "6": 131571,
+              "7": 25452
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 24974440
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 24974440
+            }
+          },
+          "instrument": {
+            "unique": 3,
+            "counts": {
+              "Orbitrap Elite": 18905343,
+              "Orbitrap Velos": 6019094,
+              "Q Exactive Hfx": 50003
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 24974440
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 24974440
+            }
+          },
+          "collision_energy": {
+            "count": 24974440,
+            "mean": 33.719168417790364,
+            "std": 3.1834867972683436,
+            "min": 27.0,
+            "max": 44.0
+          },
+          "precursor_mz": {
+            "count": 24974440,
+            "mean": 708.4268558867726,
+            "std": 239.17587971197625,
+            "min": 300.018676757813,
+            "max": 1797.959350585938
+          }
+        },
+        "PXD000865": {
+          "spectra": 22063814,
+          "projects": 1,
+          "runs": 1345,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "HCD": 20224253,
+              "CID": 1839561
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 22063814
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 11043346,
+              "3": 7691855,
+              "4": 2475397,
+              "5": 650403,
+              "6": 179924,
+              "7": 22870,
+              "1": 19
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 21298119,
+              "ITMS": 765695
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 22063814
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Velos": 22063814
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 22063814
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 22063814
+            }
+          },
+          "collision_energy": {
+            "count": 22063814,
+            "mean": 32.372202194960494,
+            "std": 5.005760866592998,
+            "min": 25.0,
+            "max": 70.0
+          },
+          "precursor_mz": {
+            "count": 22063814,
+            "mean": 666.7185542387775,
+            "std": 201.35437390442783,
+            "min": 300.012084960938,
+            "max": 1299.9609375
+          }
+        },
+        "PXD003868": {
+          "spectra": 1436818,
+          "projects": 1,
+          "runs": 27,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1436818
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1436818
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 704799,
+              "3": 560600,
+              "4": 139333,
+              "5": 26967,
+              "6": 4802,
+              "7": 317
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1436818
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Saccharomyces Cerevisiae": 1436818
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 1436818
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1436818
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1436818
+            }
+          },
+          "collision_energy": {
+            "count": 1436818,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 1436818,
+            "mean": 775.1518272187029,
+            "std": 241.56345760060634,
+            "min": 300.091888427734,
+            "max": 1748.592529296875
+          }
+        },
+        "PXD003977": {
+          "spectra": 4758097,
+          "projects": 1,
+          "runs": 120,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "CID": 3320276,
+              "HCD": 1437821
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 4758097
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 1967900,
+              "3": 1650475,
+              "4": 721923,
+              "5": 178098,
+              "1": 147469,
+              "6": 74140,
+              "7": 18092
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "ITMS": 3320276,
+              "FTMS": 1437821
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 4758097
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 4758097
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 4758097,
+              "Iontrap": 4758097
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 4758097
+            }
+          },
+          "collision_energy": {
+            "count": 4758097,
+            "mean": 32.38668673631496,
+            "std": 4.160750862133492,
+            "min": 25.0,
+            "max": 35.0
+          },
+          "precursor_mz": {
+            "count": 4758097,
+            "mean": 742.1902288239945,
+            "std": 244.46436381865195,
+            "min": 197.128326416016,
+            "max": 1499.9912109375
+          }
+        },
+        "PXD004325": {
+          "spectra": 3406220,
+          "projects": 1,
+          "runs": 66,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 3406220
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 3406220
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 1792851,
+              "3": 1152112,
+              "4": 319170,
+              "5": 89221,
+              "6": 38562,
+              "7": 14304
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 3406220
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Methanosarcina Mazei": 3406220
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 3406220
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 3406220
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 3406220
+            }
+          },
+          "collision_energy": {
+            "count": 3406220,
+            "mean": 27.5,
+            "std": 0.0,
+            "min": 27.5,
+            "max": 27.5
+          },
+          "precursor_mz": {
+            "count": 3406220,
+            "mean": 697.8563298500658,
+            "std": 251.3742081049437,
+            "min": 300.097585767045,
+            "max": 1999.789306640625
+          }
+        },
+        "PXD004424": {
+          "spectra": 229629,
+          "projects": 1,
+          "runs": 23,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 229629
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 229629
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 92442,
+              "3": 91040,
+              "4": 35577,
+              "5": 10570
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 229629
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 229629
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 229629
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 229629
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 229629
+            }
+          },
+          "collision_energy": {
+            "count": 229629,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 229629,
+            "mean": 716.469844121001,
+            "std": 202.72143282188347,
+            "min": 399.850777638539,
+            "max": 1799.822265625
+          }
+        },
+        "PXD004452": {
+          "spectra": 22192026,
+          "projects": 1,
+          "runs": 1016,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 22192026
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 22192026
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 10121333,
+              "3": 8102038,
+              "4": 2993127,
+              "5": 971418,
+              "6": 4110
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 22192026
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 22192026
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 22192026
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 22192026
+            }
+          },
+          "enzyme": {
+            "unique": 4,
+            "counts": {
+              "Trypsin": 18538251,
+              "Chymotrypsin": 1265588,
+              "Gluc": 1207759,
+              "Lysc": 1180428
+            }
+          },
+          "collision_energy": {
+            "count": 22192026,
+            "mean": 28.046297710718264,
+            "std": 0.3007522957830235,
+            "min": 28.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 22192026,
+            "mean": 744.399675220587,
+            "std": 249.22314382012956,
+            "min": 348.168339394732,
+            "max": 1597.353271484375
+          }
+        },
+        "PXD004467": {
+          "spectra": 581483,
+          "projects": 1,
+          "runs": 12,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 581483
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 581483
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 404039,
+              "3": 142984,
+              "4": 27131,
+              "5": 5397,
+              "6": 1932
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 581483
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Apis Mellifera": 581483
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 581483
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 581483
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 581483
+            }
+          },
+          "collision_energy": {
+            "count": 581483,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 581483,
+            "mean": 800.8301268266916,
+            "std": 265.99178259551485,
+            "min": 350.044128417969,
+            "max": 1598.380981445312
+          }
+        },
+        "PXD004536": {
+          "spectra": 347790,
+          "projects": 1,
+          "runs": 10,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 347790
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 347790
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 219237,
+              "3": 100888,
+              "4": 22459,
+              "5": 3978,
+              "6": 949,
+              "7": 279
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 347790
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Clam Bacteria": 347790
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 347790
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 347790
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 347790
+            }
+          },
+          "collision_energy": {
+            "count": 347790,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 347790,
+            "mean": 620.8724200021283,
+            "std": 164.63726227908026,
+            "min": 379.817927478497,
+            "max": 1594.270751953125
+          }
+        },
+        "PXD004565": {
+          "spectra": 3615246,
+          "projects": 1,
+          "runs": 91,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 3615246
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DIA": 3615246
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 1867054,
+              "3": 1446533,
+              "4": 269880,
+              "5": 24996,
+              "6": 6783
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 3615246
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Bacillus Subtilis": 3615246
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 3615246
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 3615246
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 3615246
+            }
+          },
+          "collision_energy": {
+            "count": 3615246,
+            "mean": 27.5,
+            "std": 0.0,
+            "min": 27.5,
+            "max": 27.5
+          },
+          "precursor_mz": {
+            "count": 3615246,
+            "mean": 663.6157385698272,
+            "std": 210.61275991390886,
+            "min": 299.147809035689,
+            "max": 1646.3134765625
+          }
+        },
+        "PXD004732": {
+          "spectra": 63060074,
+          "projects": 1,
+          "runs": 1460,
+          "fragmentation": {
+            "unique": 4,
+            "counts": {
+              "HCID": 43979529,
+              "CID": 16643246,
+              "ETD": 1614339,
+              "HCD": 822960
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 63060074
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 39308136,
+              "3": 19358736,
+              "4": 4108785,
+              "5": 245529,
+              "6": 35777,
+              "7": 3111
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 42948368,
+              "ITMS": 20111706
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 63060074
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 63060074
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 63060074,
+              "Iontrap": 20331258
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 63060074
+            }
+          },
+          "collision_energy": {
+            "count": 61445735,
+            "mean": 33.175066022781095,
+            "std": 19.89849645059667,
+            "min": 9.863566398621,
+            "max": 143.256546020508
+          },
+          "precursor_mz": {
+            "count": 63060074,
+            "mean": 639.8927021680311,
+            "std": 175.66243188064703,
+            "min": 357.202270507813,
+            "max": 1299.636352539063
+          }
+        },
+        "PXD004947": {
+          "spectra": 593971,
+          "projects": 1,
+          "runs": 59,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 593971
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 593971
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 326106,
+              "3": 204812,
+              "4": 49182,
+              "5": 10579,
+              "6": 2703,
+              "7": 589
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 593971
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Solanum Lycopersicum": 593971
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 593971
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 593971
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 593971
+            }
+          },
+          "collision_energy": {
+            "count": 593971,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 593971,
+            "mean": 670.6984310481587,
+            "std": 219.06670137568358,
+            "min": 378.193042182757,
+            "max": 1499.7744140625
+          }
+        },
+        "PXD004948": {
+          "spectra": 188435,
+          "projects": 1,
+          "runs": 6,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 188435
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 188435
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 159137,
+              "3": 27415,
+              "4": 1529,
+              "6": 135,
+              "5": 115,
+              "7": 104
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 188435
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Mus Musculus": 188435
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Velos": 188435
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 188435
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 188435
+            }
+          },
+          "collision_energy": {
+            "count": 188435,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 188435,
+            "mean": 651.4870310655259,
+            "std": 174.65031332494826,
+            "min": 400.172733511476,
+            "max": 1999.729370117188
+          }
+        },
+        "PXD005025": {
+          "spectra": 892688,
+          "projects": 1,
+          "runs": 23,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 892688
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 892688
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 595289,
+              "3": 245384,
+              "4": 42476,
+              "5": 7240,
+              "6": 2065,
+              "7": 234
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 892688
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Vigna Radiata": 892688
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 892688
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 892688
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 892688
+            }
+          },
+          "collision_energy": {
+            "count": 892688,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 892688,
+            "mean": 663.9643888899928,
+            "std": 233.20684532066383,
+            "min": 300.140549013066,
+            "max": 1747.840890704284
+          }
+        },
+        "PXD005573": {
+          "spectra": 6075238,
+          "projects": 1,
+          "runs": 88,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 6075238
+            }
+          },
+          "acquisition": {
+            "unique": 2,
+            "counts": {
+              "DIA": 3735682,
+              "DDA": 2339556
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 3389681,
+              "3": 1605965,
+              "1": 578475,
+              "4": 403413,
+              "5": 79718,
+              "6": 15842,
+              "7": 2144
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 6075238
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 6075238
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 6075238
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 6075238
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 6075238
+            }
+          },
+          "collision_energy": {
+            "count": 6075238,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 6075238,
+            "mean": 715.5399554037068,
+            "std": 245.0972304589055,
+            "min": 300.089055706878,
+            "max": 1649.962414120862
+          }
+        },
+        "PXD006201": {
+          "spectra": 8905797,
+          "projects": 1,
+          "runs": 330,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 8905797
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 8905797
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 3998196,
+              "3": 3120696,
+              "4": 1066231,
+              "5": 426081,
+              "6": 212105,
+              "7": 82488
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 8905797
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 8905797
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hfx": 8905797
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 8905797
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 8905797
+            }
+          },
+          "collision_energy": {
+            "count": 8905797,
+            "mean": 28.076130637156904,
+            "std": 0.38270798319329935,
+            "min": 28.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 8905797,
+            "mean": 700.7721369872486,
+            "std": 249.02699886178962,
+            "min": 299.900401038585,
+            "max": 1790.622924804688
+          }
+        },
+        "PXD006939": {
+          "spectra": 4832200,
+          "projects": 1,
+          "runs": 102,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 4832200
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 4832200
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 2160454,
+              "3": 1273636,
+              "1": 891325,
+              "4": 379925,
+              "5": 124156,
+              "6": 2620,
+              "7": 84
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 4832200
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 4832200
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 4832200
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 4832200
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 4832200
+            }
+          },
+          "collision_energy": {
+            "count": 4832200,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 4832200,
+            "mean": 572.7650069765775,
+            "std": 215.86879291349808,
+            "min": 299.925197819182,
+            "max": 1649.8798828125
+          }
+        },
+        "PXD009449": {
+          "spectra": 4396627,
+          "projects": 1,
+          "runs": 98,
+          "fragmentation": {
+            "unique": 4,
+            "counts": {
+              "HCID": 2967957,
+              "CID": 1180700,
+              "ETD": 125100,
+              "HCD": 122870
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 4396627
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 3423547,
+              "3": 935305,
+              "4": 37048,
+              "6": 420,
+              "5": 303,
+              "7": 4
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 2961817,
+              "ITMS": 1434810
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 4396627
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 4396627
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 4396627,
+              "Iontrap": 1469482
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 4396627
+            }
+          },
+          "collision_energy": {
+            "count": 4271527,
+            "mean": 33.4389823218081,
+            "std": 19.378255960131884,
+            "min": 20.0,
+            "max": 123.036895751953
+          },
+          "precursor_mz": {
+            "count": 4396627,
+            "mean": 640.0989116233337,
+            "std": 138.27512486969007,
+            "min": 359.180999755859,
+            "max": 1282.045776367188
+          }
+        },
+        "PXD010595": {
+          "spectra": 43794455,
+          "projects": 1,
+          "runs": 888,
+          "fragmentation": {
+            "unique": 4,
+            "counts": {
+              "HCID": 23901122,
+              "CID": 11866311,
+              "HCD": 6870722,
+              "ETD": 1156300
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 43794455
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 31522224,
+              "3": 10498400,
+              "4": 1680818,
+              "5": 81360,
+              "6": 10254,
+              "7": 1399
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 29353953,
+              "ITMS": 14440502
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 43794455
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 43794455
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 43794455,
+              "Iontrap": 14444326
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 43794455
+            }
+          },
+          "collision_energy": {
+            "count": 42638155,
+            "mean": 33.05848692885091,
+            "std": 18.931614911720118,
+            "min": 13.612590789795,
+            "max": 141.555374145508
+          },
+          "precursor_mz": {
+            "count": 43794455,
+            "mean": 605.360800836116,
+            "std": 166.91436964424864,
+            "min": 357.213195800781,
+            "max": 1299.717651367188
+          }
+        },
+        "PXD013868": {
+          "spectra": 58992182,
+          "projects": 1,
+          "runs": 1534,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 58992182
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 58992182
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 32185302,
+              "3": 20205718,
+              "4": 5272107,
+              "5": 1021261,
+              "6": 307794
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 49544307,
+              "ITMS": 9447875
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Arabidopsis Thaliana": 58992182
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 58992182
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 58992182
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 58992182
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 58992182,
+            "mean": 743.3268877358614,
+            "std": 229.13157943364286,
+            "min": 357.982906335581,
+            "max": 1299.993896484375
+          }
+        },
+        "PXD014525": {
+          "spectra": 9507692,
+          "projects": 1,
+          "runs": 404,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 9507692
+            }
+          },
+          "acquisition": {
+            "unique": 2,
+            "counts": {
+              "DIA": 7547550,
+              "DDA": 1960142
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 8328217,
+              "3": 851154,
+              "4": 273802,
+              "5": 54519
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 9507692
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 9507692
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hfx": 9507692
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 9507692
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 9507692
+            }
+          },
+          "collision_energy": {
+            "count": 9507692,
+            "mean": 25.6184914277829,
+            "std": 1.2136484816897184,
+            "min": 25.0,
+            "max": 28.0
+          },
+          "precursor_mz": {
+            "count": 9507692,
+            "mean": 789.8053143443991,
+            "std": 204.19627340105495,
+            "min": 349.186212044622,
+            "max": 1399.899658203125
+          }
+        },
+        "PXD014877": {
+          "spectra": 38607650,
+          "projects": 1,
+          "runs": 225,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 38607650
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 38607650
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 25137072,
+              "3": 11438986,
+              "4": 1743635,
+              "5": 287957
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 38607650
+            }
+          },
+          "organism": {
+            "unique": 54,
+            "counts": {
+              "Arabidopsis Thaliana": 3185380,
+              "Canis Lupus": 2046031,
+              "Guillardia Theta": 1371034,
+              "Fusarium Oxysporum": 1307151,
+              "Oryctolagus Cuniculus": 1271889,
+              "Thalassiosira Pseudonana": 1255557,
+              "Gossypium Hirsutum": 1231740,
+              "Glycine Max": 1216414,
+              "Hypsibius Exemplaris": 1200576,
+              "Saccharomyces Cerevisiae": 1193944,
+              "Vitis Vinifera": 1158648,
+              "Stentor Coeruleus": 1098156,
+              "Bos Taurus": 1076760,
+              "Drosophila Melanogaster": 1066764,
+              "Chlamydomonas Reinhardtii": 977043,
+              "Chromera Velia": 929922,
+              "Dictyostelium Discoideum": 909553,
+              "Gallus Gallus": 906631,
+              "Didelphidae": 901651,
+              "Mus Musculus": 888500,
+              "Danio Rerio": 888106,
+              "Emiliania Huxleyi": 885527,
+              "Caenorhabditis Elegans": 883183,
+              "Phaeodactylum Tricornutum": 851594,
+              "Crisetulus Griseus": 838382,
+              "Rattus Norvegicus": 697452,
+              "Neurospora Crassa": 695148,
+              "Triticum Aestivum": 690713,
+              "Porphyra Umbilicalis": 690028,
+              "Oryzias Melastigma": 681427,
+              "Sus Scrofa": 679100,
+              "Homo Sapiens": 527510,
+              "Symbiodinium Microadriaticum": 452072,
+              "Bacteriodes": 367655,
+              "Synechocystis Nigrescens": 333233,
+              "Parabacteriodes Distasonis": 184335,
+              "Ruminococcus Gnavus": 183536,
+              "Parabacterioides Merdae": 182572,
+              "Streptococcus Parasanguinis": 182045,
+              "Ruminococcus Torques": 181961,
+              "Eggerthella Lenta": 181801,
+              "Veillonella Parvula": 181728,
+              "Fusobacterium Nucleatum": 181542,
+              "Clostridium Bolteae": 181046,
+              "Prevotella": 180771,
+              "Ruminococcus Bromii": 180526,
+              "Blautia Obeum": 180423,
+              "Bifidobacterium Longum": 178001,
+              "Dorea Formicigenerans": 177206,
+              "Bacillus Subtilis": 176192,
+              "Halobacterium": 176174,
+              "Roseburia Intestinalis": 172890,
+              "Mycoplasma Mycoides": 170650,
+              "Halobacterium Marismortui": 19777
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hfx": 38607650
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 38607650
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 38607650
+            }
+          },
+          "collision_energy": {
+            "count": 38607650,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 38607650,
+            "mean": 584.4955416805126,
+            "std": 198.33172001868385,
+            "min": 299.100184113113,
+            "max": 1649.304164769525
+          }
+        },
+        "PXD019483": {
+          "spectra": 19819668,
+          "projects": 1,
+          "runs": 112,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 19819668
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 19819668
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 11504422,
+              "3": 6585228,
+              "4": 1360167,
+              "5": 369851
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 19819668
+            }
+          },
+          "organism": {
+            "unique": 11,
+            "counts": {
+              "Homo Sapiens": 17667704,
+              "Encephalomyocarditis Virus": 339585,
+              "Zika Virus": 323781,
+              "Vaccinia Virus": 307832,
+              "Thogotovirus": 172945,
+              "Rift Valley Fever Virus": 172924,
+              "Vesicular Stomatitis Virus": 171097,
+              "Mouse Hepatitis Virus": 168463,
+              "Herpes Simplex Virus": 167984,
+              "Semliki Forest Virus": 167819,
+              "Sars Coronavirus": 159534
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hfx": 19819668
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 19819668
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 19819668
+            }
+          },
+          "collision_energy": {
+            "count": 19819668,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 19819668,
+            "mean": 575.145458043374,
+            "std": 196.85366728678432,
+            "min": 299.118237573855,
+            "max": 1649.549926757812
+          }
+        },
+        "PXD021013": {
+          "spectra": 100969262,
+          "projects": 1,
+          "runs": 1818,
+          "fragmentation": {
+            "unique": 4,
+            "counts": {
+              "HCID": 45835845,
+              "CID": 31173488,
+              "HCD": 22211050,
+              "ETD": 1748879
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 100969262
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 51558281,
+              "3": 28545811,
+              "1": 13462146,
+              "4": 6248815,
+              "5": 959443,
+              "6": 160820,
+              "7": 33946
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 61365364,
+              "ITMS": 39603898
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 100969262
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 100969262
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap": 100969262,
+              "Iontrap": 34595937
+            }
+          },
+          "enzyme": {
+            "unique": 4,
+            "counts": {
+              "Unspecific": 71148906,
+              "Trypsin": 11249948,
+              "Lysn": 9632421,
+              "Aspn": 8937987
+            }
+          },
+          "collision_energy": {
+            "count": 99220383,
+            "mean": 32.11369265691319,
+            "std": 16.274242624572725,
+            "min": 9.899807929993,
+            "max": 150.0
+          },
+          "precursor_mz": {
+            "count": 100969262,
+            "mean": 626.03228367253,
+            "std": 203.81790174106285,
+            "min": 145.487380981445,
+            "max": 1998.625244140625
+          }
+        },
+        "PXD023064": {
+          "spectra": 956427,
+          "projects": 1,
+          "runs": 60,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "HCID": 666244,
+              "CID": 290183
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 956427
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 699581,
+              "3": 228393,
+              "4": 26069,
+              "5": 993,
+              "7": 844,
+              "6": 547
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 956427
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 956427
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 956427
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 956427
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 956427
+            }
+          },
+          "collision_energy": {
+            "count": 956427,
+            "mean": 86.09305315911809,
+            "std": 45.67846407730387,
+            "min": 28.740797042847,
+            "max": 150.0
+          },
+          "precursor_mz": {
+            "count": 956427,
+            "mean": 550.3212102896139,
+            "std": 109.86769025274425,
+            "min": 299.112487792969,
+            "max": 799.995849609375
+          }
+        },
+        "PXD024364": {
+          "spectra": 160721742,
+          "projects": 1,
+          "runs": 2460,
+          "fragmentation": {
+            "unique": 3,
+            "counts": {
+              "HCID": 123893553,
+              "ETD": 19490355,
+              "CID": 17337834
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 160721742
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 70630795,
+              "3": 49324402,
+              "4": 24097774,
+              "5": 10448601,
+              "6": 4944570,
+              "7": 1275600
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 160721742
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 160721742
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 160721742
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 160721742
+            }
+          },
+          "enzyme": {
+            "unique": 6,
+            "counts": {
+              "Chymotrypsin": 39643930,
+              "Gluc": 26459362,
+              "Lysn": 24362133,
+              "Trypsin": 24217440,
+              "Lysc": 23162987,
+              "Aspn": 22875890
+            }
+          },
+          "collision_energy": {
+            "count": 141231387,
+            "mean": 34.31715455007184,
+            "std": 11.538422161568418,
+            "min": 27.5,
+            "max": 70.0
+          },
+          "precursor_mz": {
+            "count": 160721742,
+            "mean": 743.3687394916041,
+            "std": 266.7767233510259,
+            "min": 199.024658203125,
+            "max": 1499.998779296875
+          }
+        },
+        "PXD025859": {
+          "spectra": 3016658,
+          "projects": 1,
+          "runs": 53,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 3016658
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 3016658
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 1269586,
+              "2": 1110670,
+              "4": 426418,
+              "5": 129382,
+              "6": 48509,
+              "7": 32093
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 3016658
+            }
+          },
+          "organism": {
+            "unique": 3,
+            "counts": {
+              "Mus Musculus": 2133338,
+              "Bos Taurus": 701233,
+              "Drosophila Melanogaster": 182087
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 3016658
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 3016658
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 3016658
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 3016658,
+            "mean": 1106.0241415718467,
+            "std": 267.5558438651517,
+            "min": 698.862854003906,
+            "max": 1999.97802734375
+          }
+        },
+        "PXD026629": {
+          "spectra": 940389,
+          "projects": 1,
+          "runs": 27,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 940389
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 940389
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "3": 435935,
+              "2": 356022,
+              "4": 110587,
+              "5": 34708,
+              "6": 3137
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 940389
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Mus Musculus": 940389
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 940389
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 940389
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 940389
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 940389,
+            "mean": 1057.6014209316345,
+            "std": 215.96816762505404,
+            "min": 698.271850585938,
+            "max": 1999.741943359375
+          }
+        },
+        "PXD026649": {
+          "spectra": 2589017,
+          "projects": 1,
+          "runs": 37,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 2589017
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 2589017
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 1346975,
+              "2": 860579,
+              "4": 327381,
+              "5": 50010,
+              "6": 3596,
+              "7": 476
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 2589017
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 2589017
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 2589017
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 2589017
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 2589017
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 2589017,
+            "mean": 1118.990030333903,
+            "std": 250.70952096278532,
+            "min": 698.257507324219,
+            "max": 1999.587036132813
+          }
+        },
+        "PXD029360": {
+          "spectra": 13797913,
+          "projects": 1,
+          "runs": 853,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "CID": 11643696,
+              "HCID": 2154217
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 13797913
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 7825914,
+              "3": 4704370,
+              "4": 1062785,
+              "5": 176939,
+              "6": 24464,
+              "7": 3430,
+              "1": 11
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "ITMS": 11643696,
+              "FTMS": 2154217
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 13797913
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 13797913
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 13797913
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 13797913
+            }
+          },
+          "collision_energy": {
+            "count": 13797913,
+            "mean": 34.09475027129102,
+            "std": 2.1805318252193673,
+            "min": 28.0,
+            "max": 35.0
+          },
+          "precursor_mz": {
+            "count": 13797913,
+            "mean": 644.2212216113522,
+            "std": 205.63900273692667,
+            "min": 300.087280273438,
+            "max": 1987.39599609375
+          }
+        },
+        "PXD031025": {
+          "spectra": 399820,
+          "projects": 1,
+          "runs": 6,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 399820
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 399820
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 178601,
+              "4": 117941,
+              "2": 44968,
+              "5": 43995,
+              "6": 11195,
+              "7": 3120
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 399820
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 399820
+            }
+          },
+          "instrument": {
+            "unique": 2,
+            "counts": {
+              "Orbitrap Exploris 480": 346334,
+              "Orbitrap Fusion Lumos": 53486
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 399820
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 399820
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 399820,
+            "mean": 1259.6441776981953,
+            "std": 278.93023566151993,
+            "min": 400.186221205618,
+            "max": 1995.832847579465
+          }
+        },
+        "PXD031032": {
+          "spectra": 1393464,
+          "projects": 1,
+          "runs": 34,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 1393464
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1393464
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 590971,
+              "2": 455930,
+              "4": 232812,
+              "5": 86108,
+              "6": 27538,
+              "7": 105
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1393464
+            }
+          },
+          "organism": {
+            "unique": 2,
+            "counts": {
+              "Mus Musculus": 815695,
+              "Saccharomyces Cerevisiae": 577769
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 1393464
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1393464
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1393464
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 1393464,
+            "mean": 999.3536236132379,
+            "std": 346.35488384946865,
+            "min": 198.526962280273,
+            "max": 1999.859741210938
+          }
+        },
+        "PXD035158": {
+          "spectra": 1096652,
+          "projects": 1,
+          "runs": 16,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "Unknown": 1096652
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1096652
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 490968,
+              "2": 348996,
+              "4": 175399,
+              "5": 54457,
+              "6": 17780,
+              "7": 9052
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1096652
+            }
+          },
+          "organism": {
+            "unique": 2,
+            "counts": {
+              "Homo Sapiens": 602111,
+              "Mus Musculus": 494541
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 1096652
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1096652
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1096652
+            }
+          },
+          "collision_energy": {
+            "count": 0,
+            "mean": null,
+            "std": null,
+            "min": null,
+            "max": null
+          },
+          "precursor_mz": {
+            "count": 1096652,
+            "mean": 1162.084450380365,
+            "std": 270.7094853956055,
+            "min": 699.328308105469,
+            "max": 1999.92529296875
+          }
+        },
+        "PXD036161": {
+          "spectra": 592054,
+          "projects": 1,
+          "runs": 26,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 592054
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 592054
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 207426,
+              "3": 193143,
+              "4": 97930,
+              "5": 52544,
+              "6": 28509,
+              "7": 12502
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 592054
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Serpentes": 592054
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 592054
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 592054
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 592054
+            }
+          },
+          "collision_energy": {
+            "count": 592054,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 592054,
+            "mean": 730.5842816468785,
+            "std": 252.0595408478053,
+            "min": 300.060913085938,
+            "max": 1749.016967773438
+          }
+        },
+        "PXD037009": {
+          "spectra": 29330735,
+          "projects": 1,
+          "runs": 960,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 29330735
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 29330735
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 13205426,
+              "3": 12308764,
+              "4": 2992340,
+              "5": 601776,
+              "6": 162634,
+              "7": 59795
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 29330735
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 29330735
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Exploris 480": 29330735
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 29330735
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 29330735
+            }
+          },
+          "collision_energy": {
+            "count": 29330735,
+            "mean": 26.87437839522262,
+            "std": 1.4525291106172484,
+            "min": 25.0,
+            "max": 28.0
+          },
+          "precursor_mz": {
+            "count": 29330735,
+            "mean": 549.7472761936306,
+            "std": 173.734524626417,
+            "min": 299.079617817655,
+            "max": 1749.966186523438
+          }
+        },
+        "PXD043989": {
+          "spectra": 2201348,
+          "projects": 1,
+          "runs": 36,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "HCID": 2142086,
+              "HCD": 59262
+            }
+          },
+          "acquisition": {
+            "unique": 2,
+            "counts": {
+              "DIA": 1245762,
+              "DDA": 955586
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "4": 1245762,
+              "2": 388919,
+              "1": 326529,
+              "3": 240138
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 2201348
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 2201348
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 2201348
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 2201348
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 2201348
+            }
+          },
+          "collision_energy": {
+            "count": 2201348,
+            "mean": 28.69772612054069,
+            "std": 1.4869110199524145,
+            "min": 27.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 2201348,
+            "mean": 585.5563863081077,
+            "std": 215.86987238961788,
+            "min": 299.053360890845,
+            "max": 1640.632115689203
+          }
+        },
+        "PXD044135": {
+          "spectra": 1408483,
+          "projects": 1,
+          "runs": 34,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1408483
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1408483
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 813332,
+              "3": 467693,
+              "4": 100163,
+              "5": 27295
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1408483
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Ovis Aries": 1408483
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 1408483
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1408483
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1408483
+            }
+          },
+          "collision_energy": {
+            "count": 1408483,
+            "mean": 33.0,
+            "std": 0.0,
+            "min": 33.0,
+            "max": 33.0
+          },
+          "precursor_mz": {
+            "count": 1408483,
+            "mean": 667.6802212052465,
+            "std": 199.0598453829989,
+            "min": 349.210071599644,
+            "max": 1849.925415039062
+          }
+        },
+        "PXD044169": {
+          "spectra": 1654794,
+          "projects": 1,
+          "runs": 52,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1654794
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1654794
+            }
+          },
+          "charge": {
+            "unique": 3,
+            "counts": {
+              "2": 1066153,
+              "3": 501028,
+              "4": 87613
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1654794
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Spongilla Lacustris": 1654794
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Plus": 1654794
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1654794
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1654794
+            }
+          },
+          "collision_energy": {
+            "count": 1654794,
+            "mean": 32.0,
+            "std": 0.0,
+            "min": 32.0,
+            "max": 32.0
+          },
+          "precursor_mz": {
+            "count": 1654794,
+            "mean": 650.407609920789,
+            "std": 169.774099621013,
+            "min": 374.845946338508,
+            "max": 1199.922973632812
+          }
+        },
+        "PXD044301": {
+          "spectra": 1155879,
+          "projects": 1,
+          "runs": 24,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1155879
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1155879
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 565559,
+              "3": 430907,
+              "4": 124462,
+              "5": 27966,
+              "6": 6359,
+              "7": 626
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1155879
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Oncorhynchus Mykiss": 1155879
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 1155879
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1155879
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1155879
+            }
+          },
+          "collision_energy": {
+            "count": 1155879,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 1155879,
+            "mean": 795.4767965464282,
+            "std": 250.66007797201397,
+            "min": 379.864297670449,
+            "max": 1578.168579101562
+          }
+        },
+        "PXD044303": {
+          "spectra": 2365250,
+          "projects": 1,
+          "runs": 258,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 2365250
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 2365250
+            }
+          },
+          "charge": {
+            "unique": 7,
+            "counts": {
+              "2": 809415,
+              "3": 634789,
+              "1": 614024,
+              "4": 199381,
+              "5": 70412,
+              "6": 31015,
+              "7": 6214
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 2365250
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Zea Mays": 2365250
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Elite": 2365250
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 2365250
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 2365250
+            }
+          },
+          "collision_energy": {
+            "count": 2365250,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 2365250,
+            "mean": 815.4207176008281,
+            "std": 251.88907052967963,
+            "min": 350.010009765625,
+            "max": 1799.951782226563
+          }
+        },
+        "PXD044325": {
+          "spectra": 3982927,
+          "projects": 1,
+          "runs": 60,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 3982927
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 3982927
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 1896333,
+              "3": 1351622,
+              "4": 537480,
+              "5": 197492
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 3982927
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Gallus Gallus": 3982927
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hfx": 3982927
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 3982927
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 3982927
+            }
+          },
+          "collision_energy": {
+            "count": 3982927,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 3982927,
+            "mean": 704.8527217867476,
+            "std": 220.85046694576621,
+            "min": 349.18525162602,
+            "max": 1399.142700195312
+          }
+        },
+        "PXD044445": {
+          "spectra": 3084274,
+          "projects": 1,
+          "runs": 200,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 3084274
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 3084274
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 1744350,
+              "3": 859142,
+              "4": 301078,
+              "5": 109762,
+              "6": 45172,
+              "7": 24770
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 3084274
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 3084274
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 3084274
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 3084274
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 3084274
+            }
+          },
+          "collision_energy": {
+            "count": 3084274,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 3084274,
+            "mean": 856.4702353089667,
+            "std": 268.795700797771,
+            "min": 299.947815685387,
+            "max": 1499.986328125
+          }
+        },
+        "PXD044641": {
+          "spectra": 302164,
+          "projects": 1,
+          "runs": 8,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 302164
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 302164
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "4": 128321,
+              "3": 88459,
+              "5": 56201,
+              "2": 13390,
+              "6": 12881,
+              "7": 2912
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 302164
+            }
+          },
+          "organism": {
+            "unique": 4,
+            "counts": {
+              "Homo Sapiens": 110352,
+              "Sus Scrofa": 69167,
+              "Capra Hircus": 62377,
+              "Bos Taurus": 60268
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 302164
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 302164
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 302164
+            }
+          },
+          "collision_energy": {
+            "count": 302164,
+            "mean": 32.617230341913256,
+            "std": 11.122613997927123,
+            "min": 8.563620567322,
+            "max": 148.881698608398
+          },
+          "precursor_mz": {
+            "count": 302164,
+            "mean": 1142.8388943923849,
+            "std": 310.0188501913133,
+            "min": 351.475372314453,
+            "max": 1799.98583984375
+          }
+        },
+        "PXD044830": {
+          "spectra": 5542666,
+          "projects": 1,
+          "runs": 36,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "HCID": 2810258,
+              "CID": 2732408
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 5542666
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "3": 2331912,
+              "2": 2329018,
+              "4": 585208,
+              "5": 296528
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 5542666
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Magnaporthe Oryzae": 5542666
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Eclipse": 5542666
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 5542666
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 5542666
+            }
+          },
+          "collision_energy": {
+            "count": 5542666,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 5542666,
+            "mean": 1003.0483156454974,
+            "std": 327.8691692503412,
+            "min": 299.069976806641,
+            "max": 1799.97998046875
+          }
+        },
+        "PXD045299": {
+          "spectra": 1295647,
+          "projects": 1,
+          "runs": 30,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1295647
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1295647
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 720437,
+              "3": 457454,
+              "4": 94835,
+              "5": 22921
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 1295647
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 1295647
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 1295647
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1295647
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1295647
+            }
+          },
+          "collision_energy": {
+            "count": 1295647,
+            "mean": 32.0,
+            "std": 0.0,
+            "min": 32.0,
+            "max": 32.0
+          },
+          "precursor_mz": {
+            "count": 1295647,
+            "mean": 786.051884337473,
+            "std": 253.1821150333059,
+            "min": 374.192016601563,
+            "max": 1499.99951171875
+          }
+        },
+        "PXD045457": {
+          "spectra": 59143,
+          "projects": 1,
+          "runs": 3,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 59143
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 59143
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 44767,
+              "3": 12659,
+              "4": 1542,
+              "5": 175
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 59143
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 59143
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Exploris 480": 59143
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 59143
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 59143
+            }
+          },
+          "collision_energy": {
+            "count": 59143,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 59143,
+            "mean": 553.6752824768146,
+            "std": 127.88537788290759,
+            "min": 380.201331706693,
+            "max": 1188.516227550244
+          }
+        },
+        "PXD045471": {
+          "spectra": 1856422,
+          "projects": 1,
+          "runs": 48,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1856422
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1856422
+            }
+          },
+          "charge": {
+            "unique": 4,
+            "counts": {
+              "2": 1272662,
+              "3": 519518,
+              "4": 58058,
+              "5": 6184
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1856422
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 1856422
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 1856422
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1856422
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1856422
+            }
+          },
+          "collision_energy": {
+            "count": 1856422,
+            "mean": 35.0,
+            "std": 0.0,
+            "min": 35.0,
+            "max": 35.0
+          },
+          "precursor_mz": {
+            "count": 1856422,
+            "mean": 741.0028024630427,
+            "std": 256.06330748338496,
+            "min": 298.673583984375,
+            "max": 1499.992431640625
+          }
+        },
+        "PXD045500": {
+          "spectra": 6213877,
+          "projects": 1,
+          "runs": 203,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 6213877
+            }
+          },
+          "acquisition": {
+            "unique": 2,
+            "counts": {
+              "DIA": 6093534,
+              "DDA": 120343
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 3672779,
+              "3": 2225334,
+              "4": 283224,
+              "5": 31070,
+              "6": 1470
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 6213877
+            }
+          },
+          "organism": {
+            "unique": 3,
+            "counts": {
+              "Homo Sapiens": 6213877,
+              "Escherichia Coli": 1714547,
+              "Saccharomyces Cerevisiae": 1714547
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Exploris 480": 6213877
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 6213877
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 6213877
+            }
+          },
+          "collision_energy": {
+            "count": 6213877,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 6213877,
+            "mean": 566.2642181877873,
+            "std": 137.02971265068166,
+            "min": 349.692760902704,
+            "max": 1199.821173089438
+          }
+        },
+        "PXD045650": {
+          "spectra": 342345,
+          "projects": 1,
+          "runs": 9,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 342345
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 342345
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 160963,
+              "3": 125392,
+              "4": 42976,
+              "5": 10820,
+              "6": 2038,
+              "7": 156
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 342345
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Danio Rerio": 342345
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 342345
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 342345
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 342345
+            }
+          },
+          "collision_energy": {
+            "count": 342345,
+            "mean": 32.0,
+            "std": 0.0,
+            "min": 32.0,
+            "max": 32.0
+          },
+          "precursor_mz": {
+            "count": 342345,
+            "mean": 654.8886182826865,
+            "std": 176.45086956063344,
+            "min": 375.170612625001,
+            "max": 1498.250732421875
+          }
+        },
+        "PXD045662": {
+          "spectra": 2578639,
+          "projects": 1,
+          "runs": 24,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 2578639
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 2578639
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 1282700,
+              "3": 941871,
+              "4": 252515,
+              "5": 77301,
+              "6": 24252
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 2578639
+            }
+          },
+          "organism": {
+            "unique": 2,
+            "counts": {
+              "Saccharomyces Cerevisiae": 1328192,
+              "Homo Sapiens": 1250447
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Exploris 480": 2578639
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 2578639
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 2578639
+            }
+          },
+          "collision_energy": {
+            "count": 2578639,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 2578639,
+            "mean": 624.3033320952459,
+            "std": 255.84592951359954,
+            "min": 299.158723990488,
+            "max": 1649.913927179895
+          }
+        },
+        "PXD045779": {
+          "spectra": 1418050,
+          "projects": 1,
+          "runs": 48,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1418050
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1418050
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 609510,
+              "2": 488911,
+              "4": 226115,
+              "5": 66369,
+              "6": 20819,
+              "7": 6326
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "FTMS": 929953,
+              "ITMS": 488097
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 1418050
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 1418050
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1418050
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1418050
+            }
+          },
+          "collision_energy": {
+            "count": 1418050,
+            "mean": 35.93478227142908,
+            "std": 2.8506459101442077,
+            "min": 32.0,
+            "max": 38.0
+          },
+          "precursor_mz": {
+            "count": 1418050,
+            "mean": 774.5712421924669,
+            "std": 252.31314179014393,
+            "min": 374.209228515625,
+            "max": 1499.99267578125
+          }
+        },
+        "PXD046182": {
+          "spectra": 1425581,
+          "projects": 1,
+          "runs": 40,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1425581
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1425581
+            }
+          },
+          "charge": {
+            "unique": 3,
+            "counts": {
+              "2": 791467,
+              "3": 560163,
+              "4": 73951
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 1425581
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 1425581
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 1425581
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 1425581
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 1425581
+            }
+          },
+          "collision_energy": {
+            "count": 1425581,
+            "mean": 25.0,
+            "std": 0.0,
+            "min": 25.0,
+            "max": 25.0
+          },
+          "precursor_mz": {
+            "count": 1425581,
+            "mean": 566.6803423389191,
+            "std": 165.2937181169777,
+            "min": 319.868949161477,
+            "max": 1597.363163882619
+          }
+        },
+        "PXD046211": {
+          "spectra": 27234199,
+          "projects": 1,
+          "runs": 56,
+          "fragmentation": {
+            "unique": 2,
+            "counts": {
+              "CID": 25670998,
+              "HCID": 1563201
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 27234199
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 19276290,
+              "3": 6027329,
+              "4": 1466363,
+              "5": 461857,
+              "6": 1616,
+              "7": 744
+            }
+          },
+          "analyzer_class": {
+            "unique": 2,
+            "counts": {
+              "UNKNOWN": 25670998,
+              "FTMS": 1563201
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 27234199
+            }
+          },
+          "instrument": {
+            "unique": 2,
+            "counts": {
+              "Timstof Scp": 25670998,
+              "Orbitrap Exploris 240": 1563201
+            }
+          },
+          "detector": {
+            "unique": 2,
+            "counts": {
+              "Tof": 25670998,
+              "Orbitrap": 1563201
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 27234199
+            }
+          },
+          "collision_energy": {
+            "count": 27234199,
+            "mean": 61.74748057381971,
+            "std": 10.721705225092117,
+            "min": 35.0,
+            "max": 81.443587443946
+          },
+          "precursor_mz": {
+            "count": 27234199,
+            "mean": 732.0417838431604,
+            "std": 259.3595583092482,
+            "min": 248.954653661942,
+            "max": 1694.48438051494
+          }
+        },
+        "PXD046286": {
+          "spectra": 2777026,
+          "projects": 1,
+          "runs": 75,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 2777026
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 2777026
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "3": 1190176,
+              "2": 977255,
+              "4": 415163,
+              "5": 135155,
+              "6": 46790,
+              "7": 12487
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 2777026
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 2777026
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion Lumos": 2777026
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 2777026
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 2777026
+            }
+          },
+          "collision_energy": {
+            "count": 2777026,
+            "mean": 31.48925433179236,
+            "std": 0.8721411576243926,
+            "min": 30.0,
+            "max": 32.0
+          },
+          "precursor_mz": {
+            "count": 2777026,
+            "mean": 722.5273061179256,
+            "std": 204.13797814485184,
+            "min": 348.198883056641,
+            "max": 1499.972412109375
+          }
+        },
+        "PXD046451": {
+          "spectra": 306062,
+          "projects": 1,
+          "runs": 15,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 306062
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 306062
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "3": 126449,
+              "2": 125271,
+              "4": 39308,
+              "5": 11756,
+              "6": 3278
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 306062
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 306062
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 306062
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 306062
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 306062
+            }
+          },
+          "collision_energy": {
+            "count": 306062,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 306062,
+            "mean": 813.6305685040379,
+            "std": 268.7223255301542,
+            "min": 300.166322368826,
+            "max": 1799.874267578125
+          }
+        },
+        "PXD046453": {
+          "spectra": 1246303,
+          "projects": 1,
+          "runs": 12,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 1246303
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 1246303
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 739723,
+              "3": 453703,
+              "4": 47322,
+              "5": 5126,
+              "6": 429
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "UNKNOWN": 1246303
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 1246303
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Astral": 1246303
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Astral": 1246303
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 1246303
+            }
+          },
+          "collision_energy": {
+            "count": 1246303,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 1246303,
+            "mean": 604.4394028096301,
+            "std": 148.44456211684306,
+            "min": 378.68244062243,
+            "max": 979.975228534414
+          }
+        },
+        "PXD046460": {
+          "spectra": 304409,
+          "projects": 1,
+          "runs": 15,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 304409
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 304409
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 177829,
+              "3": 126492,
+              "4": 72,
+              "6": 14,
+              "5": 2
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 304409
+            }
+          },
+          "organism": {
+            "unique": 2,
+            "counts": {
+              "Thauera Aromatica": 304409,
+              "Pseudomonas Putida": 304409
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Fusion": 304409
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 304409
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 304409
+            }
+          },
+          "collision_energy": {
+            "count": 304409,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 304409,
+            "mean": 802.8592066372737,
+            "std": 254.58902316374787,
+            "min": 347.545288085938,
+            "max": 1953.46826171875
+          }
+        },
+        "PXD046802": {
+          "spectra": 320447,
+          "projects": 1,
+          "runs": 15,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 320447
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 320447
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 157365,
+              "3": 120669,
+              "4": 34520,
+              "5": 6516,
+              "6": 1138,
+              "7": 239
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 320447
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Arabidopsis Thaliana": 320447
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 320447
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 320447
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 320447
+            }
+          },
+          "collision_energy": {
+            "count": 320447,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 320447,
+            "mean": 726.6398843544185,
+            "std": 234.35159009236386,
+            "min": 349.855094130457,
+            "max": 1594.872436523438
+          }
+        },
+        "PXD046911": {
+          "spectra": 400102,
+          "projects": 1,
+          "runs": 8,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 400102
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 400102
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 205007,
+              "3": 153754,
+              "4": 32386,
+              "5": 7376,
+              "6": 1440,
+              "7": 139
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 400102
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Candida Auris": 400102
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Elite": 400102
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 400102
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 400102
+            }
+          },
+          "collision_energy": {
+            "count": 400102,
+            "mean": 35.0,
+            "std": 0.0,
+            "min": 35.0,
+            "max": 35.0
+          },
+          "precursor_mz": {
+            "count": 400102,
+            "mean": 718.3802360557817,
+            "std": 239.55979461596291,
+            "min": 350.142578125,
+            "max": 1498.799560546875
+          }
+        },
+        "PXD047134": {
+          "spectra": 33815259,
+          "projects": 1,
+          "runs": 436,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 33815259
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 33815259
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 19632134,
+              "3": 11061114,
+              "4": 2318548,
+              "5": 619929,
+              "6": 152060,
+              "7": 31474
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 33815259
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 33815259
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 33815259
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 33815259
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 33815259
+            }
+          },
+          "collision_energy": {
+            "count": 33815259,
+            "mean": 27.0,
+            "std": 0.0,
+            "min": 27.0,
+            "max": 27.0
+          },
+          "precursor_mz": {
+            "count": 33815259,
+            "mean": 617.0688469266689,
+            "std": 179.34667833039865,
+            "min": 374.163354172609,
+            "max": 1648.60009765625
+          }
+        },
+        "PXD047226": {
+          "spectra": 557324,
+          "projects": 1,
+          "runs": 24,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 557324
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 557324
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 322490,
+              "3": 177345,
+              "4": 43200,
+              "5": 9988,
+              "6": 3558,
+              "7": 743
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "ITMS": 557324
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Rattus Norvegicus": 557324
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Elite": 557324
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 557324
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 557324
+            }
+          },
+          "collision_energy": {
+            "count": 557324,
+            "mean": 35.0,
+            "std": 0.0,
+            "min": 35.0,
+            "max": 35.0
+          },
+          "precursor_mz": {
+            "count": 557324,
+            "mean": 846.9782744834345,
+            "std": 265.21863175269596,
+            "min": 350.201232910156,
+            "max": 1594.33251953125
+          }
+        },
+        "PXD047641": {
+          "spectra": 5550222,
+          "projects": 1,
+          "runs": 103,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 5550222
+            }
+          },
+          "acquisition": {
+            "unique": 2,
+            "counts": {
+              "DDA": 4714443,
+              "DIA": 835779
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 1838616,
+              "3": 1460406,
+              "4": 1152463,
+              "1": 1004071,
+              "5": 94666
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 5550222
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 5550222
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive Hf": 5550222
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 5550222
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Unspecific": 5550222
+            }
+          },
+          "collision_energy": {
+            "count": 5550222,
+            "mean": 28.15312090219094,
+            "std": 1.4593405673464892,
+            "min": 27.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 5550222,
+            "mean": 558.253630875392,
+            "std": 214.2753615732918,
+            "min": 298.007507324219,
+            "max": 1649.975708007813
+          }
+        },
+        "PXD047705": {
+          "spectra": 5923733,
+          "projects": 1,
+          "runs": 1,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 5923733
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 5923733
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 3163644,
+              "3": 1148633,
+              "1": 825490,
+              "4": 460057,
+              "5": 325909
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "UNKNOWN": 5923733
+            }
+          },
+          "organism": {
+            "unique": 2,
+            "counts": {
+              "Mycobacterium Smegmatis": 5923733,
+              "Corynebacterium Glutamicum": 5923733
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Timstof Scp": 5923733
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Tof": 5923733
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 5923733
+            }
+          },
+          "collision_energy": {
+            "count": 5923733,
+            "mean": 35.153496861996764,
+            "std": 7.621348793414808,
+            "min": 20.313156269302,
+            "max": 55.507103150093
+          },
+          "precursor_mz": {
+            "count": 5923733,
+            "mean": 741.6279702483841,
+            "std": 285.1762857736241,
+            "min": 189.071283499972,
+            "max": 1673.287261781895
+          }
+        },
+        "PXD047761": {
+          "spectra": 256902,
+          "projects": 1,
+          "runs": 9,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 256902
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 256902
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 106301,
+              "3": 90325,
+              "4": 37751,
+              "5": 15096,
+              "6": 6470,
+              "7": 959
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 256902
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Trypanosoma Cruzi": 256902
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Q Exactive": 256902
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 256902
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 256902
+            }
+          },
+          "collision_energy": {
+            "count": 256902,
+            "mean": 30.0,
+            "std": 0.0,
+            "min": 30.0,
+            "max": 30.0
+          },
+          "precursor_mz": {
+            "count": 256902,
+            "mean": 726.3867272324452,
+            "std": 219.36253979423637,
+            "min": 399.966205206987,
+            "max": 1954.437744140625
+          }
+        },
+        "PXD047782": {
+          "spectra": 14067517,
+          "projects": 1,
+          "runs": 2,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 14067517
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 14067517
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 6766668,
+              "3": 5320635,
+              "4": 1190067,
+              "1": 500228,
+              "5": 289919
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "UNKNOWN": 14067517
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Plasmodium Yoelii": 14067517
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 14067517
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 14067517
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 14067517
+            }
+          },
+          "collision_energy": {
+            "count": 14067517,
+            "mean": 37.72729091825582,
+            "std": 7.035403703446894,
+            "min": 26.388984509466,
+            "max": 52.549333333333
+          },
+          "precursor_mz": {
+            "count": 14067517,
+            "mean": 767.5106541744948,
+            "std": 212.34715281076976,
+            "min": 398.478440532926,
+            "max": 1681.364021623694
+          }
+        },
+        "PXD047898": {
+          "spectra": 41827198,
+          "projects": 1,
+          "runs": 27,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "CID": 41827198
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 41827198
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "3": 14639960,
+              "2": 8966156,
+              "4": 8876179,
+              "5": 6391420,
+              "1": 2953483
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "UNKNOWN": 41827198
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 41827198
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Timstof Pro 2": 41827198
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Tof": 41827198
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 41827198
+            }
+          },
+          "collision_energy": {
+            "count": 41827198,
+            "mean": 51.80133864103614,
+            "std": 12.855249638486676,
+            "min": 20.617647058824,
+            "max": 96.0
+          },
+          "precursor_mz": {
+            "count": 41827198,
+            "mean": 1058.9674487842644,
+            "std": 359.95689236778384,
+            "min": 203.075741444362,
+            "max": 1999.816392615907
+          }
+        },
+        "PXD048219": {
+          "spectra": 8081318,
+          "projects": 1,
+          "runs": 180,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 8081318
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 8081318
+            }
+          },
+          "charge": {
+            "unique": 5,
+            "counts": {
+              "2": 6912902,
+              "3": 1130760,
+              "4": 35509,
+              "5": 1520,
+              "6": 627
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 8081318
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Saccharomyces Cerevisiae": 8081318
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Q Exactive": 8081318
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 8081318
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 8081318
+            }
+          },
+          "collision_energy": {
+            "count": 8081318,
+            "mean": 28.0,
+            "std": 0.0,
+            "min": 28.0,
+            "max": 28.0
+          },
+          "precursor_mz": {
+            "count": 8081318,
+            "mean": 630.2924982162178,
+            "std": 221.0291171470634,
+            "min": 348.195795466787,
+            "max": 1599.721647228352
+          }
+        },
+        "PXD049028": {
+          "spectra": 494160,
+          "projects": 1,
+          "runs": 5,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCID": 494160
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 494160
+            }
+          },
+          "charge": {
+            "unique": 1,
+            "counts": {
+              "3": 494160
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 494160
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 494160
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Ascend": 494160
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 494160
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 494160
+            }
+          },
+          "collision_energy": {
+            "count": 494160,
+            "mean": 28.0,
+            "std": 0.0,
+            "min": 28.0,
+            "max": 28.0
+          },
+          "precursor_mz": {
+            "count": 494160,
+            "mean": 680.059006245931,
+            "std": 173.25977809687413,
+            "min": 384.924896240234,
+            "max": 975.193176269531
+          }
+        },
+        "PXD057992": {
+          "spectra": 8395102,
+          "projects": 1,
+          "runs": 562,
+          "fragmentation": {
+            "unique": 1,
+            "counts": {
+              "HCD": 8395102
+            }
+          },
+          "acquisition": {
+            "unique": 1,
+            "counts": {
+              "DDA": 8395102
+            }
+          },
+          "charge": {
+            "unique": 6,
+            "counts": {
+              "2": 3373990,
+              "3": 3358400,
+              "4": 1226539,
+              "5": 274998,
+              "6": 125281,
+              "7": 35894
+            }
+          },
+          "analyzer_class": {
+            "unique": 1,
+            "counts": {
+              "FTMS": 8395102
+            }
+          },
+          "organism": {
+            "unique": 1,
+            "counts": {
+              "Homo Sapiens": 8395102
+            }
+          },
+          "instrument": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap Eclipse": 8395102
+            }
+          },
+          "detector": {
+            "unique": 1,
+            "counts": {
+              "Orbitrap": 8395102
+            }
+          },
+          "enzyme": {
+            "unique": 1,
+            "counts": {
+              "Trypsin": 8395102
+            }
+          },
+          "collision_energy": {
+            "count": 8395102,
+            "mean": 32.0,
+            "std": 0.0,
+            "min": 32.0,
+            "max": 32.0
+          },
+          "precursor_mz": {
+            "count": 8395102,
+            "mean": 678.9427708515835,
+            "std": 216.73613869014096,
+            "min": 373.212524414063,
+            "max": 1499.999877929688
+          }
+        }
+      }
+    }
+  },
+  "field_sources": {
+    "acquisition": "catalog (/app/search_data.csv)",
+    "fragmentation": "parquet (column: frag_type)",
+    "detector": "catalog (/app/search_data.csv)",
+    "enzyme": "catalog (/app/search_data.csv)",
+    "charge": "parquet (column: precursor_charge)",
+    "collision_energy": "parquet (column: collision_energy)",
+    "precursor_mz": "parquet (column: precursor_mz)",
+    "analyzer_class": "parquet (column: header)",
+    "runs": "parquet (column: experiment_name)",
+    "organism": "catalog (/app/search_data.csv)",
+    "instrument": "catalog (/app/search_data.csv)",
+    "spectra": "parquet (row count)",
+    "projects": "path or column identity rules"
+  },
+  "notes": {
+    "runs": "column:experiment_name",
+    "catalog_match": "63636/63636",
+    "organism_counts": "per-run via catalog; multi-organism may exceed spectra"
+  }
+}

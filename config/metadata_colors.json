@@ -1,0 +1,164 @@
+{
+  "_meta": {
+    "description": "Single source of truth for metadata colors across all InstaNovoFM notebooks. Nature Methods style: pastel, colorblind-safe (adapted from ColorBrewer Set2 + Wong CB-safe palette).",
+    "neutral_color": "#AED6F1",
+    "neutral_note": "Uniform fill used for categorical fields that should NOT be color-encoded (PTMs, diseases, tissue, cell_type). Same treatment as the PTM figure in notebook 1.",
+    "neutral_fields": [
+      "ptm",
+      "diseases",
+      "tissue",
+      "cell_type"
+    ]
+  },
+  "palette": [
+    "#4E9AC6",
+    "#6DBF91",
+    "#F5A45D",
+    "#C285C7",
+    "#E87878",
+    "#7CCBC8",
+    "#F5D46A",
+    "#AAAAAA"
+  ],
+  "pastel": [
+    "#AED6F1",
+    "#A9DFBF",
+    "#FAD7A0",
+    "#D7BDE2",
+    "#F1948A",
+    "#A2D9CE",
+    "#F9E79F",
+    "#D5D8DC"
+  ],
+  "organism": {
+    "H. sapiens": "#4E9AC6",
+    "M. musculus": "#6DBF91",
+    "A. thaliana": "#F5A45D",
+    "R. norvegicus": "#C285C7",
+    "S. cerevisiae": "#E87878",
+    "Z. mays": "#7CCBC8",
+    "B. subtilis": "#F5D46A",
+    "Other": "#AAAAAA"
+  },
+  "_organism_full_note": "Binomial names as they appear in the UMAP parquet, for figure_3. The 'organism' block above holds figure_1's abbreviated labels ('H. sapiens') and cannot be reused here: its org_group() mapper folds 'Homo sapiens; Arabidopsis thaliana' into 'H. sapiens', silently merging a multi-species sample into human. Mixed samples get their own key instead. Colours are the 12 measured for maximum CVD separation (worst pair dE 5.2); anything outside these keys is grey 'other'.",
+  "organism_full": {
+    "Homo sapiens": "#8c564b",
+    "Mixed (multi-species)": "#de8f05",
+    "Saccharomyces cerevisiae": "#1f77b4",
+    "Mus musculus": "#56b4e9",
+    "Arabidopsis thaliana": "#ffbb78",
+    "Methanosarcina mazei": "#d55e00",
+    "Gallus gallus": "#1b9e77",
+    "Solanum lycopersicum": "#cc78bc",
+    "Canis lupus": "#ece133",
+    "Apis mellifera": "#bcbd22",
+    "Bacillus subtilis": "#a65628",
+    "Oncorhynchus mykiss": "#ff9896"
+  },
+  "_project_note": "The 12 largest projects in the UMAP sample. 78 exist; 12 is the ceiling for colours a reader can still tell apart, so the rest fall to grey 'other'.",
+  "project": {
+    "PXD047134": "#8c564b",
+    "PXD010154": "#de8f05",
+    "PXD024364": "#1f77b4",
+    "PXD000561": "#56b4e9",
+    "PXD004732": "#ffbb78",
+    "PXD002052": "#d55e00",
+    "PXD019483": "#1b9e77",
+    "PXD029360": "#cc78bc",
+    "PXD048219": "#ece133",
+    "PXD004452": "#bcbd22",
+    "PXD005573": "#a65628",
+    "PXD000900": "#ff9896"
+  },
+  "_modification_note": "PTM classes as they appear in umap_coordinates.parquet's modification_class. 'Unmodified' takes the neutral grey on purpose: it is the absence of a PTM and covers 72% of spectra, so giving it a hue would paint the whole embedding one colour.",
+  "modification_class": {
+    "Unmodified": "#DEE2E6",
+    "Carbamidomethyl": "#1f77b4",
+    "Oxidation": "#de8f05",
+    "Glu->pyro-Glu": "#1b9e77",
+    "Phospho": "#d55e00",
+    "Acetyl": "#cc78bc",
+    "UniMod:121": "#56b4e9",
+    "Other": "#8c564b"
+  },
+  "_chem_label_note": "Labelling strategy from search_quant, the authoritative field: 'precursor' is label-free quantification, 'TMT' is isobaric labelling. Deriving this from UniMod accessions in modification_types instead catches only 113 of the 3,610 labelled spectra (97% miss), because a fixed TMT modification is often not written per spectrum. The accessions are still used to rescue the 57 spectra search_quant files as 'precursor' but that carry iTRAQ or SILAC, which it has no category for. 'Label-free' is neutral grey: it is 96% of spectra and would otherwise swamp the plot.",
+  "chem_label": {
+    "Label-free": "#DEE2E6",
+    "TMT": "#d55e00",
+    "iTRAQ4plex": "#1b9e77",
+    "SILAC": "#de8f05",
+    "Mixed label": "#cc78bc"
+  },
+  "kingdom": {
+    "Animalia": "#4E9AC6",
+    "Plantae": "#6DBF91",
+    "Fungi": "#E87878",
+    "Bacteria": "#F5D46A",
+    "Archaea": "#C285C7",
+    "Protista": "#7CCBC8",
+    "Other": "#DEE2E6"
+  },
+  "acquisition": {
+    "DDA": "#4E9AC6",
+    "DIA": "#F5A45D"
+  },
+  "detector": {
+    "Orbitrap": "#4E9AC6",
+    "Astral": "#6DBF91",
+    "TOF": "#F5A45D",
+    "Orbitrap+IT": "#C285C7",
+    "Triple Quad": "#E87878",
+    "Ion Trap": "#AAAAAA",
+    "Other": "#DEE2E6"
+  },
+  "fragmentation": {
+    "HCID": "#5E8DBC",
+    "HCD": "#E4C961",
+    "CID": "#70BAA1",
+    "ETD": "#D48F4C",
+    "Unknown": "#D5D8DC"
+  },
+  "instrument": {
+    "Q Exactive": "#AED6F1",
+    "Orbitrap Fusion": "#A9DFBF",
+    "TimsTOF": "#FAD7A0",
+    "Orbitrap Astral": "#D7BDE2",
+    "Orbitrap Elite": "#A2D9CE",
+    "Orbitrap Velos": "#F9E79F",
+    "Orbitrap (Other)": "#F1948A"
+  },
+  "enzyme": {
+    "Trypsin": "#4E9AC6",
+    "Lysn": "#6DBF91",
+    "Aspn": "#F5A45D",
+    "Lysc": "#C285C7",
+    "Chymotrypsin": "#E87878",
+    "Gluc": "#F5D46A",
+    "Unspecific": "#AAAAAA",
+    "Other": "#DEE2E6"
+  },
+  "charge": {
+    "1": "#AED6F1",
+    "2": "#4E9AC6",
+    "3": "#2E75B6",
+    "4": "#1F4E79",
+    "5+": "#C285C7",
+    "Other": "#DEE2E6"
+  },
+  "_tier_note": "Ordinal ramp (tiers are nested and ordered, so one hue with monotone lightness — never categorical hues). LCFM/MCFM/HCFM pass the ordinal checks on a white surface: monotone L, adjacent dL >= 0.06, light end 2.26:1, hue spread 13 deg. ACFM is a context-only step, not drawn as a mark; a 4-step drawn ramp would need #1F4E79 appended at the dark end instead.",
+  "tier": {
+    "ACFM": "#AED6F1",
+    "LCFM": "#7FB3D3",
+    "MCFM": "#4E9AC6",
+    "HCFM": "#2E75B6"
+  },
+  "_pipeline_note": "Storage stages in data/foundational.txt. The four tiers are NOT re-coloured here: they reuse the tier block above, because colour follows the entity across the whole figure set. Only raw and mzML are new entities, and they are pre-model source formats rather than confidence tiers, so they take neutral greys — the hue change is what marks them as a different kind of thing.",
+  "pipeline_source": {
+    "raw": "#D5D8DC",
+    "mzML": "#AAAAAA"
+  },
+  "ptm": "#AED6F1",
+  "diseases": "#AED6F1",
+  "tissue": "#AED6F1",
+  "cell_type": "#AED6F1"
+}

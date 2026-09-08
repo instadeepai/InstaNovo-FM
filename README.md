@@ -2,8 +2,8 @@
 
 **A self-supervised foundation model for proteomics tandem mass spectra**
 
-<!-- Badges: update the PyPI and Colab URLs once those are live -->
-[![PyPI version](https://img.shields.io/badge/pypi-coming--soon-lightgrey.svg)](#)
+<!-- Badges: update the Colab URL once the notebook is live -->
+[![PyPI version](https://img.shields.io/pypi/v/instanovo-fm.svg)](https://pypi.org/project/instanovo-fm/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](#license)
 [![DOI](https://img.shields.io/badge/DOI-10.64898%2F2026.09.03.747733-blue.svg)](https://doi.org/10.64898/2026.09.03.747733)
 [![Open In Colab](https://img.shields.io/badge/Colab-coming--soon-lightgrey.svg)](#)
@@ -65,16 +65,19 @@ Then open a notebook and select the **InstaNovo-FM (figures)** kernel.
 
 ## Installation
 
-We support Python 3.10–3.13 and use [uv](https://docs.astral.sh/uv/) for dependency management.
+We support Python 3.10–3.13.
 
 ```bash
-git clone https://github.com/instadeepai/InstaNovo-FM.git
-cd InstaNovo-FM
-
-uv sync                    # model, dataset pipeline and evaluation harness
-uv sync --group figures    # when you want to reproduce the figures
-uv sync --extra interpret  # for UMAP visualization
+pip install instanovo-fm                # model, dataset pipeline and evaluation harness
+pip install "instanovo-fm[interpret]"   # adds UMAP visualization
+pip install "instanovo-fm[clustering]"  # adds the EvoC clustering eval task
 ```
+
+Two things live in the repository rather than the package: the figure notebooks
+(see [Reproducing the figures](#reproducing-the-figures)) and the `figures` and `dev`
+dependency groups, which are [PEP 735](https://peps.python.org/pep-0735/) groups rather
+than extras and so resolve only from a checkout, through
+[uv](https://docs.astral.sh/uv/).
 
 ## Quick start
 
@@ -317,10 +320,13 @@ If you use InstaNovo-FM in your research, please cite:
 
 ```bibtex
 @article{instanovofm,
-  title   = {Learning from tandem mass spectra at scale with a self-supervised foundation model for proteomics},
-  author  = {Nieuwoudt, Mechiel and Reverenna, Marco and Patel, Divanisha and Catzel, Rachel and Houngue, Isaac H.J.
-             and Daniel, Jemma and Eloff, Kevin and Santos, Alberto and Lopez Carranza, Nicolas and Jenkins, Timothy P.
-             and Van Goey, Jeroen and Kalogeropoulos, Konstantinos},
+  title   = {Learning from tandem mass spectra at scale with a self-supervised foundation
+             model for proteomics},
+  author  = {Nieuwoudt, Mechiel and Reverenna, Marco and Patel, Divanisha
+             and Catzel, Rachel and Houngue, Isaac H.J. and Daniel, Jemma
+             and Eloff, Kevin and Santos, Alberto and Lopez Carranza, Nicolas
+             and Jenkins, Timothy P. and Van Goey, Jeroen
+             and Kalogeropoulos, Konstantinos},
   year    = {2026},
   journal = {bioRxiv},
   doi     = {10.64898/2026.09.03.747733},
@@ -358,7 +364,7 @@ Developed by:
 - [Novo Nordisk Foundation Biotechnology Research Institute for the Green Transition](https://www.dtu.dk/), Technical University of Denmark
 - [Department of Biotechnology and Biomedicine](https://orbit.dtu.dk/en/organisations/department-of-biotechnology-and-biomedicine), Technical University of Denmark
 - [Center for Translational Protein Design](https://www.dtu.dk/)
-- Delft University of Technology & the Kavli Institute of Nanoscience
+- [Delft University of Technology](https://www.tudelft.nl/en/) & the [Kavli Institute of Nanoscience](https://kavli.tudelft.nl/)
 
 Built on public proteomics data from the [PRIDE](https://www.ebi.ac.uk/pride/) repository and the
 broader open-proteomics community.

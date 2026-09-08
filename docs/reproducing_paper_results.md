@@ -26,10 +26,11 @@ instanovo-fm train \
 
 A bare `foundation_base` run does not reproduce the paper.
 
-> **The trained weights are not published yet**
+> **You can skip the training run**
 >
-> There is no checkpoint to download, so reproducing the numbers below means training the
-> model with the command above first. The weights will be released with the codebase.
+> The published weights are a release asset, so reproducing the numbers below does not require
+> training the model first. `FoundationModel.from_pretrained("instanovo-fm-v0.1.0")` fetches
+> them, and `FoundationModel.describe_pretrained()` lists the ablation checkpoints alongside it.
 
 ## Reproducing the probe results
 

@@ -115,6 +115,25 @@ The first row is the published model: every TS-noPA number in the paper comes fr
 The next three complete the masking/attention-bias factorial, and the last is the
 corpus-scale comparison baseline.
 
+The de novo sequencers — the foundation encoder plus an InstaNovo decoder — load the same
+way, from `DownstreamDeNovo`:
+
+```python
+from instanovo_fm.downstream.de_novo_sequencing.model import DownstreamDeNovo
+
+DownstreamDeNovo.describe_pretrained()
+model, config = DownstreamDeNovo.from_pretrained("instanovo-fm-denovo-v0.1.0")
+```
+
+| id | encoder | notes |
+|---|---|---|
+| `instanovo-fm-denovo-v0.1.0` | fine-tuned | the published sequencer, benchmarked against IN v1.2, Casanovo and XuanjiNovo |
+| `instanovo-fm-denovo-frozen-v0.1.0` | frozen | retains ~85% of the fine-tuned peptide recall |
+| `instanovo-fm-denovo-scratch-v0.1.0` | from scratch | the no-pretraining control |
+
+All three run 2.5M steps at batch size 128, warming up over the first 100K steps to a
+learning rate of 5e-5; the fine-tuned variant unfreezes the encoder at step 100K.
+
 By id, the checkpoint is downloaded from this repository's
 [Releases](https://github.com/instadeepai/InstaNovo-FM/releases) and cached under
 `~/.cache/instanovo-fm/`. A path or a `.ckpt` filename loads from disk instead:
@@ -123,10 +142,10 @@ By id, the checkpoint is downloaded from this repository's
 model, config = FoundationModel.from_pretrained("checkpoints/model_best.ckpt")
 ```
 
-The registry is [`src/instanovo_fm/models.json`](src/instanovo_fm/models.json) and covers
-the published model, the four cells of the masking/attention-bias factorial, and the MCFM
-scaling baseline. **By id needs the release to exist** — until then use a local path; see
-[Pretrained weights & data](#pretrained-weights--data).
+The registry is [`src/instanovo_fm/models.json`](src/instanovo_fm/models.json). It covers
+the published model, the four cells of the masking/attention-bias factorial, the MCFM
+scaling baseline, and the three de novo sequencers — see
+[Pretrained weights & data](#pretrained-weights--data) for the licence they carry.
 
 ### Extract embeddings and run the evaluation tasks
 
@@ -176,13 +195,13 @@ the paper:
   and `by_project/` holds the tier before filtering and splitting, one directory per accession,
   so alternative partitions can be derived. The central peptide registry of split assignments
   ships alongside, so the partitions can be reproduced and extended. ACFM itself is not released.
-- **Model checkpoints:** *Not yet released.* They will be attached to a
-  [Release](https://github.com/instadeepai/InstaNovo-FM/releases) under CC BY-NC-SA 4.0
-  (see [License](#license)). The loader is already wired for them:
-  [`models.json`](src/instanovo_fm/models.json) registers the five checkpoints against
-  their release-asset URLs, so `FoundationModel.from_pretrained("instanovo-fm-v0.1.0")`
-  starts working the moment the release is cut with those asset names. Until then it
-  reports the 404 and the URL it tried.
+- **Model checkpoints:** attached to the
+  [`v0.1.0` release](https://github.com/instadeepai/InstaNovo-FM/releases/tag/v0.1.0) under
+  CC BY-NC-SA 4.0 (see [License](#license)). Eight in all — five foundation models and
+  three de novo sequencers — registered in
+  [`models.json`](src/instanovo_fm/models.json) and loaded by id with `from_pretrained`,
+  which caches under `~/.cache/instanovo-fm/`. See
+  [Load a pretrained checkpoint](#load-a-pretrained-checkpoint).
 - **Embeddings:** *Not yet available.* An interactive explorer for the frozen embedding space
   is hosted at [instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM)
   (goes live with the repository).

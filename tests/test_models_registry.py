@@ -173,13 +173,52 @@ def test_describe_pretrained_hands_back_a_copy() -> None:
     assert FoundationModel.describe_pretrained()["instanovo-fm-v0.1.0"]["corpus"] == "LCFM"
 
 
+# What a caller needs in order to choose, per family. Kept separate on purpose:
+# `masking` and `pairwise_bias` describe how a foundation model was pretrained and
+# say nothing about a de novo model trained from scratch, so requiring them
+# everywhere would only invite filling them in with something untrue.
+REQUIRED_FIELDS = {
+    "": ("description", "corpus", "training_steps"),
+    "foundational": ("masking", "pairwise_bias", "layers"),
+    "downstream_denovo": ("encoder_init",),
+}
+
+
 def test_every_entry_describes_itself(registry: dict[str, Any]) -> None:
-    """The fields a caller chooses between checkpoints on must be present on all of them."""
-    required = ("description", "corpus", "masking", "pairwise_bias", "layers", "training_steps")
+    """The fields a caller chooses between checkpoints on must be present."""
     for model_type, models in registry.items():
+        required = REQUIRED_FIELDS[""] + REQUIRED_FIELDS.get(model_type, ())
         for model_id, info in models.items():
             missing = [field for field in required if field not in info]
             assert not missing, f"{model_type}/{model_id} does not record {missing}"
+
+
+def test_every_family_has_its_required_fields_declared(registry: dict[str, Any]) -> None:
+    """A new model type must say what describes it, rather than inheriting nothing."""
+    undeclared = [t for t in registry if t not in REQUIRED_FIELDS]
+    assert not undeclared, f"REQUIRED_FIELDS says nothing about {undeclared}"
+
+
+def test_the_de_novo_variants_cover_the_three_encoder_treatments(registry: dict[str, Any]) -> None:
+    """The paper trains the de novo model three ways: fine-tuned, frozen, from scratch."""
+    models = registry["downstream_denovo"]
+    assert {info["encoder_init"] for info in models.values()} == {
+        "fine-tuned",
+        "frozen",
+        "from scratch",
+    }
+    # All three share the schedule stated in Methods.
+    for model_id, info in models.items():
+        assert info["training_steps"] == 2500000, model_id
+        assert info["warmup_steps"] == 100000, model_id
+        assert info["batch_size"] == 128, model_id
+
+
+def test_the_published_de_novo_model_is_the_fine_tuned_one(registry: dict[str, Any]) -> None:
+    """It is the variant benchmarked against IN v1.2, Casanovo and XuanjiNovo."""
+    published = registry["downstream_denovo"]["instanovo-fm-denovo-v0.1.0"]
+    assert published["encoder_init"] == "fine-tuned"
+    assert published["encoder_unfrozen_at_step"] == 100000
 
 
 def test_the_published_model_matches_the_paper(registry: dict[str, Any]) -> None:

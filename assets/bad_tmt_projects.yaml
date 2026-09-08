@@ -1,0 +1,23 @@
+# This list is hand-written because some projects are marked as "quant" type "TMT" in the search data, but not every project has correctly indicated the TMT tag used in "modifications"
+# Note that is it possible for projects to have mixed "quant" types, so we should verify per file
+# If a project is mentioned once in each, it is mixed and we must read which modification is applicable per-file from the search data (i.e., "modifications" = "TMT10"/"TMT18"/etc)
+# If no TMT modification is mentioned in the "modifications column", do not modify that project and raise as an error at the end of processing
+
+tmt_6_8_10:
+  - PXD023119
+  - PXD045779
+  - PXD046286
+  - PXD000865
+  - PXD045650
+  - PXD044135
+  - PXD044445
+  - PXD044169
+  - PXD010595
+
+tmt_16_18:
+  - PXD065790
+  - PXD058160
+  - PXD058913
+  - PXD046211
+  - PXD057992
+  - PXD046286

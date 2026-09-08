@@ -1338,6 +1338,41 @@ class FoundationModel(nn.Module, PadTokenMixin):
         except (FileNotFoundError, json.JSONDecodeError):
             return []
 
+    @staticmethod
+    def describe_pretrained(model_id: Optional[str] = None) -> Dict[str, Any]:
+        """Describe the registered pretrained checkpoints.
+
+        ``get_pretrained`` returns ids alone, which is thin when the checkpoints
+        differ only by training corpus, masking strategy and whether the pairwise
+        attention bias is on. This returns what the registry records about each --
+        the download URL and, where the paper states them, the architecture and
+        the training budget -- so a caller can choose without opening models.json.
+
+        Args:
+            model_id: A registered id. Omit it to describe every checkpoint.
+
+        Returns:
+            The entry for ``model_id``, or a mapping of every id to its entry when
+            ``model_id`` is None. Empty if the registry is missing or unreadable.
+
+        Raises:
+            ValueError: If ``model_id`` is given and is not registered.
+        """
+        try:
+            with resources.files("instanovo_fm").joinpath("models.json").open("r", encoding="utf-8") as f:
+                models_config = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            models_config = {}
+
+        models: Dict[str, Any] = models_config.get(MODEL_TYPE, {})
+        if model_id is None:
+            return {name: dict(info) for name, info in models.items()}
+
+        if model_id not in models:
+            raise ValueError(f"Model {model_id} not found in models.json. Available {MODEL_TYPE} models: {list(models)}")
+
+        return dict(models[model_id])
+
     @classmethod
     def load(cls, path: str) -> Tuple["FoundationModel", DictConfig]:
         """Load model from checkpoint path.

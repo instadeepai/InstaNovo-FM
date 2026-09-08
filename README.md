@@ -92,6 +92,29 @@ FoundationModel.get_pretrained()
 model, config = FoundationModel.from_pretrained("instanovo-fm-v0.1.0")
 ```
 
+The ids differ only by training corpus, masking strategy and whether the pairwise
+attention bias is on, so `describe_pretrained` says which is which:
+
+```python
+FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")
+# {'remote': '...', 'corpus': 'LCFM', 'masking': 'thompson_span with isotope co-masking',
+#  'pairwise_bias': False, 'layers': 12, 'model_dimension': 768, 'parameters': '89.5M', ...}
+
+FoundationModel.describe_pretrained()          # every checkpoint, keyed by id
+```
+
+| id | corpus | masking | PA bias | layers | params |
+|---|---|---|---|---|---|
+| `instanovo-fm-v0.1.0` | LCFM | Thompson-span | no | 12 | 89.5M |
+| `instanovo-fm-lcfm-ts-pa-v0.1.0` | LCFM | Thompson-span | yes | 12 | 89.5M |
+| `instanovo-fm-lcfm-sa-nopa-v0.1.0` | LCFM | signal-aware | no | 12 | 89.5M |
+| `instanovo-fm-lcfm-sa-pa-v0.1.0` | LCFM | signal-aware | yes | 12 | 89.5M |
+| `instanovo-fm-mcfm-90k-v0.1.0` | MCFM | Thompson-span | no | 9 | 40M |
+
+The first row is the published model: every TS-noPA number in the paper comes from it.
+The next three complete the masking/attention-bias factorial, and the last is the
+corpus-scale comparison baseline.
+
 By id, the checkpoint is downloaded from this repository's
 [Releases](https://github.com/instadeepai/InstaNovo-FM/releases) and cached under
 `~/.cache/instanovo-fm/`. A path or a `.ckpt` filename loads from disk instead:

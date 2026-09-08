@@ -109,3 +109,103 @@ def test_a_path_that_does_not_exist_is_reported_as_such(tmp_path: Any) -> None:
     missing = tmp_path / "model_best.ckpt"
     with pytest.raises(FileNotFoundError):
         FoundationModel.from_pretrained(str(missing))
+
+
+def test_version_is_not_written_twice() -> None:
+    """pyproject.toml is the only place a version is declared.
+
+    ``__version__`` was a second literal in ``__init__.py`` and the two had
+    already drifted: pyproject said 0.1.0 while the package still said
+    0.1.0.dev0.
+    """
+    import importlib.metadata
+
+    import instanovo_fm
+
+    assert instanovo_fm.__version__ == importlib.metadata.version("instanovo-fm")
+
+
+def test_asset_urls_name_the_tag_for_this_version(registry: dict[str, Any]) -> None:
+    """The release tag in every asset URL has to match the version being released.
+
+    A download is an exact URL, so bumping the version without moving the URLs
+    leaves every id resolving to a 404 on a tag that will never exist.
+    """
+    import instanovo_fm
+
+    expected = f"{RELEASE_PREFIX}v{instanovo_fm.__version__}/"
+    for models in registry.values():
+        for model_id, info in models.items():
+            assert info["remote"].startswith(expected), (
+                f"{model_id} points at {info['remote']}, but this is version "
+                f"{instanovo_fm.__version__}, so the tag should be v{instanovo_fm.__version__}"
+            )
+
+
+def test_describe_pretrained_covers_every_id(registry: dict[str, Any]) -> None:
+    """Describing everything must agree with listing everything."""
+    described = FoundationModel.describe_pretrained()
+    assert list(described) == FoundationModel.get_pretrained()
+    assert described == registry[FOUNDATION_MODEL_TYPE]
+    assert DownstreamDeNovo.describe_pretrained() == registry[DENOVO_MODEL_TYPE]
+
+
+def test_describe_pretrained_returns_one_entry(registry: dict[str, Any]) -> None:
+    """A single id returns just that entry."""
+    entry = FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")
+    assert entry == registry[FOUNDATION_MODEL_TYPE]["instanovo-fm-v0.1.0"]
+
+
+def test_describe_pretrained_rejects_an_unknown_id() -> None:
+    """And says what the options are, as from_pretrained does."""
+    with pytest.raises(ValueError, match="not found in models.json"):
+        FoundationModel.describe_pretrained("no-such-model")
+
+
+def test_describe_pretrained_hands_back_a_copy() -> None:
+    """A caller poking at the result must not corrupt the registry for the next one."""
+    first = FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")
+    first["layers"] = 999
+    assert FoundationModel.describe_pretrained("instanovo-fm-v0.1.0")["layers"] == 12
+
+    everything = FoundationModel.describe_pretrained()
+    everything["instanovo-fm-v0.1.0"]["corpus"] = "nonsense"
+    assert FoundationModel.describe_pretrained()["instanovo-fm-v0.1.0"]["corpus"] == "LCFM"
+
+
+def test_every_entry_describes_itself(registry: dict[str, Any]) -> None:
+    """The fields a caller chooses between checkpoints on must be present on all of them."""
+    required = ("description", "corpus", "masking", "pairwise_bias", "layers", "training_steps")
+    for model_type, models in registry.items():
+        for model_id, info in models.items():
+            missing = [field for field in required if field not in info]
+            assert not missing, f"{model_type}/{model_id} does not record {missing}"
+
+
+def test_the_published_model_matches_the_paper(registry: dict[str, Any]) -> None:
+    """Metadata nothing reads is metadata that rots, so pin it to the manuscript.
+
+    Methods states the deployed model: model dimension 768, 12 attention heads,
+    12 layers, feedforward 3072, about 89.5M parameters, ~230,000 steps on LCFM
+    with Thompson-span masking and no pairwise attention bias.
+    """
+    published = registry[FOUNDATION_MODEL_TYPE]["instanovo-fm-v0.1.0"]
+    assert published["layers"] == 12
+    assert published["model_dimension"] == 768
+    assert published["attention_heads"] == 12
+    assert published["feedforward_dimension"] == 3072
+    assert published["parameters"] == "89.5M"
+    assert published["training_steps"] == 230000
+    assert published["corpus"] == "LCFM"
+    assert published["masking"].startswith("thompson_span")
+    assert published["pairwise_bias"] is False
+
+
+def test_the_factorial_covers_all_four_cells(registry: dict[str, Any]) -> None:
+    """Two axes, masking strategy and pairwise bias, so four LCFM checkpoints."""
+    lcfm = {
+        (info["masking"].split("_")[0], info["pairwise_bias"])
+        for info in registry[FOUNDATION_MODEL_TYPE].values()
+        if info["corpus"] == "LCFM"
+    }
+    assert lcfm == {("thompson", False), ("thompson", True), ("signal", False), ("signal", True)}

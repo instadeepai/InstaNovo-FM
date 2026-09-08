@@ -1,8 +1,16 @@
 """InstaNovo-FM: a self-supervised foundation model for tandem mass spectra."""
 
+from importlib.metadata import PackageNotFoundError, version
+
 from omegaconf import OmegaConf
 
-__version__ = "0.1.0.dev0"
+# Derived from the installed distribution so pyproject.toml is the only place a
+# version is written. It used to be a second literal here, and the two had
+# already drifted apart.
+try:
+    __version__ = version("instanovo-fm")
+except PackageNotFoundError:  # running from a source tree without an install
+    __version__ = "0.0.0.dev0"
 
 
 def _upstream_config_dir() -> str:

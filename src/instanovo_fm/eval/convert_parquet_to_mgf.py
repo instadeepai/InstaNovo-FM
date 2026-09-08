@@ -12,7 +12,7 @@ import pandas as pd
 from instanovo.__init__ import console
 from instanovo_fm.eval._extract_embeddings_common import load_spectrum_dataframe
 from instanovo_fm.eval._predict_de_novo_common import (
-    XUANJINOVO_TO_UNIMOD,
+    XUANJINOVO_BRACKETED_TO_UNIMOD,
     _resolve_group,
     build_model_vocab,
     filter_unpredictable_rows,
@@ -44,13 +44,13 @@ XUANJINOVO_RESIDUES: List[str] = [
     "R",
     "Y",
     "W",
-    "C+57.021",  # cysteine, fixed carbamidomethyl
-    "M+15.995",  # oxidised methionine (variable)
-    "N+0.984",
-    "Q+0.984",  # deamidation
-    "+42.011",  # acetylation (N-term)
-    "+43.006",  # carbamylation (N-term)
-    "-17.027",  # loss of ammonia (N-term)
+    "C[+57.021]",  # cysteine, fixed carbamidomethyl
+    "M[+15.995]",  # oxidised methionine (variable)
+    "N[+0.984]",
+    "Q[+0.984]",  # deamidation
+    "[+42.011]",  # acetylation (N-term)
+    "[+43.006]",  # carbamylation (N-term)
+    "[-17.027]",  # loss of ammonia (N-term)
 ]
 
 
@@ -119,7 +119,7 @@ def _filter_dataset(
     has_targets = "sequence" in df.columns
     if not has_targets:
         logger.warning("No 'sequence' column found — sidecar targets will be empty (de novo mode).")
-    model_vocab = build_model_vocab(XUANJINOVO_RESIDUES, XUANJINOVO_TO_UNIMOD)
+    model_vocab = build_model_vocab(XUANJINOVO_RESIDUES, XUANJINOVO_BRACKETED_TO_UNIMOD)
     effective_max_charge = reconcile_max_charge(max_charge, MAX_CHARGE, "XuanjiNovo")
     df = filter_unpredictable_rows(df, max_charge=effective_max_charge, model_vocab=model_vocab, model_name="XuanjiNovo").reset_index(drop=True)
     if len(df) == 0:

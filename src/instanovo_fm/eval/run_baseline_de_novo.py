@@ -57,11 +57,10 @@ def _load_model_and_predictor(model: str) -> tuple[Any, Any]:
         from instanovo_fm.eval.predict_casanovo_de_novo import predict_dataframe as casanovo_predict
 
         return load_casanovo_model, casanovo_predict
-    if model == "xuanjinovo":
-        from instanovo_fm.eval.predict_xuanjinovo_de_novo import load_xuanjinovo_model
-        from instanovo_fm.eval.predict_xuanjinovo_de_novo import predict_dataframe as xuanjinovo_predict
-
-        return load_xuanjinovo_model, xuanjinovo_predict
+    # XuanjiNovo has no greedy in-repo predictor: it goes through the upstream
+    # model, via run_xuanjinovo.py and score_xuanjinovo.py. This used to import
+    # predict_xuanjinovo_de_novo, which does not exist, so asking for it raised
+    # ModuleNotFoundError instead of the error below.
     raise NotImplementedError(f"No de novo predictor wired up for model={model!r}.")
 
 

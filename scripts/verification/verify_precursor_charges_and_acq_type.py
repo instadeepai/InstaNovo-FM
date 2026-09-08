@@ -17,11 +17,11 @@ Supports both local directories and S3 buckets as input.
 
 CLI::
 
-    python scripts/verification/verify_precursor_charges_and_acq_type.py --help
-    python scripts/verification/verify_precursor_charges_and_acq_type.py \
+    uv run python -m scripts.verification.verify_precursor_charges_and_acq_type --help
+    uv run python -m scripts.verification.verify_precursor_charges_and_acq_type \
         --input-dir <data-root>/lcfm/ \
         --output-dir lcfm
-    python scripts/verification/verify_precursor_charges_and_acq_type.py \
+    uv run python -m scripts.verification.verify_precursor_charges_and_acq_type \
         --input-dir s3://<your-bucket>/acfm/ \
         --search-data data/search_data.xlsx \
         --output-dir acfm \

@@ -5,11 +5,11 @@ before downstream preprocessing consumes them.
 
 CLI::
 
-    python scripts/preprocessing/check_conversion.py --help
-    python scripts/preprocessing/check_conversion.py --input-dir <data-root>/acfm --output-file missing_files.txt
-    python scripts/preprocessing/check_conversion.py --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file missing_files.txt
+    uv run python -m scripts.preprocessing.check_conversion --help
+    uv run python -m scripts.preprocessing.check_conversion --input-dir <data-root>/acfm --output-file missing_files.txt
+    uv run python -m scripts.preprocessing.check_conversion --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file missing_files.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

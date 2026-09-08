@@ -6,11 +6,11 @@ to review associated Parquet deletions first.
 
 CLI::
 
-    python scripts/preprocessing/delete_same_folder_duplicates.py --help
-    python scripts/preprocessing/delete_same_folder_duplicates.py --input-file duplicate_files_acfm.txt --dry-run
-    python scripts/preprocessing/delete_same_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --force
+    uv run python -m scripts.preprocessing.delete_same_folder_duplicates --help
+    uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file duplicate_files_acfm.txt --dry-run
+    uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file report_a.txt --input-file report_b.txt --force
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

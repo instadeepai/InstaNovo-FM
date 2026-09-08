@@ -6,9 +6,9 @@ and supports local trees or S3 listings.
 
 CLI::
 
-    python scripts/preprocessing/add_acquisition_column.py --help
-    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/
-    python scripts/preprocessing/add_acquisition_column.py --input-dir <data-root>/lcfm/ --search-data data/search_data.xlsx
+    uv run python -m scripts.preprocessing.add_acquisition_column --help
+    uv run python -m scripts.preprocessing.add_acquisition_column --input-dir <data-root>/lcfm/
+    uv run python -m scripts.preprocessing.add_acquisition_column --input-dir <data-root>/lcfm/ --search-data data/search_data.xlsx
 """
 
 import logging

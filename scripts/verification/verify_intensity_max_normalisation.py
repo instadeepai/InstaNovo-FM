@@ -17,12 +17,12 @@ as ``1.0``), or **created** as ``Float32`` when the column was missing.
 
 CLI::
 
-    python scripts/verification/verify_intensity_max_normalisation.py --help
-    python scripts/verification/verify_intensity_max_normalisation.py \
+    uv run python -m scripts.verification.verify_intensity_max_normalisation --help
+    uv run python -m scripts.verification.verify_intensity_max_normalisation \
         --input path/to/file.parquet
-    python scripts/verification/verify_intensity_max_normalisation.py \
+    uv run python -m scripts.verification.verify_intensity_max_normalisation \
         --input-dir <data-root>/lcfm/ --project PXD009449
-    python scripts/verification/verify_intensity_max_normalisation.py \
+    uv run python -m scripts.verification.verify_intensity_max_normalisation \
         --input path/to/file.parquet --fix --dry-run
 """
 

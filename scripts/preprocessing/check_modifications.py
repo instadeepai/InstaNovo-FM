@@ -6,13 +6,13 @@ identified before Parquet sequences are rewritten.
 
 CLI::
 
-    python scripts/preprocessing/check_modifications.py --help
-    python scripts/preprocessing/check_modifications.py --input-file modifications.xlsx
-    python scripts/preprocessing/check_modifications.py --input-file mods_a.xlsx --input-file mods_b.xlsx \
+    uv run python -m scripts.preprocessing.check_modifications --help
+    uv run python -m scripts.preprocessing.check_modifications --input-file modifications.xlsx
+    uv run python -m scripts.preprocessing.check_modifications --input-file mods_a.xlsx --input-file mods_b.xlsx \
         --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
         --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

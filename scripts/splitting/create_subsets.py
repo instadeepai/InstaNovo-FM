@@ -11,8 +11,8 @@ tree unchanged.
 
 CLI::
 
-    python scripts/splitting/create_subsets.py --help
-    python scripts/splitting/create_subsets.py \
+    uv run python -m scripts.splitting.create_subsets --help
+    uv run python -m scripts.splitting.create_subsets \
         --input-dir psms \
         --medium-output-dir subsets/medium \
         --high-output-dir subsets/high \

@@ -16,8 +16,8 @@ when a split fits in memory, or ``shuffle_2pass.py`` when it does not.
 
 CLI::
 
-    python scripts/splitting/shuffle_indices.py --help
-    python scripts/splitting/shuffle_indices.py \
+    uv run python -m scripts.splitting.shuffle_indices --help
+    uv run python -m scripts.splitting.shuffle_indices \
         --input-dir /data/root \
         --output-dir shuffled_splits \
         --chunk-size 400000 \

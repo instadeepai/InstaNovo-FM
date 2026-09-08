@@ -10,8 +10,8 @@ does not fit.
 
 CLI::
 
-    python scripts/splitting/shuffle_in_ram.py --help
-    python scripts/splitting/shuffle_in_ram.py \
+    uv run python -m scripts.splitting.shuffle_in_ram --help
+    uv run python -m scripts.splitting.shuffle_in_ram \
         --input-dir lcfm_splits \
         --output-dir lcfm_shuffled \
         --target-chunk-size 400000 \

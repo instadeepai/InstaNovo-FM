@@ -16,12 +16,12 @@ characters.
 
 CLI::
 
-    python scripts/splitting/split_labelled_data.py --help
-    python scripts/splitting/split_labelled_data.py split --input-dir lcfm --output-dir splits
-    python scripts/splitting/split_labelled_data.py split -i lcfm --output-dir splits --mode split-only
-    python scripts/splitting/split_labelled_data.py split -i data --output-dir splits \\
+    uv run python -m scripts.splitting.split_labelled_data --help
+    uv run python -m scripts.splitting.split_labelled_data split --input-dir lcfm --output-dir splits
+    uv run python -m scripts.splitting.split_labelled_data split -i lcfm --output-dir splits --mode split-only
+    uv run python -m scripts.splitting.split_labelled_data split -i data --output-dir splits \\
         --column-remap '{"legacy_peptide":"unmodified_peptide"}'
-    python scripts/splitting/split_labelled_data.py batch dir1 dir2 --output-dir splits/
+    uv run python -m scripts.splitting.split_labelled_data batch dir1 dir2 --output-dir splits/
 """
 
 from __future__ import annotations

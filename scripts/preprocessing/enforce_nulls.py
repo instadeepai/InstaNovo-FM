@@ -6,11 +6,11 @@ rewrites it to null before alignment or training.
 
 CLI::
 
-    python scripts/preprocessing/enforce_nulls.py --help
-    python scripts/preprocessing/enforce_nulls.py --input-dir <data-root>/lcfm --output-file enforced_nulls.csv
-    python scripts/preprocessing/enforce_nulls.py --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file enforced_nulls.csv
+    uv run python -m scripts.preprocessing.enforce_nulls --help
+    uv run python -m scripts.preprocessing.enforce_nulls --input-dir <data-root>/lcfm --output-file enforced_nulls.csv
+    uv run python -m scripts.preprocessing.enforce_nulls --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file enforced_nulls.csv
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

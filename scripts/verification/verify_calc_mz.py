@@ -68,13 +68,13 @@ READING THE RATES (1) = as-is %, (2) = after carbamidomethylation over all proce
 
 CLI::
 
-    python scripts/verification/verify_calc_mz.py --help
-    python scripts/verification/verify_calc_mz.py \
+    uv run python -m scripts.verification.verify_calc_mz --help
+    uv run python -m scripts.verification.verify_calc_mz \
         --input-dir <data-root>/lcfm/ \
         --output-file calc_mz_verification.csv \
         --tolerance 10 \
         --verbose
-    python scripts/verification/verify_calc_mz.py \
+    uv run python -m scripts.verification.verify_calc_mz \
         --input-dir <data-root>/lcfm/ \
         --output-file calc_mz_verification.csv \
         --search-data data/search_data.xlsx \

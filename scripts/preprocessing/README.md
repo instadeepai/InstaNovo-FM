@@ -4,7 +4,7 @@ Convert and clean mass-spectrometry files before verification and splitting.
 For the full pipeline order, see [`../README.md`](../README.md).
 
 All scripts in this folder use Typer.
-Run them from this directory, or give the full path from the repository root as `python scripts/preprocessing/<script>.py`.
+Run them from the repository root as `uv run python -m scripts.preprocessing.<script>` (see [`../README.md`](../README.md)).
 
 ## Basic workflow
 
@@ -19,41 +19,41 @@ For other datasets that dictionary may need updating by hand.
 
 ## Individual script usage
 
-Shared flags are documented in [`../README.md`](../README.md). Every script is a single Typer command: `python <script>.py --help`. Repeat `--input-dir` / `--input-file` instead of separate batch subcommands.
+Shared flags are documented in [`../README.md`](../README.md). Every script is a single Typer command: `uv run python -m scripts.preprocessing.<script> --help`. Repeat `--input-dir` / `--input-file` instead of separate batch subcommands.
 
 ### 1. Detect duplicates (`detect_all_duplicates.py`)
 
 ```bash
-python detect_all_duplicates.py --input-dir ./data --output-file duplicates.txt
-python detect_all_duplicates.py --input-dir ./data1 --input-dir ./data2 --output-file duplicates.txt --verbose
-python detect_all_duplicates.py --input-dir ./data --extensions .ipc .parquet --output-file duplicates.txt
+uv run python -m scripts.preprocessing.detect_all_duplicates --input-dir ./data --output-file duplicates.txt
+uv run python -m scripts.preprocessing.detect_all_duplicates --input-dir ./data1 --input-dir ./data2 --output-file duplicates.txt --verbose
+uv run python -m scripts.preprocessing.detect_all_duplicates --input-dir ./data --extensions .ipc .parquet --output-file duplicates.txt
 ```
 
 ### 2. Delete same-folder duplicates (`delete_same_folder_duplicates.py`)
 
 ```bash
-python delete_same_folder_duplicates.py --input-file duplicates.txt
-python delete_same_folder_duplicates.py --input-file duplicates.txt --force
-python delete_same_folder_duplicates.py --input-file duplicates.txt --dry-run
-python delete_same_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --force
+uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file duplicates.txt
+uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file duplicates.txt --force
+uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file duplicates.txt --dry-run
+uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-file report_a.txt --input-file report_b.txt --force
 ```
 
 ### 3. Find empty files (`find_empty_files.py`)
 
 ```bash
-python find_empty_files.py --input-dir ./data --output-file empty_files.txt
-python find_empty_files.py --input-dir ./data --min-size 1024 --output-file small_files.txt
-python find_empty_files.py --input-dir ./acfm --input-dir ./lcfm --output-file empty_files.txt
+uv run python -m scripts.preprocessing.find_empty_files --input-dir ./data --output-file empty_files.txt
+uv run python -m scripts.preprocessing.find_empty_files --input-dir ./data --min-size 1024 --output-file small_files.txt
+uv run python -m scripts.preprocessing.find_empty_files --input-dir ./acfm --input-dir ./lcfm --output-file empty_files.txt
 ```
 
 ### 4. Convert IPC to Parquet (`convert_ipc_to_parquet.py`)
 
 ```bash
-python convert_ipc_to_parquet.py --input-dir ./data --output-file errors.txt
-python convert_ipc_to_parquet.py --input-file file_list.txt --output-file errors.txt
-python convert_ipc_to_parquet.py --input-dir ./data \
+uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-dir ./data --output-file errors.txt
+uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-file file_list.txt --output-file errors.txt
+uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-dir ./data \
     --column-mapping '{"rt": "retention_time", "mz": "mz_array"}' --verbose
-python convert_ipc_to_parquet.py --input-file list1.txt --input-file list2.txt --output-file errors.txt
+uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-file list1.txt --input-file list2.txt --output-file errors.txt
 ```
 
 ### 5. Enforce null values (`enforce_nulls.py`)
@@ -61,47 +61,47 @@ python convert_ipc_to_parquet.py --input-file list1.txt --input-file list2.txt -
 By default replaces `"Unknown"` with null in `collision_energy` and `frag_type`.
 
 ```bash
-python enforce_nulls.py --input-dir ./data --output-file affected_files.csv
-python enforce_nulls.py --input-dir ./data --column some_column --old-value "N/A"
-python enforce_nulls.py --input-dir ./acfm --input-dir ./lcfm --output-file affected_files.csv
+uv run python -m scripts.preprocessing.enforce_nulls --input-dir ./data --output-file affected_files.csv
+uv run python -m scripts.preprocessing.enforce_nulls --input-dir ./data --column some_column --old-value "N/A"
+uv run python -m scripts.preprocessing.enforce_nulls --input-dir ./acfm --input-dir ./lcfm --output-file affected_files.csv
 ```
 
 ### 6. Delete files from a list (`delete_files.py`)
 
 ```bash
-python delete_files.py --input-file file_list.txt --error-log errors.txt
-python delete_files.py --input-file file_list.txt --dry-run
-python delete_files.py --input-file list1.txt --input-file list2.txt --error-log errors.txt
+uv run python -m scripts.preprocessing.delete_files --input-file file_list.txt --error-log errors.txt
+uv run python -m scripts.preprocessing.delete_files --input-file file_list.txt --dry-run
+uv run python -m scripts.preprocessing.delete_files --input-file list1.txt --input-file list2.txt --error-log errors.txt
 ```
 
 ### 7. Find modifications (`find_modifications.py`)
 
 ```bash
-python find_modifications.py --input-dir ./data --output-file modifications.xlsx
-python find_modifications.py --input-dir ./data --pattern "**/*.parquet" --verbose
-python find_modifications.py --input-dir ./data1 --input-dir ./data2 --output-file modifications.xlsx
+uv run python -m scripts.preprocessing.find_modifications --input-dir ./data --output-file modifications.xlsx
+uv run python -m scripts.preprocessing.find_modifications --input-dir ./data --pattern "**/*.parquet" --verbose
+uv run python -m scripts.preprocessing.find_modifications --input-dir ./data1 --input-dir ./data2 --output-file modifications.xlsx
 ```
 
 ### 8. Check conversion completeness (`check_conversion.py`)
 
 ```bash
-python check_conversion.py --input-dir ./data --output-file missing_files.txt
-python check_conversion.py --input-dir ./data1 --input-dir ./data2 --output-file missing_files.txt
+uv run python -m scripts.preprocessing.check_conversion --input-dir ./data --output-file missing_files.txt
+uv run python -m scripts.preprocessing.check_conversion --input-dir ./data1 --input-dir ./data2 --output-file missing_files.txt
 ```
 
 ### 9. Detect multi-folder duplicates (`detect_multi_folder_duplicates.py`)
 
 ```bash
-python detect_multi_folder_duplicates.py --input-file duplicates.txt --output-file multi_duplicates.txt
-python detect_multi_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --output-file multi_duplicates.txt
+uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file duplicates.txt --output-file multi_duplicates.txt
+uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file report_a.txt --input-file report_b.txt --output-file multi_duplicates.txt
 ```
 
 ### 10. Delete multi-folder duplicates (`delete_multi_folder_duplicates.py`)
 
 ```bash
-python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder
-python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder --force
-python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --target-dir ./target_folder --dry-run
+uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --input-file multi_duplicates.txt --target-dir ./target_folder
+uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --input-file multi_duplicates.txt --target-dir ./target_folder --force
+uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --input-file multi_duplicates.txt --target-dir ./target_folder --dry-run
 ```
 
 ### 11. Infer isolation targets (`infer_isolation_target.py`)
@@ -109,16 +109,16 @@ python delete_multi_folder_duplicates.py --input-file multi_duplicates.txt --tar
 `--input-dir` accepts a glob pattern selecting parquet files.
 
 ```bash
-python infer_isolation_target.py --input-dir "./data/**/*.parquet" --output-file modified.txt
-python infer_isolation_target.py --input-dir "./data1/**/*.parquet" --input-dir "./data2/**/*.parquet" \
+uv run python -m scripts.preprocessing.infer_isolation_target --input-dir "./data/**/*.parquet" --output-file modified.txt
+uv run python -m scripts.preprocessing.infer_isolation_target --input-dir "./data1/**/*.parquet" --input-dir "./data2/**/*.parquet" \
     --output-file modified.txt --error-log errors.txt
 ```
 
 ### 12. Label modifications (`label_modifications.py`)
 
 ```bash
-python label_modifications.py --input-dir subfolder_name
-python label_modifications.py --input-dir subfolder1 --input-dir subfolder2 \
+uv run python -m scripts.preprocessing.label_modifications --input-dir subfolder_name
+uv run python -m scripts.preprocessing.label_modifications --input-dir subfolder1 --input-dir subfolder2 \
     --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
     --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 ```
@@ -126,8 +126,8 @@ python label_modifications.py --input-dir subfolder1 --input-dir subfolder2 \
 `check_modifications.py` compares inventories against the same mapping tables:
 
 ```bash
-python check_modifications.py --input-file modifications.xlsx
-python check_modifications.py --input-file modifications.xlsx \
+uv run python -m scripts.preprocessing.check_modifications --input-file modifications.xlsx
+uv run python -m scripts.preprocessing.check_modifications --input-file modifications.xlsx \
     --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
     --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 ```
@@ -138,15 +138,15 @@ Adds an `acquisition` column (DIA/DDA) from search-data Excel.
 Defaults to `data/search_data.xlsx`.
 
 ```bash
-python add_acquisition_column.py \
+uv run python -m scripts.preprocessing.add_acquisition_column \
     --input-dir <data-root>/lcfm/
 
-python add_acquisition_column.py \
+uv run python -m scripts.preprocessing.add_acquisition_column \
     --input-dir s3://bucket/acfm/ \
     --search-data data/search_data.xlsx \
     --aws-profile <your-aws-profile>
 
-python add_acquisition_column.py \
+uv run python -m scripts.preprocessing.add_acquisition_column \
     --input-dir <data-root>/lcfm/ \
     --search-data data/search_data.xlsx \
     --dry-run --verbose

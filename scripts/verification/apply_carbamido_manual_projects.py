@@ -12,11 +12,11 @@ when the sequence contains bare cysteines).
 
 CLI::
 
-    python scripts/verification/apply_carbamido_manual_projects.py --help
-    python scripts/verification/apply_carbamido_manual_projects.py \
+    uv run python -m scripts.verification.apply_carbamido_manual_projects --help
+    uv run python -m scripts.verification.apply_carbamido_manual_projects \
         --input-dir <data-root>/lcfm/ \
         --project my_dataset_a --project my_dataset_b
-    python scripts/verification/apply_carbamido_manual_projects.py \
+    uv run python -m scripts.verification.apply_carbamido_manual_projects \
         -i <data-root>/lcfm/ -p proj1 -p proj2 --dry-run
 """
 

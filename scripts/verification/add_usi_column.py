@@ -11,10 +11,10 @@ public PROXI services until converted to UNIMOD-style ProForma.
 
 CLI::
 
-    python scripts/verification/add_usi_column.py --help
-    python scripts/verification/add_usi_column.py \
+    uv run python -m scripts.verification.add_usi_column --help
+    uv run python -m scripts.verification.add_usi_column \
         --input-dir <data-root>/lcfm/
-    python scripts/verification/add_usi_column.py \
+    uv run python -m scripts.verification.add_usi_column \
         -i <data-root>/lcfm/ --project PXD009449 --dry-run
 """
 

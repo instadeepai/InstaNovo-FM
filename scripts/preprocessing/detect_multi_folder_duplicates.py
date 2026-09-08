@@ -5,11 +5,11 @@ different project folders can be reviewed before any deletion.
 
 CLI::
 
-    python scripts/preprocessing/detect_multi_folder_duplicates.py --help
-    python scripts/preprocessing/detect_multi_folder_duplicates.py --input-file preprocessing/outputs/duplicate_files_acfm.txt --output-file multi_folder_duplicates.txt
-    python scripts/preprocessing/detect_multi_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --output-file multi_folder_duplicates.txt
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --help
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file preprocessing/outputs/duplicate_files_acfm.txt --output-file multi_folder_duplicates.txt
+    uv run python -m scripts.preprocessing.detect_multi_folder_duplicates --input-file report_a.txt --input-file report_b.txt --output-file multi_folder_duplicates.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

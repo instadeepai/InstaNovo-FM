@@ -6,11 +6,11 @@ ACFM acquisition and USI metadata during conversion.
 
 CLI::
 
-    python scripts/preprocessing/convert_ipc_to_parquet.py --help
-    python scripts/preprocessing/convert_ipc_to_parquet.py --input-dir <data-root>/acfm
-    python scripts/preprocessing/convert_ipc_to_parquet.py --input-file missing_files_lcfm.txt --input-file missing_files_acfm.txt
+    uv run python -m scripts.preprocessing.convert_ipc_to_parquet --help
+    uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-dir <data-root>/acfm
+    uv run python -m scripts.preprocessing.convert_ipc_to_parquet --input-file missing_files_lcfm.txt --input-file missing_files_acfm.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

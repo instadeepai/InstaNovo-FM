@@ -29,12 +29,12 @@ multiple YAML files.
 
 CLI::
 
-    python scripts/verification/apply_tmt_itraq_from_search_data.py --help
-    python scripts/verification/apply_tmt_itraq_from_search_data.py \
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data --help
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data \
         --input-dir <data-root>/lcfm/ \
         --spec PXD001:TMT_6_8_10 \
         --dry-run
-    python scripts/verification/apply_tmt_itraq_from_search_data.py \
+    uv run python -m scripts.verification.apply_tmt_itraq_from_search_data \
         --search-data data/search_data.xlsx \
         --input-dir <data-root>/lcfm/ \
         --spec-file tags.yaml

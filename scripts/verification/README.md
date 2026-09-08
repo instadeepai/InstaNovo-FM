@@ -4,7 +4,7 @@ Check labelled parquet trees after preprocessing and before splitting.
 Several of these scripts can also apply the corresponding repair.
 For the full pipeline order, see [`../README.md`](../README.md).
 
-Run these from the repository root.
+Run these from the repository root as `uv run python -m scripts.verification.<script>` (see [`../README.md`](../README.md)).
 
 ## Basic workflow
 
@@ -23,7 +23,7 @@ Adds a `usi` column to parquet files in the [PSI USI](https://www.psidev.info/us
 The string is `mzspec:<collection>:<datafile>:<scanType>:<scan>[:<interpretation>]` when the locator fields can be filled.
 
 ```bash
-python scripts/verification/add_usi_column.py --input-dir <data-root>/lcfm/
+uv run python -m scripts.verification.add_usi_column --input-dir <data-root>/lcfm/
 ```
 
 #### Inputs used per row
@@ -50,13 +50,13 @@ The parquet is still written, with `usi` null for that row, if a locator field c
 Verifies that every spectrum has intensities normalised by their maximum value, with that maximum kept in the `scale_factor` column.
 
 ```bash
-python scripts/verification/verify_intensity_max_normalisation.py --input-dir <data-root>/lcfm
+uv run python -m scripts.verification.verify_intensity_max_normalisation --input-dir <data-root>/lcfm
 ```
 
 Add `--fix` to normalise non-conforming rows in place:
 
 ```bash
-python scripts/verification/verify_intensity_max_normalisation.py --input-dir <data-root>/lcfm --fix
+uv run python -m scripts.verification.verify_intensity_max_normalisation --input-dir <data-root>/lcfm --fix
 ```
 
 ### 3. Verify precursor charges and acquisition type (`verify_precursor_charges_and_acq_type.py`)
@@ -67,11 +67,11 @@ Verifies that precursor charge values are consistent with the acquisition type.
 - DIA files should have zero precursor charges, because the wide isolation windows leave the charge state unknown.
 
 ```bash
-python scripts/verification/verify_precursor_charges_and_acq_type.py \
+uv run python -m scripts.verification.verify_precursor_charges_and_acq_type \
     --input-dir <data-root>/lcfm/ \
     --output-dir lcfm
 
-python scripts/verification/verify_precursor_charges_and_acq_type.py \
+uv run python -m scripts.verification.verify_precursor_charges_and_acq_type \
     --input-dir s3://bucket/acfm/ \
     --search-data data/search_data.xlsx \
     --output-dir acfm \
@@ -102,7 +102,7 @@ This identifies four problems:
 4. Incorrect precursor charges used in the peptide m/z calculation.
 
 ```bash
-python scripts/verification/verify_calc_mz.py \
+uv run python -m scripts.verification.verify_calc_mz \
     --input-dir <data-root>/lcfm/ \
     --output-file calc_mz_verification.csv \
     --search-data data/search_data.xlsx \
@@ -121,7 +121,7 @@ Builds a residue-mass YAML that `verify_calc_mz.py` can use to recompute peptide
 It does not walk parquet files, but instead starts from the same gold-standard and PXD009449-ambiguous Excel tables as `label_modifications.py`.
 
 ```bash
-python scripts/verification/build_unimod_mass_dictionary.py \
+uv run python -m scripts.verification.build_unimod_mass_dictionary \
     --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
     --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx \
     --output-dir assets/mod_dicts

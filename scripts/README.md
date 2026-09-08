@@ -36,14 +36,13 @@ Steps 7 to 9 are documented in [`splitting/README.md`](splitting/README.md).
 
 ## CLI
 
-Scripts use Typer. Most expose a single command (no subcommand), so:
+Scripts use Typer and import each other as the `scripts` package, which is not installed with the wheel.
+Run them as modules from the **repository root** so that package resolves:
 
 ```bash
-python scripts/<stage>/<script>.py --help
-python scripts/<stage>/<script>.py --input-dir ...
+uv run python -m scripts.<stage>.<script> --help
+uv run python -m scripts.<stage>.<script> --input-dir ...
 ```
-
-`split_labelled_data.py` is the exception: it keeps `split` and `batch` because `batch` is one combined registry pass, not a for-loop over independent runs.
 
 ### Shared flags
 

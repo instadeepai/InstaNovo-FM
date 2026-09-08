@@ -6,11 +6,11 @@ before deletion.
 
 CLI::
 
-    python scripts/preprocessing/delete_files.py --help
-    python scripts/preprocessing/delete_files.py --input-file output_files/small_files_hcfm.txt --dry-run
-    python scripts/preprocessing/delete_files.py --input-file report_a.txt --input-file report_b.txt --error-log errors.txt
+    uv run python -m scripts.preprocessing.delete_files --help
+    uv run python -m scripts.preprocessing.delete_files --input-file output_files/small_files_hcfm.txt --dry-run
+    uv run python -m scripts.preprocessing.delete_files --input-file report_a.txt --input-file report_b.txt --error-log errors.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

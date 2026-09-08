@@ -10,8 +10,8 @@ masses and writes:
 
 CLI::
 
-    python scripts/verification/build_unimod_mass_dictionary.py --help
-    python scripts/verification/build_unimod_mass_dictionary.py \
+    uv run python -m scripts.verification.build_unimod_mass_dictionary --help
+    uv run python -m scripts.verification.build_unimod_mass_dictionary \
         --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
         --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx \
         --output-dir assets/mod_dicts

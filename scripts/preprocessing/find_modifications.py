@@ -5,11 +5,11 @@ labels and representative spectrum metadata are available in an Excel report.
 
 CLI::
 
-    python scripts/preprocessing/find_modifications.py --help
-    python scripts/preprocessing/find_modifications.py --input-dir <data-root>/lcfm --output-file modifications.xlsx
-    python scripts/preprocessing/find_modifications.py --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file modifications.xlsx
+    uv run python -m scripts.preprocessing.find_modifications --help
+    uv run python -m scripts.preprocessing.find_modifications --input-dir <data-root>/lcfm --output-file modifications.xlsx
+    uv run python -m scripts.preprocessing.find_modifications --input-dir <data-root>/lcfm --input-dir <data-root>/hcfm --output-file modifications.xlsx
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

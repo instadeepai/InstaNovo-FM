@@ -4,11 +4,11 @@ Run this validation after collecting IPC data and before conversion.
 
 CLI::
 
-    python scripts/preprocessing/find_empty_files.py --help
-    python scripts/preprocessing/find_empty_files.py --input-dir <data-root>/acfm --output-file empty_files.txt
-    python scripts/preprocessing/find_empty_files.py --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file empty_files.txt
+    uv run python -m scripts.preprocessing.find_empty_files --help
+    uv run python -m scripts.preprocessing.find_empty_files --input-dir <data-root>/acfm --output-file empty_files.txt
+    uv run python -m scripts.preprocessing.find_empty_files --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file empty_files.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

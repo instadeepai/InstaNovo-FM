@@ -6,11 +6,11 @@ cannot infer.
 
 CLI::
 
-    python scripts/preprocessing/infer_isolation_target.py --help
-    python scripts/preprocessing/infer_isolation_target.py --input-dir "<data-root>/acfm/**/*.parquet" --output-file modified_files.txt
-    python scripts/preprocessing/infer_isolation_target.py --input-dir "<data-root>/acfm/**/*.parquet" --input-dir "<data-root>/lcfm/**/*.parquet" --output-file modified_files.txt
+    uv run python -m scripts.preprocessing.infer_isolation_target --help
+    uv run python -m scripts.preprocessing.infer_isolation_target --input-dir "<data-root>/acfm/**/*.parquet" --output-file modified_files.txt
+    uv run python -m scripts.preprocessing.infer_isolation_target --input-dir "<data-root>/acfm/**/*.parquet" --input-dir "<data-root>/lcfm/**/*.parquet" --output-file modified_files.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

@@ -16,11 +16,11 @@ and applies fixes:
 
 CLI::
 
-    python scripts/verification/fix_precursor_charges_from_reports.py --help
-    python scripts/verification/fix_precursor_charges_from_reports.py \
+    uv run python -m scripts.verification.fix_precursor_charges_from_reports --help
+    uv run python -m scripts.verification.fix_precursor_charges_from_reports \
         --input-dir <data-root>/lcfm/ \
         --report-dir verify_precursor_charge_and_acq_type_lcfm
-    python scripts/verification/fix_precursor_charges_from_reports.py \
+    uv run python -m scripts.verification.fix_precursor_charges_from_reports \
         --input-dir <data-root>/lcfm/ \
         --report-dir verify_precursor_charge_and_acq_type_lcfm \
         --dry-run

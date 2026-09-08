@@ -14,11 +14,11 @@ project gate passes).
 
 CLI::
 
-    python scripts/verification/apply_carbamido_from_calc_mz_report.py --help
-    python scripts/verification/apply_carbamido_from_calc_mz_report.py \
+    uv run python -m scripts.verification.apply_carbamido_from_calc_mz_report --help
+    uv run python -m scripts.verification.apply_carbamido_from_calc_mz_report \
         --input-dir <data-root>/lcfm/ \
         --verification-csv calc_mz_verification.csv
-    python scripts/verification/apply_carbamido_from_calc_mz_report.py \
+    uv run python -m scripts.verification.apply_carbamido_from_calc_mz_report \
         --input-dir <data-root>/lcfm/ \
         --verification-csv calc_mz_verification.csv \
         --dry-run

@@ -31,27 +31,27 @@ so these costs never stack across splits.
 
 CLI::
 
-    python scripts/splitting/shuffle_2pass.py --help
+    uv run python -m scripts.splitting.shuffle_2pass --help
 
     # Forecast a safe --chunk-size for this machine before committing to a run
-    python scripts/splitting/shuffle_2pass.py --forecast --sample-file train_0.parquet
+    uv run python -m scripts.splitting.shuffle_2pass --forecast --sample-file train_0.parquet
 
     # Basic run: single directory
-    python scripts/splitting/shuffle_2pass.py \
+    uv run python -m scripts.splitting.shuffle_2pass \
         --input-dir /data/shards --output-dir /data/shuffled
 
     # Combine multiple dataset directories into a single shuffled output
-    python scripts/splitting/shuffle_2pass.py \
+    uv run python -m scripts.splitting.shuffle_2pass \
         --input-dir /data/dataset1 --input-dir /data/dataset2 \
         --input-dir /data/dataset3 --output-dir /data/shuffled
 
     # Custom chunk size + seed for reproducibility
-    python scripts/splitting/shuffle_2pass.py \
+    uv run python -m scripts.splitting.shuffle_2pass \
         --input-dir /data/shards --output-dir /data/shuffled \
         --chunk-size 200000 --seed 42
 
     # Different parallelism per stage
-    python scripts/splitting/shuffle_2pass.py \
+    uv run python -m scripts.splitting.shuffle_2pass \
         --input-dir /data/shards --output-dir /data/shuffled \
         --pass1-procs 4 --pass2-procs 8
 """

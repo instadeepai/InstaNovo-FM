@@ -4,6 +4,7 @@ Build confidence subsets, peptide-disjoint train/test/validation splits, and shu
 For the full pipeline order, which runs preprocessing then verification then this stage, see [`../README.md`](../README.md).
 
 All scripts in this folder use Typer.
+Run them from the repository root as `uv run python -m scripts.splitting.<script>` (see [`../README.md`](../README.md)).
 
 ## Basic workflow
 
@@ -15,7 +16,7 @@ All scripts in this folder use Typer.
 
 ```bash
 # 1. Build MCFM / HCFM confidence subsets from scored labelled data
-python create_subsets.py \
+uv run python -m scripts.splitting.create_subsets \
     --input-dir <data-root>/lcfm \
     --medium-output-dir <data-root>/mcfm \
     --high-output-dir <data-root>/hcfm
@@ -23,32 +24,32 @@ python create_subsets.py \
 # 2. Extend the InstaNovo registry with new labelled peptides (LCFM),
 #    then write train/test/valid parquet. Omit --registry-dir to download
 #    peptide_registry.parquet from HuggingFace.
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits \
     --mode both
 
 # 3. Optionally update the registry from additional labelled trees in one pass
-python split_labelled_data.py batch <data-root>/mcfm <data-root>/hcfm \
+uv run python -m scripts.splitting.split_labelled_data batch <data-root>/mcfm <data-root>/hcfm \
     --output-dir <data-root>/registry_update \
     --registry-dir <data-root>/lcfm_splits \
     --mode update-splits
 
 # 4. Partition each corpus using the updated registry (errors if any peptide
 #    is missing — run update-splits first for that tree)
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/mcfm \
     --output-dir <data-root>/mcfm_splits \
     --registry-dir <data-root>/registry_update \
     --mode split-only
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/hcfm \
     --output-dir <data-root>/hcfm_splits \
     --registry-dir <data-root>/registry_update \
     --mode split-only
 
 # 5. Shuffle the splits
-python shuffle_2pass.py --input-dir <data-root>/lcfm_splits --output-dir shuffled_splits
+uv run python -m scripts.splitting.shuffle_2pass --input-dir <data-root>/lcfm_splits --output-dir shuffled_splits
 ```
 
 ### About the peptide registry
@@ -78,31 +79,31 @@ Creates train/test/validation splits from labelled peptide data using the peptid
 
 ```bash
 # Basic usage (download HF registry, update + split)
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits
 
 # Custom parameters
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits \
     --rows-per-file 500000
 
 # Update registry only
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits \
     --mode update-splits
 
 # Split files only (registry must already contain all peptides)
-python split_labelled_data.py split \
+uv run python -m scripts.splitting.split_labelled_data split \
     --input-dir <data-root>/lcfm \
     --output-dir <data-root>/lcfm_splits \
     --registry-dir <data-root>/lcfm_splits \
     --mode split-only
 
 # Batch: one combined update/split pass over several directories
-python split_labelled_data.py batch <data-root>/lcfm <data-root>/mcfm <data-root>/hcfm \
+uv run python -m scripts.splitting.split_labelled_data batch <data-root>/lcfm <data-root>/mcfm <data-root>/hcfm \
     --output-dir <data-root>/combined_splits
 ```
 
@@ -135,7 +136,7 @@ This is separate from `split_labelled_data.py`, because it filters rows by a glo
 Passing `--hold-back-modified-rows` drops rows whose `sequence` contains the internal `[IN:<digits>]` modification tokens before scoring and output, so those rows affect neither the thresholds nor the exported subsets.
 
 ```bash
-python create_subsets.py \
+uv run python -m scripts.splitting.create_subsets \
     --input-dir <data-root>/lcfm/ \
     --medium-output-dir <data-root>/mcfm/ \
     --high-output-dir <data-root>/hcfm/ \
@@ -148,19 +149,19 @@ Advanced splitting for unlabelled data using LSH clustering.
 
 ```bash
 # Full processing (recommended)
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode full \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits
 
 # LSH computation only
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode lsh_only \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits
 
 # Splitting only (using existing LSH)
-python split_unlabelled_data.py \
+uv run python -m scripts.splitting.split_unlabelled_data \
     --mode split_only \
     --input-dir /path/to/acfm/data \
     --output-dir ./acfm_splits \
@@ -188,12 +189,12 @@ High-performance shuffling for large datasets (such as ACFM and LCFM).
 
 ```bash
 # Basic usage (auto-detects optimal settings)
-python shuffle_2pass.py \
+uv run python -m scripts.splitting.shuffle_2pass \
     --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits
 
 # Custom configuration
-python shuffle_2pass.py \
+uv run python -m scripts.splitting.shuffle_2pass \
     --input-dir <data-root>/lcfm_splits \
     --output-dir shuffled_splits \
     --chunk-size 100000 \
@@ -202,7 +203,7 @@ python shuffle_2pass.py \
     --seed 42
 
 # Memory forecasting
-python shuffle_2pass.py \
+uv run python -m scripts.splitting.shuffle_2pass \
     --forecast \
     --ram-gb 32 \
     --sample-file train_0.parquet
@@ -223,13 +224,13 @@ Simple and fast shuffling for the smallest datasets that fit entirely in RAM.
 
 ```bash
 # Basic usage
-python shuffle_in_ram.py \
+uv run python -m scripts.splitting.shuffle_in_ram \
     --input-dir <data-root>/hcfm_splits \
     --output-dir shuffled_splits \
     --target-chunk-size 50000
 
 # Custom configuration
-python shuffle_in_ram.py \
+uv run python -m scripts.splitting.shuffle_in_ram \
     --input-dir <data-root>/hcfm_splits \
     --output-dir shuffled_splits \
     --target-chunk-size 50000 \
@@ -258,7 +259,7 @@ Slower but simpler shuffling approach for smaller datasets that still do not fit
 
 ```bash
 # Basic usage
-python shuffle_indices.py \
+uv run python -m scripts.splitting.shuffle_indices \
     --input-dir <data-root> \
     --output-dir shuffled_splits \
     --chunk-size 400000 \

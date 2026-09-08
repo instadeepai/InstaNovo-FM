@@ -6,11 +6,11 @@ target folder.
 
 CLI::
 
-    python scripts/preprocessing/delete_multi_folder_duplicates.py --help
-    python scripts/preprocessing/delete_multi_folder_duplicates.py --input-file multi_folder_duplicates.txt --target-dir <target-folder> --dry-run
-    python scripts/preprocessing/delete_multi_folder_duplicates.py --input-file report_a.txt --input-file report_b.txt --target-dir <target-folder> --force
+    uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --help
+    uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --input-file multi_folder_duplicates.txt --target-dir <target-folder> --dry-run
+    uv run python -m scripts.preprocessing.delete_multi_folder_duplicates --input-file report_a.txt --input-file report_b.txt --target-dir <target-folder> --force
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

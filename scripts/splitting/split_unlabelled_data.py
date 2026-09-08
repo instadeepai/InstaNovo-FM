@@ -19,12 +19,12 @@ Checkpointing:
 
 CLI::
 
-    python scripts/splitting/split_unlabelled_data.py --help
-    python scripts/splitting/split_unlabelled_data.py --mode full \
+    uv run python -m scripts.splitting.split_unlabelled_data --help
+    uv run python -m scripts.splitting.split_unlabelled_data --mode full \
         --input-dir data --output-dir splits
-    python scripts/splitting/split_unlabelled_data.py --mode lsh_only \
+    uv run python -m scripts.splitting.split_unlabelled_data --mode lsh_only \
         --input-dir data --output-dir splits
-    python scripts/splitting/split_unlabelled_data.py --mode split_only \
+    uv run python -m scripts.splitting.split_unlabelled_data --mode split_only \
         --input-dir data --output-dir splits \
         --lsh-assignments splits/updated_lsh_assignments.parquet --mz-max 6000
 """

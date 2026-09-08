@@ -5,11 +5,11 @@ cleanup stages have a complete candidate report.
 
 CLI::
 
-    python scripts/preprocessing/detect_all_duplicates.py --help
-    python scripts/preprocessing/detect_all_duplicates.py --input-dir <data-root>/acfm --output-file duplicates.txt
-    python scripts/preprocessing/detect_all_duplicates.py --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file duplicates.txt
+    uv run python -m scripts.preprocessing.detect_all_duplicates --help
+    uv run python -m scripts.preprocessing.detect_all_duplicates --input-dir <data-root>/acfm --output-file duplicates.txt
+    uv run python -m scripts.preprocessing.detect_all_duplicates --input-dir <data-root>/acfm --input-dir <data-root>/lcfm --output-file duplicates.txt
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

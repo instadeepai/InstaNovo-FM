@@ -44,13 +44,13 @@ We expect the parquet files to contain the columns:
 
 CLI::
 
-    python scripts/preprocessing/label_modifications.py --help
-    python scripts/preprocessing/label_modifications.py --input-dir <subfolder>
-    python scripts/preprocessing/label_modifications.py --input-dir <subfolder-a> --input-dir <subfolder-b> \
+    uv run python -m scripts.preprocessing.label_modifications --help
+    uv run python -m scripts.preprocessing.label_modifications --input-dir <subfolder>
+    uv run python -m scripts.preprocessing.label_modifications --input-dir <subfolder-a> --input-dir <subfolder-b> \
         --gold-standard-mods assets/mod_dicts/gold_standard_modifications.xlsx \
         --ambiguous-mods assets/mod_dicts/PXD009449_ambiguous_mods.xlsx
 
-Use ``python script.py --help`` for flags.
+Run from the repository root; see ``scripts/README.md`` for the ``uv run python -m`` invocation.
 """
 
 from __future__ import annotations

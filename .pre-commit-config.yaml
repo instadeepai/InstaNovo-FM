@@ -52,8 +52,11 @@ repos:
     hooks:
       - id: pydocstyle
         additional_dependencies: [toml]
-        args: [--convention=google, --add-ignore=D100,D104,D105,D107,D417]
-        exclude: ^(src/instanovo_fm/|tests/|scripts/)
+        # The ported code contains legacy partial docstrings; keep the hook
+        # active while allowing those categories to be addressed incrementally.
+        args:
+          - --convention=google
+          - "--add-ignore=D100,D101,D102,D103,D104,D105,D107,D205,D415,D417"
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
@@ -65,6 +68,14 @@ repos:
         types: [text]
         additional_dependencies: [tomli]
         exclude: ^(docs/.venv|dist|build)/
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.35.1
+    hooks:
+      - id: typos
+        # Restrict dialect checking to prose; identifiers, API names and data
+        # schemas legitimately use American spellings and fixed API names.
+        exclude: ^(LICENSE\.md|src/|scripts/|tests/|data/|config/|notebooks/)
 
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.1

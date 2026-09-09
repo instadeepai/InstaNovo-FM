@@ -26,7 +26,7 @@ repository.
 |---|---|---|
 | [Casanovo](https://github.com/Noble-Lab/casanovo) | `casanovo==5.1.2` from PyPI | Apache-2.0 |
 | Casanovo checkpoint `casanovo_v5_0_0.ckpt` | the `v5.0.0` release asset | see below |
-| [MassNet-DDA](https://github.com/guomics-lab/MassNet-DDA) (XuanjiNovo) | commit `84105ec` | Apache-2.0, © 2024 PHOENIX center |
+| [MassNet-DDA](https://github.com/guomics-lab/MassNet-DDA) (XuanjiNovo) | commit `84105ec` | Apache-2.0, © 2024 PHOENIX centre |
 | [`ctcdecode`](https://github.com/parlance/ctcdecode) | the copy in that MassNet-DDA commit | MIT |
 | [`imputer-pytorch`](https://github.com/rosinality/imputer-pytorch) | the copy in that MassNet-DDA commit | MIT |
 | [CuPy](https://github.com/cupy/cupy) | `cupy-cuda12x==13.6.0` | MIT |

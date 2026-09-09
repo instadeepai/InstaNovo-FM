@@ -73,7 +73,7 @@ cd InstaNovo-FM
 
 uv sync                    # model, dataset pipeline and evaluation harness
 uv sync --group figures    # when you want to reproduce the figures
-uv sync --extra interpret  # for UMAP visualization
+uv sync --extra interpret  # for UMAP visualisation
 ```
 
 ## Quick start
@@ -331,7 +331,7 @@ If you use InstaNovo-FM in your research, please cite:
 
 ## License
 
-| artifact | licence |
+| artefact | licence |
 |---|---|
 | **Code** in this repository | [Apache License 2.0](LICENSE.md) |
 | **Model checkpoints** | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): attribution, non-commercial, share-alike |
@@ -357,7 +357,7 @@ Developed by:
 - [InstaDeep](https://www.instadeep.com/)
 - [Novo Nordisk Foundation Biotechnology Research Institute for the Green Transition](https://www.dtu.dk/), Technical University of Denmark
 - [Department of Biotechnology and Biomedicine](https://orbit.dtu.dk/en/organisations/department-of-biotechnology-and-biomedicine), Technical University of Denmark
-- [Center for Translational Protein Design](https://www.dtu.dk/)
+- [Centre for Translational Protein Design](https://www.dtu.dk/)
 - Delft University of Technology & the Kavli Institute of Nanoscience
 
 Built on public proteomics data from the [PRIDE](https://www.ebi.ac.uk/pride/) repository and the

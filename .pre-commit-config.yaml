@@ -69,7 +69,6 @@ repos:
     rev: 0.8.1
     hooks:
       - id: nbstripout
-        exclude: ^notebooks/introducing_the_next_generation_of_InstaNovo_models\.ipynb$
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.17

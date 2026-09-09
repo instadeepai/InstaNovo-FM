@@ -15,7 +15,7 @@ repos:
     hooks:
       - id: mypy
         args: [--ignore-missing-imports]
-        additional_dependencies: [types-PyYAML]
+        additional_dependencies: [types-requests, types-PyYAML]
         # src/instanovo_fm/ is the ported foundation model, kept diffable
         # against its origin in the internal repository rather than relinted
         # here -- the same reason ruff-format excludes it and ruff's
@@ -53,6 +53,7 @@ repos:
       - id: pydocstyle
         additional_dependencies: [toml]
         args: [--convention=google, --add-ignore=D100,D104,D105,D107,D417]
+        exclude: ^(src/instanovo_fm/|tests/|scripts/)
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
@@ -69,6 +70,7 @@ repos:
     rev: 0.8.1
     hooks:
       - id: nbstripout
+        exclude: ^notebooks/(figure_1|figure_3|figure_4)\.ipynb$
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.17

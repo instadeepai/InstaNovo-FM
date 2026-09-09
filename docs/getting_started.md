@@ -7,21 +7,27 @@ This tutorial trains a small model on your own data and then reads embeddings ou
 If you want to know what the model is before running it, read
 [The InstaNovo Foundation Model](foundation_model.md) first.
 
-> **There is no pretrained checkpoint to download yet**
+> **This tutorial trains its own small model**
 >
-> The weights behind the paper are not published, so this tutorial trains a small model from
-> scratch. That is enough to see the training signal and inspect the embedding space, but it is
-> not the published model — see
-> [Reproduce the Foundation Model results](reproducing_paper_results.md) for that configuration.
+> Training from scratch is what shows you the training signal, so that is what the steps below
+> do — the result is not the published model. If you only want embeddings, load the published
+> weights instead and skip to the embedding section:
+>
+> ```python
+> from instanovo_fm.model.encoder import FoundationModel
+>
+> model, config = FoundationModel.from_pretrained("instanovo-fm-v0.1.0")
+> ```
+>
+> To retrain the published model yourself, see
+> [Reproduce the Foundation Model results](reproducing_paper_results.md).
 
 ## Installation
 
-Install from source, following the [Installation section of the README](../README.md#installation):
+Install the package, as in the [Installation section of the README](../README.md#installation):
 
 ```bash
-git clone https://github.com/instadeepai/InstaNovo-FM.git
-cd InstaNovo-FM
-uv sync
+pip install instanovo-fm
 ```
 
 Then check the CLI is present:
@@ -30,8 +36,8 @@ Then check the CLI is present:
 instanovo-fm --help
 ```
 
-You should see two commands, `train` and `evaluate`. If you would rather not install the console
-script, `python -m instanovo_fm.cli` works identically.
+You should see three commands: `train`, `evaluate` and `denovo`. If you would rather not
+install the console script, `python -m instanovo_fm.cli` works identically.
 
 > **A GPU matters more here than for inference**
 >

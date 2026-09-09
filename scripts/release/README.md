@@ -1,5 +1,17 @@
 # Dataset release scripts
 
+Two artefacts go to two HuggingFace repos, and the scripts are deliberately separate:
+
+| artefact | repo | scripts |
+|---|---|---|
+| the labelled spectra corpus, in tiers and flavours | [`InstaDeepAI/InstaNovo`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo) | `hf_probe.py`, `hf_upload.py`, `dataset_card.md` |
+| the frozen spectrum embeddings | [`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings) | `prepare_embeddings.py`, `hf_upload_embeddings.py`, `embeddings_card.md` |
+
+They share no tier logic and carry different licences, so folding the embeddings into
+`hf_upload.py` would have meant a flag that changes what every other flag means. The
+embeddings runbook is in the header of `hf_upload_embeddings.py`; the rest of this file
+is about the corpus.
+
 Upload the labelled confidence tiers to the HuggingFace dataset repo.
 
 ## Order of operations

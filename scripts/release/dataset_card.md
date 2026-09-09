@@ -314,7 +314,7 @@ proteomics*. bioRxiv. <https://doi.org/10.64898/2026.09.03.747733>
   year    = {2026},
   journal = {bioRxiv},
   doi     = {10.64898/2026.09.03.747733},
-  url     = {https://www.biorxiv.org/content/10.64898/2026.09.03.747733v1},
+  url     = {https://doi.org/10.64898/2026.09.03.747733},
   note    = {Preprint}
 }
 ```

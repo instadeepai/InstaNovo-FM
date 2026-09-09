@@ -219,7 +219,8 @@ the paper:
   on HuggingFace, under CC BY-NC-SA 4.0 (the model's terms, since they are derived through it).
   Two configs of held-out LCFM test spectra, mean-pooled from `instanovo-fm-v0.1.0`: `100k`
   is the point set published as Figure 3 and carries its exact coordinates, `1M` is a larger
-  draw carrying two 2-D and two 3-D UMAP layouts that appear nowhere in the manuscript. Each
+  draw carrying two 2-D and two 3-D UMAP layouts (not yet mentioned in
+  [v1 of the preprint](https://www.biorxiv.org/content/10.64898/2026.09.03.747733v1)). Each
   row is a 768-d vector plus the metadata identifying its spectrum. The peak arrays are not
   duplicated — join to the corpus on `usi`, which is **not unique** here, so take first
   occurrences. An interactive explorer over the same embedding space is hosted at

@@ -136,7 +136,8 @@ recovered from frozen embeddings:
 The frozen embeddings of the held-out LCFM test split are published as
 [`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings):
 a `100k` config carrying the Figure 3 point set with its exact published coordinates, and a
-`1M` config carrying two 2-D and two 3-D UMAP layouts that appear nowhere in the manuscript.
+`1M` config carrying two 2-D and two 3-D UMAP layouts (not yet mentioned in
+[v1 of the preprint](https://www.biorxiv.org/content/10.64898/2026.09.03.747733v1)).
 Each row is the 768-d mean-pooled vector plus the metadata identifying its spectrum.
 
 Use them to analyse the embedding space without re-running inference. To reproduce them

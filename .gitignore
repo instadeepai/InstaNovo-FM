@@ -32,3 +32,7 @@ __pycache__/
 # so any run or test that exercises it drops these in the working tree
 error_log.txt
 batch_error_log.txt
+
+# Deployment-local scratch: downloaded HDF5 extractions and built payloads.
+# Multi-gigabyte and reproducible, so never committed.
+local_artifacts/

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InstaNovo-FM — a self-supervised foundation model for proteomics tandem mass spectra</title>
+<meta name="description" content="InstaNovo-FM is a self-supervised foundation model for bottom-up proteomics, trained to reconstruct masked regions of tandem mass spectra across 1.63 billion MS/MS spectra without peptide-sequence labels.">
+<link rel="icon" href="static/images/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="InstaNovo-FM: learning from tandem mass spectra at scale">
+<meta property="og:description" content="A self-supervised foundation model for bottom-up proteomics, pretrained on 1.63 billion tandem mass spectra without peptide-sequence labels.">
+<meta property="og:image" content="static/images/social_preview.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/css/page.css">
+</head>
+<body>
+
+<!-- ==================================================================== hero -->
+<header class="hero">
+  <div class="wrap">
+    <p class="wordmark"><span class="mark">InstaNovo-FM</span><span class="tag">a foundation model for tandem mass spectra</span></p>
+    <h1>Learning from tandem mass spectra at scale with a self-supervised foundation model for proteomics</h1>
+    <nav class="chips" aria-label="Resources">
+      <a class="chip primary" href="./">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="6" r="3"/><circle cx="12" cy="11" r="2.2"/><circle cx="6" cy="12.5" r="1.4"/></svg>
+        UMAP explorer</a>
+      <a class="chip" href="https://github.com/instadeepai/InstaNovo-FM">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.35c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+        Code</a>
+      <span class="chip pending">bioRxiv<span class="soon">soon</span></span>
+      <span class="chip pending">Model weights<span class="soon">soon</span></span>
+      <span class="chip pending">Dataset<span class="soon">soon</span></span>
+    </nav>
+  </div>
+</header>
+
+<!-- ============================================================= abstract -->
+<section class="abstract">
+  <div class="wrap">
+    <div>
+      <p>Mass spectrometry-based proteomics increasingly relies on machine learning. Yet, deep learning models in proteomics are trained for narrowly defined supervised tasks such as peptide identification, <em>de novo</em> sequencing or fragment intensity prediction, limiting transfer across downstream tasks. We have developed <span class="model">InstaNovo-FM</span>, a self-supervised foundation model for bottom-up proteomics trained to reconstruct masked regions of tandem mass spectra. <span class="model">InstaNovo-FM</span> was built on a diverse training corpus spanning 1.63 billion MS/MS spectra and 184.6 million high-confidence annotations. Model embeddings delineate fundamental experimental and biological properties, including fragmentation method, sequence properties and post-translational modifications, without requiring peptide labels. Furthermore, <span class="model">InstaNovo-FM</span> enables downstream applications, including <em>de novo</em> peptide sequencing, database-free identification and analytical run classification. This foundation model establishes a unified representation space for peptide fragmentation spectra, enabling robust transferability across proteomics applications.</p>
+      <p class="keywords"><b>Keywords:</b> proteomics &middot; tandem mass spectrometry &middot; self-supervised learning &middot; foundation model &middot; spectral representation learning &middot; <em>de novo</em> sequencing</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== results -->
+<div class="results">
+
+<section class="result" id="corpus">
+  <div class="wrap">
+    <div class="head">
+      <h2>A billion-scale, uniform tandem mass spectrum dataset</h2>
+      <p>Public repositories hold petabytes of raw mass spectrometry data, but almost none of it is usable as a single training corpus: every submission carries its own instrument, protease, labelling chemistry and search configuration. We screened tens of thousands of project submissions using repository metadata and a custom GPT-4 metadata annotation. We selected 92 projects for orthogonal diversity, and reprocessed raw data through one unified processing pipeline.</p>
+      <p>The result is <strong>ACFM</strong> — 1,625,276,573 MS/MS scans, and its labelled subset <strong>LCFM</strong>, 184,607,213 peptide-spectrum matches at run-specific 1% FDR. Progressively stricter curation for spectrum quality yields MCFM and HCFM for fine-tuning and post-training experiments. Splits are peptide-centric, so no peptide crosses a split or a confidence tier.</p>
+    </div>
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig1.webp" alt="Figure 1: construction and characterisation of the InstaNovo-FM pretraining corpus" width="1656" height="843"></div>
+      <figcaption><b>Figure 1 &mdash; Construction and characterisation of the InstaNovo-FM pretraining corpus.</b> (A.) Curation pipeline. (B.) Kingdom-level taxonomy across the organism-annotated projects. (C.) Share of spectra by mass analyser. (D.) Share of spectra by digestion protease.
+      <span class="src"><a href="static/pdfs/fig1.pdf">Full resolution (PDF)</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="result" id="architecture">
+  <div class="wrap">
+    <div class="head">
+      <h2>Masked modelling on spectra needed three ideas that text and images never require</h2>
+      <p>A tandem mass spectrum is an unordered set of continuous <span class="mono">m/z</span>&ndash;intensity pairs with no vocabulary, variable length, and a noise floor that dominates peak counts. Three domain problems had to be solved before masked reconstruction made sense.</p>
+      <p><strong>Multi-scale encoding:</strong> <span class="mono">m/z</span> spans three orders of magnitude with meaning at scales from amino-acid masses (57&ndash;186 Da) down to isotope spacing (1.003 Da/z), so each peak is embedded with learnable frequencies at multiple log-spaced scales. <strong>Hiding the answer:</strong> the natural positional signal <em>is</em> the prediction target, so masked positions get a Gaussian-blurred <span class="mono">m/z</span> (&sigma; = 10 Da) — an order of magnitude wider than isotope spacing — plus the original visible intensity. <strong>Classification, not regression:</strong> predicting <span class="mono">m/z</span> by regression is satisfied by memorising the intensity-weighted mean, so reconstruction is a choice among 12,250 bins at fixed 0.2 Da resolution, the best combined score of twelve candidate binning strategies.</p>
+    </div>
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig2.webp" alt="Figure 2: InstaNovo-FM architecture and self-supervised pretraining objective" width="1609" height="371" loading="lazy"></div>
+      <figcaption><b>Figure 2 &mdash; InstaNovo-FM architecture and self-supervised pretraining objective.</b> Encoder schematic: masked MS/MS to a 768-dimensional encoder, latent and peak tokens, then group, offset, &delta;-Da and intensity heads.
+      <span class="src"><a href="static/pdfs/fig2.pdf">Full resolution (PDF)</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="result" id="masking">
+  <div class="wrap">
+    <div class="head">
+      <h2>Annotation-free masking enables chemistry-specialised attention heads and enables proteomic feature learning</h2>
+      <p>Uniform masking spends most of the training gradient on noise, and it leaks: mask a fragment while any member of its isotope cluster stays visible and the model recovers it by arithmetic rather than chemistry. <strong>Thompson-span masking with isotope co-masking</strong> targets contiguous <span class="mono">m/z</span>-sorted spans of 3&ndash;4 peaks chosen by intensity-weighted sampling, and co-masks isotope partners atomically. The annotation-free <strong>TS&middot;noPA</strong> variant leads on most structural and spectral probes and develops <strong>8 of 12</strong> structurally enriched attention heads, where the signal-aware variants concentrate specialisation in a single head.</p>
+    </div>
+  </div>
+</section>
+
+<section class="result" id="embeddings">
+  <div class="wrap">
+    <div class="head">
+      <h2>The embedding space encodes a hierarchy of proteomics knowledge</h2>
+      <p>If the model has learned the physics and biology in a spectrum, its embedding space should show it without ever being told. We computed UMAP embeddings of 100,000 spectra from the LCFM test set and interrogated the structure at decreasing scales.</p>
+      <p>At the broadest scale the space separates spectra by fragmentation method into well-defined lobes. Zooming into the HCD lobe reveals sub-structure by instrument family; within instrument sub-clusters, isobaric-tag spectra form compact clusters irrespective of biological origin; and at the deepest zoom, replicate spectra of the same peptide co-locate tightly while neighbouring peptides share precursor <span class="mono">m/z</span> and hydrophobicity. Like ESM2, the training objective was agnostic to every one of these categories — but here they are physical, experimental and chemical rather than evolutionary.</p>
+    </div>
+
+    <div class="cta">
+      <div class="t">
+        <h3>Explore the embedding space yourself</h3>
+        <p>The same 100,000 spectra behind Figure 3, in the published layout. Colour by any of 23 categorical or 14 measured fields, filter, search a peptidoform, profile a region, or switch to the separate 3-component fit.</p>
+      </div>
+      <a class="chip primary" href="./">Open the UMAP explorer</a>
+    </div>
+
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig3.webp" alt="Figure 3: InstaNovo-FM embedding space" width="1606" height="1531" loading="lazy"></div>
+      <figcaption><b>Figure 3 &mdash; The InstaNovo-FM embedding space encodes a hierarchy of proteomics knowledge.</b> UMAP of ~100,000 LCFM test-set spectra coloured by fragmentation type, with five numbered zoom windows recolouring the same layout by instrument, chemical labelling, PTM class, retention time and digestion enzyme (a). Macro-F1 of linear classification probes on frozen embeddings (b) and R&sup2; of ridge-regression probes (c).
+      <span class="src"><a href="static/pdfs/fig3.pdf">Full resolution (PDF)</a> &middot; <a href="./">interactive version</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="result" id="peaks">
+  <div class="wrap">
+    <div class="head">
+      <h2>The model learns peptide ion series and fragmentation chemistry</h2>
+      <p>Descending from the spectrum to the individual peak, we see that peak representations separate b-ions, y-ions, precursor-related peaks and unannotated peaks. Integrated gradients then show <em>which</em> peaks drive a reconstruction. A substantial share of the high-attention peaks that standard b/y annotation leaves unexplained match a defined off-database fragment species to within a few parts per million, dominated by internal fragments, then side-chain d-/w-ions. The model was never told these peaks exist; it learned their relevance from spectral context, because they co-vary with the peaks it is trying to reconstruct.</p>
+    </div>
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig4.webp" alt="Figure 4: peak-level representations and attention" width="1645" height="1239" loading="lazy"></div>
+      <figcaption><b>Figure 4 &mdash; Peak-level representations and attention reveal learned fragmentation chemistry.</b> Integrated-gradients attribution for a representative test-split reconstruction (TGVELGKPTHFTVNAK, masked y<sub>5</sub>; HCD, Q Exactive, charge 3+), shown coloured by ion type, by per-peak attribution and by model confidence.
+      <span class="src"><a href="static/pdfs/fig4.pdf">Full resolution (PDF)</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="result" id="benchmark">
+  <div class="wrap">
+    <div class="head">
+      <h2>InstaNovo-FM reaches parity with sequence-supervised encoders</h2>
+      <p>Under one uniform linear-probe protocol across four frozen embedding spaces — InstaNovo v1.2, Casanovo, XuanjiNovo and <span class="model">InstaNovo-FM</span> — the annotation-free model leads on the acquisition and physical properties, recovering instrument family and fragmentation method more accurately than the others. It does not lead everywhere: XuanjiNovo is ahead on duplicate retrieval and hydrophobicity, and InstaNovo v1.2 on the modification probes.</p>
+      <p>The other three encoders were all trained with peptide-sequence labels, and <span class="model">InstaNovo-FM</span> reaches comparable linear decodability with none. On <em>de novo</em> sequencing across six biological hold-out sets, fine-tuning from <span class="model">InstaNovo-FM</span> is competitive, and the <em>frozen</em> encoder retains most of the fine-tuned peptide recall.</p>
+    </div>
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig5.webp" alt="Figure 5: uniform probe benchmarking" width="1662" height="1570" loading="lazy"></div>
+      <figcaption><b>Figure 5 &mdash; Uniform probe benchmarking across embedding spaces.</b> (A). UMAPs of the same held-out spectra embedded by <span class="model">InstaNovo-FM</span>, Casanovo, XuanjiNovo and InstaNovo, coloured by fragmentation type. Duplicate-retrieval Recall@1 (B), fragmentation macro F1 (C) and PTM-presence balanced accuracy (D) across the four encoders. Mean <em>de novo</em> peptide recall across six biological hold-out datasets (E).
+      <span class="src"><a href="static/pdfs/fig5.pdf">Full resolution (PDF)</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="result" id="downstream">
+  <div class="wrap">
+    <div class="head">
+      <h2>Frozen encoder embeddings enable downstream applications</h2>
+      <p><strong>Database-free identification.</strong> Used as a retrieval index over annotated reference spectra, the frozen embeddings recover a true same-peptide replicate among the nearest neighbours, and more of them as the neighbourhood widens. Applied to a held-out project the model never saw in pretraining, the highest-similarity rescues are unambiguous: near-identical spectra, with almost complete <span class="mono">b/y</span> residue coverage of the assigned peptide. Embedding proximity, model confidence and fragment-ion evidence converge on the same peptide.</p>
+      <p><strong>Modification detection.</strong> Linear probes on frozen embeddings detect phosphorylation and glycosylation with high fidelity, and resolve coarse N-glycan family — without modification-specific pretraining. Detectability tracks the size of the mass shift: deamidation of asparagine, near-isobaric with the M+1 isotope at +0.98 Da, is recovered well above chance but far less reliably.</p>
+      <p><strong>Run-level classification.</strong> Aggregating per-spectrum embeddings per LC-MS/MS run classifies digestion enzyme across 61 runs, with no peptide or protein identifications at all — and two further cohorts cluster by biological condition.</p>
+    </div>
+    <figure>
+      <div class="figbox"><span class="enlarge">Enlarge</span><img src="static/images/fig6.webp" alt="Figure 6: downstream applications of the frozen InstaNovo-FM encoder" width="1664" height="1162" loading="lazy"></div>
+      <figcaption><b>Figure 6 &mdash; Downstream applications of the frozen InstaNovo-FM encoder.</b> (A) Query Recall@<span class="mono">k</span> per peptide with the mean across queries. (B) Global UMAP of library spectra highlighting five representative query spectra and their top-5 rescued matches. (C) A mirror plot of a rescued identification annotated by ion type. (D) Run-aggregated embeddings coloured by digestion enzyme.
+      <span class="src"><a href="static/pdfs/fig6.pdf">Full resolution (PDF)</a></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- =========================================================== model card -->
+<section class="result" id="model">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Model card</p>
+      <h2 style="margin-bottom:26px">InstaNovo-FM at a glance</h2>
+    </div>
+    <div class="card">
+      <table>
+        <tbody>
+        <tr><th>Architecture</th><td>Encoder-only transformer; no positional encoding, no pairwise-attention bias</td></tr>
+        <tr><th>Size</th><td>d = 768 &middot; 12 layers &middot; 12 heads (head dim 64) &middot; FFN 3072 &middot; ~89.5 M parameters</td></tr>
+        <tr><th>Peak encoding</th><td>Multi-scale sinusoidal <span class="mono">m/z</span> with learnable log-spaced frequencies; intensity concatenated and projected through a second MLP</td></tr>
+        <tr><th>Masked positions</th><td>Gaussian-blurred <span class="mono">m/z</span> (&sigma; = 10 Da) + original visible intensity; no learnable mask token</td></tr>
+        <tr><th>Objective</th><td>Hierarchical masked reconstruction &mdash; group softmax (245) &times; offset softmax (50) over 12,250 bins at 0.2 Da; auxiliary intensity head (pretraining only)</td></tr>
+        <tr><th>Masking</th><td>Thompson-span, 3&ndash;4 peak contiguous spans, isotope co-masking; 30% fragment-group budget (~26.6% of peaks)</td></tr>
+        <tr><th>Spectrum embedding</th><td>Mean of final-layer hidden states over non-padding peak tokens</td></tr>
+        <tr><th>Training</th><td>~230,000 steps on LCFM &asymp; 117 M spectra &asymp; 2 epochs; batch 1,024; fp16</td></tr>
+        <tr><th>Preprocessing</th><td>Drop peaks below 1% of base peak, keep top 200 by intensity, sqrt-transform, &#8467;2-normalise</td></tr>
+        <tr><th>Compute</th><td>EuroHPC JU allocation EHPC-AI-2024A01-086, MareNostrum 5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- =============================================================== footer -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <h3>Explore the data and code</h3>
+        <p>Training code and evaluation pipelines: <a href="https://github.com/instadeepai/InstaNovo-FM">instadeepai/InstaNovo-FM</a>. The InstaNovo codebase, including <em>de novo</em> sequencing inference and model evaluation utilities: <a href="https://github.com/instadeepai/InstaNovo">instadeepai/InstaNovo</a>. Training and evaluation data are publicly available on <a href="https://huggingface.co/datasets/InstaDeepAI/InstaNovo">Hugging Face</a>.</p>
+      </div>
+    </div>
+    <p class="legal">Page template inspired by
+      <a href="https://github.com/eliahuhorwitz/Academic-project-page-template">Academic Project Page Template</a>.</p>
+  </div>
+</footer>
+
+<dialog class="zoom" id="zoom"><img id="zoomImg" alt=""></dialog>
+<script src="static/js/page.js"></script>
+</body>
+</html>

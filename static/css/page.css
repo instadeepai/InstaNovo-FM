@@ -1,0 +1,302 @@
+/* ===========================================================================
+   InstaNovo-FM project page
+   Tokens are defined on bare :root so a viewer following the system theme has a
+   complete palette; the dark blocks only redefine them.
+   =========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --paper:      #faf9f6;
+  --surface:    #ffffff;
+  --surface-2:  #f2f0ea;
+  --ink:        #14171c;
+  --ink-2:      #464c55;
+  --ink-3:      #767d87;
+  --rule:       #e3e0d8;
+  --rule-2:     #cfcbc0;
+
+  --accent:     #1f5fa8;
+  --accent-ink: #ffffff;
+  --warm:       #b85419;
+  --green:      #2c8266;
+
+  --hero-1:     #f4f2ec;
+  --hero-2:     #e9eef5;
+  --shadow:     0 1px 2px rgba(20,23,28,.06), 0 8px 24px -12px rgba(20,23,28,.18);
+
+  --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --sans:  "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* One column for the whole page. --wide is --measure plus the gutters, so the
+     hero, the stat band, every result section and the footer grid all line up on
+     the same two edges instead of each picking its own width. */
+  --measure: 77ch;
+  --wide: 900px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper:     #0e1116;
+    --surface:   #151a21;
+    --surface-2: #1b212a;
+    --ink:       #eef1f4;
+    --ink-2:     #b3bcc6;
+    --ink-3:     #8b949f;
+    --rule:      #262d36;
+    --rule-2:    #38414c;
+    --accent:    #6fa8e8;
+    --accent-ink:#0b0f14;
+    --warm:      #e8955c;
+    --green:     #57c2a0;
+    --hero-1:    #121820;
+    --hero-2:    #0f1922;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper:     #0e1116;
+  --surface:   #151a21;
+  --surface-2: #1b212a;
+  --ink:       #eef1f4;
+  --ink-2:     #b3bcc6;
+  --ink-3:     #8b949f;
+  --rule:      #262d36;
+  --rule-2:    #38414c;
+  --accent:    #6fa8e8;
+  --accent-ink:#0b0f14;
+  --warm:      #e8955c;
+  --green:     #57c2a0;
+  --hero-1:    #121820;
+  --hero-2:    #0f1922;
+  --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+}
+
+/* ------------------------------------------------------------------- base */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.65;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+code, .mono { font-family: var(--mono); font-size: .92em; }
+
+.wrap { max-width: var(--wide); margin: 0 auto; padding: 0 24px; }
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 500; line-height: 1.18; margin: 0; }
+h2 { font-size: clamp(1.6rem, 1.15rem + 1.6vw, 2.3rem); letter-spacing: -.012em; }
+h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.005em; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 10px;
+}
+
+/* ------------------------------------------------------------------- hero */
+.hero {
+  background: linear-gradient(168deg, var(--hero-1) 0%, var(--hero-2) 100%);
+  border-bottom: 1px solid var(--rule);
+  padding: clamp(44px, 5vw, 72px) 0 clamp(32px, 3vw, 44px);
+}
+/* The paper title does not contain the model name, so the name needs its own
+   presence here rather than being buried in a small uppercase line. */
+.hero .wordmark {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px;
+  margin: 0 0 18px;
+}
+.hero .wordmark .mark {
+  font-family: var(--serif); font-weight: 600;
+  font-size: clamp(1.2rem, 1rem + .7vw, 1.5rem);
+  letter-spacing: -.015em; color: var(--ink);
+}
+.hero .wordmark .tag {
+  font-family: var(--mono); font-size: 11.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+
+/* Inline, the name appears 7 times in running text. Bolding it would compete with
+   the <strong> already carrying the key claims, so it gets a half-step of weight
+   and slightly tighter tracking -- legible as a name, quiet enough to repeat. */
+.model { font-weight: 500; letter-spacing: -.006em; }
+b .model, strong .model, h2 .model { font-weight: inherit; }
+.hero h1 {
+  font-size: clamp(1.95rem, 1.1rem + 3vw, 3.15rem);
+  letter-spacing: -.021em;
+  text-wrap: balance;
+}
+
+/* The hero carries institutions only; the full postal addresses live in the
+   footer, because six of them repeated the same street address four times and
+   pushed everything else below the fold. */
+/* Own line, so it does not read as a seventh affiliation. */
+
+/* --------------------------------------------------------------- link chips */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 17px; border-radius: 999px;
+  border: 1px solid var(--rule-2);
+  background: var(--surface);
+  color: var(--ink); text-decoration: none;
+  font-size: 14.5px; font-weight: 500; line-height: 1.15;
+  min-height: 39px;              /* the nested "soon" pill is taller than plain text,
+                                    so pin the height or the row sits unevenly */
+  box-shadow: 0 1px 1.5px rgba(20, 23, 28, .04);
+  transition: border-color .14s, color .14s, transform .14s, box-shadow .14s;
+}
+.chip:hover {
+  border-color: var(--accent); color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px -3px rgba(20, 23, 28, .16);
+}
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip svg { width: 15px; height: 15px; flex: none; }
+
+.chip.primary {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+  box-shadow: 0 1px 2px rgba(20, 23, 28, .12);
+}
+.chip.primary:hover {
+  color: var(--accent-ink); filter: brightness(1.06);
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* Not yet available: recessed rather than dashed, since a dashed outline reads as
+   broken or droppable rather than forthcoming. Non-interactive, so no hover. */
+.chip.pending {
+  color: var(--ink-3);
+  border-color: var(--rule);
+  background: var(--surface-2);
+  box-shadow: none;
+  cursor: default;
+  padding-right: 8px;
+  font-weight: 400;
+}
+.chip.pending:hover { border-color: var(--rule); color: var(--ink-3); transform: none;
+                      box-shadow: none; }
+.chip .soon {
+  font-size: 9.5px; font-weight: 600; line-height: 1;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 7px 3px;
+}
+
+/* --------------------------------------------------------------- stat band */
+
+/* --------------------------------------------------------------- abstract */
+.abstract { padding: clamp(44px, 5vw, 72px) 0; }
+.abstract h2 { font-size: 1.05rem; font-family: var(--sans); font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 18px; }
+.abstract p { font-size: clamp(1.02rem, .98rem + .3vw, 1.16rem); color: var(--ink); margin: 0 0 1em; }
+.keywords {
+  margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rule);
+  font-size: 13.5px; color: var(--ink-2);
+}
+.keywords b { color: var(--ink); font-weight: 600; }
+
+/* --------------------------------------------------------------- sections */
+.results { border-top: 1px solid var(--rule); }
+.result { padding: clamp(46px, 5vw, 78px) 0; border-bottom: 1px solid var(--rule); }
+
+.result p { color: var(--ink-2); }
+.result p strong { color: var(--ink); font-weight: 600; }
+.result h2 { margin-bottom: 14px; text-wrap: balance; }
+
+/* ----------------------------------------------------------------- figures */
+figure { margin: 34px 0 0; }
+.figbox {
+  position: relative;
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--surface); padding: 10px;
+  box-shadow: var(--shadow);
+}
+.figbox img { width: 100%; cursor: zoom-in; border-radius: 4px; }
+/* These are dense multi-panel plates, so scaling them to the column costs detail;
+   make the zoom affordance visible rather than hover-only. */
+.figbox .enlarge {
+  position: absolute; top: 18px; right: 18px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 6px;
+  border: 1px solid var(--rule-2);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  font: 500 11.5px var(--sans); color: var(--ink-2);
+  pointer-events: none;
+}
+.figbox:hover .enlarge { border-color: var(--accent); color: var(--accent); }
+figcaption {
+  margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2);
+}
+figcaption b { color: var(--ink); font-weight: 600; }
+figcaption .src { display: block; margin-top: 7px; font-size: 12.5px; color: var(--ink-3); }
+
+dialog.zoom {
+  border: 0; padding: 0; background: transparent;
+  max-width: 96vw; max-height: 96vh; overflow: auto;
+  overscroll-behavior: contain;
+}
+dialog.zoom::backdrop { background: rgba(8,10,14,.86); }
+/* Natural pixel size, pannable: the plates carry more detail than the column shows. */
+dialog.zoom img {
+  display: block; width: auto; max-width: none; max-height: none;
+  cursor: zoom-out; border-radius: 6px;
+}
+
+/* -------------------------------------------------------------- explorer cta */
+.cta {
+  margin: 34px 0 0; padding: 24px;
+  border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--surface);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
+}
+.cta .t { flex: 1 1 300px; }
+.cta h3 { margin-bottom: 5px; }
+.cta p { margin: 0; font-size: 14.5px; }
+
+/* ------------------------------------------------------------- model card */
+.card { border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.card table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+.card th, .card td { text-align: left; padding: 11px 18px; border-top: 1px solid var(--rule); vertical-align: baseline; }
+.card tr:first-child th, .card tr:first-child td { border-top: 0; }
+.card th { font-weight: 600; color: var(--ink-2); width: 34%; font-size: 13.5px; }
+.card td { font-family: var(--mono); font-size: 13.5px; }
+
+/* ----------------------------------------------------------------- bibtex */
+
+/* ----------------------------------------------------------------- footer */
+footer { padding: clamp(44px, 5vw, 70px) 0 60px; border-top: 1px solid var(--rule); }
+.foot-grid { display: grid; gap: 30px 34px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.foot-grid h3 { font-family: var(--sans); font-size: 12px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+.foot-grid p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.legal { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule);
+  font-size: 13px; color: var(--ink-3); }
+
+/* -------------------------------------------------------------- responsive */
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .figbox { padding: 6px; border-radius: 8px; }
+  .figbox .enlarge { top: 12px; right: 12px; padding: 3px 7px; font-size: 10.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

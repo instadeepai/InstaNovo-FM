@@ -415,6 +415,7 @@ function drawSync(){
     (NL < N ? ` · loading ${fmtInt(NL)}/${fmtInt(N)}` : '');
   renderLegend();
   updateViewLabel();
+  updateHeader();
 }
 
 /* Exact percentiles from the uint16 codes, with no sort and no allocation
@@ -1139,8 +1140,28 @@ async function init(boot){
   const fit = () => Plotly.Plots.resize(PLOT);
   requestAnimationFrame(fit); setTimeout(fit, 250);
   new ResizeObserver(fit).observe(document.getElementById('center'));
-  document.getElementById('hdrsub').textContent =
-    `${D.dataset} \u00b7 ${fmtInt(N)} spectra \u00b7 ${D.catOrder.length} label fields \u00b7 ${D.numOrder.length} measured fields`;
+  updateHeader();
+}
+
+/** The header describes the layout on screen, not the pool it came from.
+ *
+ *  It used to be written once at boot from N, so selecting a layout covering part of
+ *  the pool -- Figure 3's own rows inside the 1M set -- left the header claiming a
+ *  million spectra while the map showed a tenth of that.
+ */
+function updateHeader(){
+  const el = document.getElementById('hdrsub');
+  if (!el || !D) return;
+  const spec = D.layouts[S.layout] || {};
+  const shown = N - N_UNPLACED;
+  const bits = [D.dataset];
+  /* The short name here; the full description is the switcher button's tooltip, which
+     is where a sentence belongs. */
+  if (spec.short && spec.short !== S.layout) bits.push(spec.short);
+  bits.push(shown === N ? `${fmtInt(N)} spectra`
+                        : `${fmtInt(shown)} of ${fmtInt(N)} spectra`);
+  bits.push(`${D.catOrder.length} label fields`, `${D.numOrder.length} measured fields`);
+  el.textContent = bits.join(' \u00b7 ');
 }
 let zhint3d = () => {}, fitAll3d = () => {};
 /** Re-applied after every Plotly.purge, i.e. on each 2-D/3-D switch. */
@@ -1250,11 +1271,8 @@ function buildLayoutSwitcher(){
   seg.hidden = false;
   seg.innerHTML = names.map(n => {
     const spec = D.layouts[n];
-    const covered = spec.covered === D.n
-      ? `all ${fmtInt(D.n)} spectra`
-      : `${fmtInt(spec.covered)} of ${fmtInt(D.n)} spectra`;
     return `<button data-layout="${esc(n)}" aria-pressed="${n === S.layout}" ` +
-           `title="${esc(spec.label || n)} — ${covered}">${esc(spec.short || n)}</button>`;
+           `title="${esc(spec.label || n)}">${esc(spec.short || n)}</button>`;
   }).join('');
   seg.querySelectorAll('button').forEach(b => {
     b.onclick = () => setLayout(b.dataset.layout);

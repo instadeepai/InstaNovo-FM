@@ -34,6 +34,7 @@
 
 <!-- The viewer needs its plot host; kept off-screen so this page stays a report. -->
 <div id="plot"></div>
+<span class="sub" id="hdrsub" hidden></span>
 <div id="overlay" hidden></div><div id="statusbar" hidden><span id="stView"></span><span id="stN"></span><span id="stSel"></span></div>
 <select id="colorField" hidden></select><select id="zField" hidden></select>
 <div id="zBlock" hidden><div id="zHint"></div></div>
@@ -142,6 +143,23 @@ check('layout switching keeps the colour field and filters',
     S.filters = []; await draw();
     return {ok: kept && drew,
             detail: `switched to ${other}: colour field ${kept ? 'kept' : 'LOST'}, ${totalDrawn().toLocaleString()} drawn`};
+  });
+
+check('the header describes the layout on screen, not the pool',
+      'It was written once at boot from the pool size, so selecting a partial layout left it claiming a million spectra over a map showing a tenth of that.',
+  async () => {
+    const partial = layoutNames().find(n => D.layouts[n].covered < D.n);
+    if (!partial) return {ok: true, detail: 'no partial layout in this payload; skipped'};
+    const was = S.layout;
+    await setLayout(partial);
+    const text = document.getElementById('hdrsub').textContent;
+    /* The qualified form, "<covered> of <pool> spectra". Asserting merely that the
+       pool size is absent is wrong: the correct header names both. */
+    const want = `${D.layouts[partial].covered.toLocaleString()} of ${D.n.toLocaleString()} spectra`;
+    const ok = text.includes(want);
+    await setLayout(was);
+    return {ok, detail: ok ? `on ${partial}: “${text.split(' · ').slice(1, 3).join(' · ')}”`
+                           : `header does not say “${want}”: ${text}`};
   });
 
 check('a layout that covers only part of the pool says so',

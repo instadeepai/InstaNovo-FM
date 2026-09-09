@@ -254,6 +254,7 @@ def write_payload(
     keys: dict[str, np.ndarray],
     order_layout: str,
     label: str,
+    layout_labels: dict[str, tuple[str, str]],
     provenance: dict[str, Any],
     chunk_rows: int,
     boot_rows: int,
@@ -302,6 +303,8 @@ def write_payload(
         # Two layouts of the same rows are the same space only if one was derived in the
         # other's frame; the viewer keeps the viewport across a switch only when these match.
         entry["spaceId"] = name
+        short, long = layout_labels.get(name, (name, name))
+        entry["short"], entry["label"] = short, long
         entry["chunkBounds"] = fmt.chunk_bounds(
             axes["x"][order], axes["y"][order], n, chunk_rows
         )
@@ -419,6 +422,15 @@ def write_payload(
 # ---------------------------------------------------------------------------
 
 
+def _layout_label(text: str) -> tuple[str, tuple[str, str]]:
+    """NAME=Short|Longer description, for the switcher button and its tooltip."""
+    name, _, rest = text.partition("=")
+    short, _, long = rest.partition("|")
+    if not name or not short.strip():
+        raise argparse.ArgumentTypeError(f"expected NAME=Short|Description, got {text!r}")
+    return name, (short.strip(), (long or short).strip())
+
+
 def _layout_spec(text: str) -> tuple[str, list[str]]:
     name, _, columns = text.partition("=")
     parts = [c.strip() for c in columns.split(",") if c.strip()]
@@ -437,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="parquet with usi + coordinate columns; repeatable")
     ap.add_argument("--layout", type=_layout_spec, action="append", required=True,
                     help="NAME=xcol,ycol[,x3col,y3col,z3col]; repeatable")
+    ap.add_argument("--layout-label", type=_layout_label, action="append", default=[],
+                    help="NAME=Short|Description for the switcher; repeatable")
     ap.add_argument("--order-layout", help="layout whose geometry fixes the row order")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--label", default="", help="dataset description shown in the UI")
@@ -486,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"writing {args.out}", flush=True)  # noqa: T201
     catalog = write_payload(args.out, nums, cats, layouts, keys, order_layout,
-                            args.label, provenance, args.chunk_rows, args.boot_rows)
+                            args.label, dict(args.layout_label), provenance,
+                            args.chunk_rows, args.boot_rows)
 
     problems = fmt.validate(catalog, args.out)
     (args.out / "catalog.json").write_text(json.dumps(catalog, separators=(",", ":")))

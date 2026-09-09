@@ -131,6 +131,18 @@ recovered from frozen embeddings:
 - **Integrated-gradients attribution** — which input peaks the model actually used to reconstruct a
   masked group, and whether those peaks correspond to chemically meaningful relationships.
 
+## The published embeddings
+
+The frozen embeddings of the held-out LCFM test split are published as
+[`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings):
+a `100k` config carrying the Figure 3 point set with its exact published coordinates, and a
+`1M` config carrying two 2-D and two 3-D UMAP layouts that appear nowhere in the manuscript.
+Each row is the 768-d mean-pooled vector plus the metadata identifying its spectrum.
+
+Use them to analyse the embedding space without re-running inference. To reproduce them
+instead, `scripts/release/prepare_embeddings.py` turns the eval harness's `embeddings.h5`
+into the published shards.
+
 ## Corpora
 
 - **MCFM** — a curated, high-confidence subset.

@@ -215,9 +215,21 @@ the paper:
   [`models.json`](src/instanovo_fm/models.json) and loaded by id with `from_pretrained`,
   which caches under `~/.cache/instanovo-fm/`. See
   [Load a pretrained checkpoint](#load-a-pretrained-checkpoint).
-- **Embeddings:** *Not yet available.* An interactive explorer for the frozen embedding space
-  is hosted at [instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM)
-  (goes live with the repository).
+- **Embeddings:** [`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings)
+  on HuggingFace, under CC BY-NC-SA 4.0 (the model's terms, since they are derived through it).
+  Two configs of held-out LCFM test spectra, mean-pooled from `instanovo-fm-v0.1.0`: `100k`
+  is the point set published as Figure 3 and carries its exact coordinates, `1M` is a larger
+  draw carrying two 2-D and two 3-D UMAP layouts that appear nowhere in the manuscript. Each
+  row is a 768-d vector plus the metadata identifying its spectrum. The peak arrays are not
+  duplicated — join to the corpus on `usi`, which is **not unique** here, so take first
+  occurrences. An interactive explorer over the same embedding space is hosted at
+  [instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM).
+
+  ```python
+  from datasets import load_dataset
+
+  fig3 = load_dataset("InstaDeepAI/InstaNovo-FM-embeddings", "100k", split="train")
+  ```
 
 ## Repository structure
 
@@ -254,7 +266,10 @@ InstaNovo-FM/
 
 An interactive explorer for the frozen embedding space, including a figure viewer and a UMAP
 browser over ~100,000 held-out LCFM spectra, is hosted at
-[instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM).
+[instadeepai.github.io/InstaNovo-FM](https://instadeepai.github.io/InstaNovo-FM). The
+embeddings behind it are published as
+[`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings),
+so the space can be analysed rather than only browsed.
 
 Design and operational notes live in `docs/`. A hosted docs site is planned. _(TODO: add docs site
 URL.)_ Until then, the guides live in [`docs/`](docs/):
@@ -337,6 +352,7 @@ If you use InstaNovo-FM in your research, please cite:
 | **Model checkpoints** | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): attribution, non-commercial, share-alike |
 | **Corpus-production code** ([Figshare](https://doi.org/10.6084/m9.figshare.33368752)) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | **Dataset** ([`InstaDeepAI/InstaNovo`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo)) | [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use/), the spectra derive from public PRIDE submissions |
+| **Embeddings** ([`InstaDeepAI/InstaNovo-FM-embeddings`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo-FM-embeddings)) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): derived from those spectra through a non-commercially-licensed model, so the model's terms carry over |
 
 
 The Apache-2.0 grant covers this repository's source alone. It does **not** extend to the

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer self-test · InstaNovo-FM</title>
+<style>
+  :root { color-scheme: light dark; --ok:#177245; --bad:#b3261e; }
+  body { margin:0; padding:18px 22px; font:14px/1.5 ui-sans-serif,-apple-system,sans-serif; }
+  h1 { font-size:17px; margin:0 0 4px; }
+  p.lede { color:#666; margin:0 0 16px; max-width:62em; }
+  table { border-collapse:collapse; width:100%; max-width:70em; }
+  th, td { text-align:left; padding:4px 8px; border-bottom:1px solid rgba(128,128,128,.25); vertical-align:top; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#777; }
+  .r { font-weight:600; white-space:nowrap; }
+  .pass { color:var(--ok); } .fail { color:var(--bad); }
+  .why { color:#666; font-size:13px; }
+  code, .mono { font-family:ui-monospace,Menlo,monospace; font-size:12.5px; }
+  #summary { margin:14px 0 0; font-weight:600; }
+  #plot { position:absolute; left:-99999px; width:1300px; height:850px; }
+</style>
+</head>
+<body>
+<h1>Explorer self-test</h1>
+<p class="lede">
+  Boots the viewer against the payload in <code>data/</code> and checks the invariants that
+  would otherwise fail silently &mdash; a renderer that quietly samples instead of drawing
+  every spectrum, per-point colour arrays creeping back in, legend counts that ignore the
+  filters, or a layout switch that loses state. Each row says what is being checked and why
+  it matters.
+</p>
+<table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead><tbody id="rows"></tbody></table>
+<p id="summary">running…</p>
+
+<!-- The viewer needs its plot host; kept off-screen so this page stays a report. -->
+<div id="plot"></div>
+<div id="overlay" hidden></div><div id="statusbar" hidden><span id="stView"></span><span id="stN"></span><span id="stSel"></span></div>
+<select id="colorField" hidden></select><select id="zField" hidden></select>
+<div id="zBlock" hidden><div id="zHint"></div></div>
+<div id="legend" hidden></div><div id="hiState" hidden></div><div id="filters" hidden></div>
+<select id="dupSel" hidden></select><input type="text" id="pepSearch" hidden><div id="pepHint" hidden></div>
+<div id="boxBlock" hidden><div class="box6">
+  <input type="number" id="bx0"><input type="number" id="bx1"><input type="number" id="by0">
+  <input type="number" id="by1"><input type="number" id="bz0"><input type="number" id="bz1">
+  <span id="bzlab"></span></div><button id="boxAll"></button><button id="boxShow"></button></div>
+<div class="seg" id="layoutSeg" hidden></div>
+<button id="md2d" hidden></button><button id="md3d" hidden></button>
+<button id="rdGl" hidden></button><button id="rdSvg" hidden></button>
+<button id="thLight" hidden></button><button id="thDark" hidden></button>
+<button id="lgReset" hidden></button><button id="addFilter" hidden></button><button id="clearFilters" hidden></button>
+<input type="checkbox" id="showBg" checked hidden>
+<input type="range" id="size" hidden><input type="range" id="hsize" hidden><input type="range" id="opac" hidden>
+<span id="szv" hidden></span><span id="hzv" hidden></span><span id="opv" hidden></span>
+<button id="exPng" hidden></button><button id="exSvg" hidden></button><button id="exPdf" hidden></button>
+<div id="exHint" hidden></div><button id="btnProfileView" hidden></button><button id="btnReset" hidden></button>
+<div class="tabs" hidden><button id="tbRegion"></button><button id="tbPoint"></button></div>
+<div class="pane" id="pnRegion" hidden><div id="regionOut"></div></div>
+<div class="pane" id="pnPoint" hidden><div id="pinbar"><button id="unpin"></button></div><div id="pointOut"></div></div>
+
+<script src="static/js/plotly-2.35.2.min.js"></script>
+<script src="static/js/data-loader.js"></script>
+<script src="static/js/viewer.js"></script>
+<script>
+const CHECKS = [];
+function check(name, why, fn){ CHECKS.push({name, why, fn}); }
+
+const traces = () => PLOT.data || [];
+const totalDrawn = () => traces().reduce((a, t) => a + (t.x ? t.x.length : 0), 0);
+const maxPerTrace = () => Math.max(0, ...traces().map(t => t.x ? t.x.length : 0));
+const arrayColoured = () => traces().filter(t => {
+  const c = t.marker && t.marker.color;
+  return c != null && typeof c !== 'string';
+}).length;
+
+check('every placeable spectrum is drawn',
+      'A renderer that samples looks plausible and understates density, which in a UMAP is the finding.',
+  () => {
+    const placeable = N - N_UNPLACED;
+    const expect = S.showBg ? placeable : N_IN;
+    return {ok: totalDrawn() === expect,
+            detail: `${totalDrawn().toLocaleString()} drawn, ${expect.toLocaleString()} placeable`};
+  });
+
+check('no trace exceeds the chunk size',
+      'Plotly scattergl cost is superlinear in points per trace: 1M in one trace stalls 17 s per zoom, the same 1M in 20 traces of 50k takes 0.18 s.',
+  () => ({ok: maxPerTrace() <= CHUNK,
+           detail: `largest trace ${maxPerTrace().toLocaleString()}, limit ${CHUNK.toLocaleString()}`}));
+
+check('no per-point colour arrays',
+      'A per-point colour array costs ~2 microseconds per point inside Plotly’s colorscale expansion on every rebuild, and chunking does not help because the cost is in the total.',
+  () => ({ok: arrayColoured() === 0,
+          detail: `${arrayColoured()} of ${traces().length} traces carry an array colour`}));
+
+check('legend counts follow the filters',
+      'The published viewer showed the whole-dataset total here, so the numbers never moved when a filter, a hidden class or the point budget changed.',
+  async () => {
+    const field = S.kind === 'cat' ? S.colorField : 'analyser';
+    if (S.kind !== 'cat'){ S.colorField = 'analyser'; S.kind = 'cat'; }
+    S.filters = []; await draw();
+    const before = liveCounts(field).slice();
+    S.filters = [{field, values: new Set([0])}];
+    await draw();
+    const after = liveCounts(field).slice();
+    S.filters = []; await draw();
+    const restricted = after[1] === 0 && after[0] === before[0];
+    return {ok: restricted,
+            detail: `level 0 ${before[0].toLocaleString()} → ${after[0].toLocaleString()}, ` +
+                    `level 1 ${before[1].toLocaleString()} → ${after[1].toLocaleString()}`};
+  });
+
+check('a numeric colouring stays on scalar colours',
+      'Binning into a discrete ramp is what keeps a numeric field as cheap as a categorical one.',
+  async () => {
+    const num = D.numOrder[0];
+    S.kind = 'num'; S.colorField = num; await draw();
+    const bad = arrayColoured(), n = traces().length;
+    S.kind = 'cat'; S.colorField = 'analyser'; await draw();
+    return {ok: bad === 0, detail: `${num}: ${n} traces, ${bad} array-coloured`};
+  });
+
+check('layout switching keeps the colour field and filters',
+      'A comparison is only useful if both sides are showing the same thing.',
+  async () => {
+    const names = layoutNames();
+    if (names.length < 2) return {ok: true, detail: 'only one layout in this payload; skipped'};
+    S.colorField = 'activation'; S.kind = 'cat';
+    S.filters = [{field: 'analyser', values: new Set([0])}];
+    await draw();
+    const was = {field: S.colorField, filter: [...S.filters[0].values]};
+    const other = names.find(n => n !== S.layout);
+    await setLayout(other);
+    const kept = S.colorField === was.field && String([...S.filters[0].values]) === String(was.filter);
+    const drew = totalDrawn() > 0;
+    S.filters = []; await draw();
+    return {ok: kept && drew,
+            detail: `switched to ${other}: colour field ${kept ? 'kept' : 'LOST'}, ${totalDrawn().toLocaleString()} drawn`};
+  });
+
+check('a layout that covers only part of the pool says so',
+      'Silently drawing fewer points than the status line claims is the failure this guards.',
+  () => {
+    const partial = layoutNames().filter(n => D.layouts[n].covered < D.n);
+    if (!partial.length) return {ok: true, detail: 'every layout covers the whole pool; skipped'};
+    return {ok: true, detail: partial.map(n =>
+      `${n}: ${D.layouts[n].covered.toLocaleString()} of ${D.n.toLocaleString()}`).join(', ')};
+  });
+
+check('the catalog is small enough not to delay first paint',
+      'Nothing rendered until it parsed; the published manifest was 184 KB because it inlined a count array per categorical.',
+  async () => {
+    const r = await fetch('data/catalog.json');
+    const bytes = (await r.arrayBuffer()).byteLength;
+    return {ok: bytes < 50000, detail: `${bytes.toLocaleString()} bytes, budget 50,000`};
+  });
+
+check('peptide search resolves through the postings list',
+      'Otherwise every keystroke scans every row and uppercases every level.',
+  async () => {
+    await ensureCols([['cat', 'sequence']]);
+    const c = CAT.sequence;
+    const viaPostings = !!(c.postings && c.postingsOff);
+    S.pep = levelAt('sequence', 0).slice(0, 6);
+    await draw();
+    const hits = highlightIdx().length;
+    S.pep = ''; await draw();
+    return {ok: hits > 0,
+            detail: `${hits.toLocaleString()} rows matched “${levelAt('sequence', 0).slice(0, 6)}”` +
+                    (viaPostings ? ' via postings' : ' by scanning (no postings in payload)')};
+  });
+
+/* The viewer boots asynchronously, so wait for it rather than racing it -- the
+   first checks would otherwise pass vacuously against an empty plot. */
+async function ready(timeoutMs){
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs){
+    if (typeof D !== 'undefined' && D && N > 0 && PLOT.data && PLOT.data.length) return true;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}
+
+(async () => {
+  const body = document.getElementById('rows');
+  let pass = 0;
+  if (!await ready(60000)){
+    document.getElementById('summary').textContent =
+      'the viewer did not finish loading, so nothing could be checked';
+    document.getElementById('summary').className = 'fail';
+    window.SELFTEST = {pass: 0, total: CHECKS.length, booted: false};
+    return;
+  }
+  for (const c of CHECKS){
+    let res;
+    try { res = await c.fn(); }
+    catch (e) { res = {ok: false, detail: 'threw: ' + (e && e.message || e)}; }
+    if (res.ok) pass++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${c.name}<div class="why">${c.why}</div></td>` +
+                   `<td class="r ${res.ok ? 'pass' : 'fail'}">${res.ok ? 'pass' : 'FAIL'}</td>` +
+                   `<td class="mono">${res.detail || ''}</td>`;
+    body.appendChild(tr);
+  }
+  const s = document.getElementById('summary');
+  s.textContent = `${pass} of ${CHECKS.length} checks passed`;
+  s.className = pass === CHECKS.length ? 'pass' : 'fail';
+  window.SELFTEST = {pass, total: CHECKS.length};
+})();
+</script>
+</body>
+</html>

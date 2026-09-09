@@ -204,11 +204,22 @@ function loadOne(kind, key){
     jobs.push(m.levelsPath ? fetchBytes(m.levelsPath) : Promise.resolve(null));
     jobs.push(m.levelsOffsetPath ? fetchTyped(m.levelsOffsetPath, 'uint32') : Promise.resolve(null));
     jobs.push(m.countPath ? fetchTyped(m.countPath, 'uint32') : Promise.resolve(null));
-    p = Promise.all(jobs).then(([codes, blob, offsets, count]) => {
+    /* Search blob and postings, present only on the searchable field. Together
+       they turn a substring highlight from a scan of every row plus a
+       toUpperCase() per level into a byte scan plus a slice per match. */
+    jobs.push(m.searchPath ? fetchBytes(m.searchPath) : Promise.resolve(null));
+    jobs.push(m.searchOffsetPath ? fetchTyped(m.searchOffsetPath, 'uint32') : Promise.resolve(null));
+    jobs.push(m.postingsPath ? fetchTyped(m.postingsPath, 'uint32') : Promise.resolve(null));
+    jobs.push(m.postingsOffsetPath ? fetchTyped(m.postingsOffsetPath, 'uint32') : Promise.resolve(null));
+    p = Promise.all(jobs).then(([codes, blob, offsets, count, search, searchOff, postings, postingsOff]) => {
       c.codes = codes;
       if (blob) c.blob = blob;
       if (offsets) c.offsets = offsets;
       if (count) c.count = count;
+      if (search) c.search = search;
+      if (searchOff) c.searchOff = searchOff;
+      if (postings) c.postings = postings;
+      if (postingsOff) c.postingsOff = postingsOff;
     });
   } else {
     const c = NUM[key];
@@ -296,7 +307,8 @@ async function bootData(base){
     const m = D.cats[k];
     CAT[k] = {label: m.label, group: m.group, nlevels: m.nlevels,
               levels: m.levels || null, count: m.count || null,
-              codes: null, blob: null, offsets: null, memo: new Map(), partial: 0};
+              codes: null, blob: null, offsets: null, memo: new Map(), partial: 0,
+              search: null, searchOff: null, postings: null, postingsOff: null};
   }
   for (const k of D.numOrder){
     const m = D.nums[k];

@@ -1,0 +1,17 @@
+# Demo / happy-path reformulated spectral rescue evaluation (single peptide pair).
+
+defaults:
+  - foundational_eval_spectral_rescue_reformulated
+  - _self_
+
+evaluation:
+  output_dir: "instanovo/foundational/eval/embed_eval_results/spectral_rescue_demo"
+  task_configs:
+    spectralrescuetaskreformulated:
+      num_reference_queries: 10
+      num_modified_queries: 10
+      max_base_positives: 20
+      max_negatives: 200
+      max_queries_per_raw_file: null
+      negative_sampling: "random"
+      sample_seed: 42

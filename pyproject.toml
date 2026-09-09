@@ -119,6 +119,15 @@ dev = [
 [tool.uv]
 package = true
 
+[tool.codespell]
+# Scientific abbreviations and variable names that codespell otherwise flags.
+# codespell checks spelling, but does not enforce a US/British style variant.
+ignore-words-list = "aas,disjointness,fpr,nce,ot,pres,ser,sord,strat,unparseable"
+
+[tool.typos.default]
+# Enforce British English spellings in documentation and text files.
+locale = "en-gb"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

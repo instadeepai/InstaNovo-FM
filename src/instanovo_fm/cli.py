@@ -108,7 +108,7 @@ def foundational_evaluate(
     logger.info("Initializing InstaNovo Foundation Model evaluation.")
 
     if config_name is None:
-        config_name = "foundational_local"
+        config_name = "foundational"
 
     # Surface the two overrides people reach for most as first-class options,
     # while still allowing arbitrary Hydra overrides as trailing arguments.

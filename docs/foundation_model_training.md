@@ -31,7 +31,8 @@ Those particular overrides are the published model — see
 | Config | Role |
 |---|---|
 | `configs/foundational.yaml` | Training entry point |
-| `configs/foundational_local.yaml` | Local variant, and the default for evaluation |
+| `configs/foundational.yaml` | Paper-aligned default configuration for evaluation |
+| `configs/foundational_local.yaml` | Local development variant |
 | `configs/model/foundation_base.yaml` | Architecture and masking |
 | `configs/dataset/{lcfm,mcfm,hcfm}.yaml` | Corpora |
 

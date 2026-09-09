@@ -6,7 +6,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/instanovo-fm.svg)](https://pypi.org/project/instanovo-fm/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](#license)
 [![DOI](https://img.shields.io/badge/DOI-10.64898%2F2026.09.03.747733-blue.svg)](https://doi.org/10.64898/2026.09.03.747733)
-[![Open In Colab](https://img.shields.io/badge/Colab-coming--soon-lightgrey.svg)](#)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/instadeepai/InstaNovo-FM/blob/main/notebooks/getting_started_with_instanovo_fm.ipynb)
 
 The official code repository for **InstaNovo-FM**, a self-supervised foundation model for
 bottom-up proteomics. Unlike existing proteomics models that are trained for a single supervised
@@ -167,7 +167,7 @@ scaling baseline, and the three de novo sequencers — see
 
 ```bash
 uv run python -m instanovo_fm.eval.embed_evaluation \
-  --config-name foundational_local
+  --config-name foundational
 ```
 
 The spectrum embedding is the mean of the final-layer hidden states over the non-padding
@@ -179,7 +179,7 @@ attention and integrated-gradients attribution. Each is runnable the same way.
 
 ```bash
 uv run python -m instanovo_fm.trainer.train \
-  --config-name foundational_local
+  --config-name foundational
 ```
 
 ## Downstream applications

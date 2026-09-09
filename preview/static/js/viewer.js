@@ -1001,7 +1001,7 @@ function readBox(){
   return b;
 }
 
-async function init(){
+async function init(boot){
   const params = new URLSearchParams(location.search);
   /* ?layout= so a reviewer can deep-link one side of a comparison. */
   const asked = params.get('layout');
@@ -1286,7 +1286,16 @@ async function setLayout(name){
   updateViewLabel();
 }
 
-bootData().then(init).catch(e => {
+/* The boot tier paints a strided sample; the rest of the rows arrive behind it. Without
+   this the first paint stands, so the map keeps the sample and the status line goes on
+   claiming to be loading after it has finished. */
+bootData().then(async boot => {
+  await init(boot);
+  if (boot && boot.rest){
+    try { await boot.rest; } catch (e) { console.error('background tiers failed', e); }
+    await draw();
+  }
+}).catch(e => {
   console.error(e);
   const ov = document.getElementById('overlay');
   if (!ov) return;

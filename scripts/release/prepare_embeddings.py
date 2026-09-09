@@ -144,6 +144,85 @@ def load_coords(
     return index, columns
 
 
+# Columns the figure pipeline derives after extraction, so they are in the published
+# Figure 3 table but in neither HDF5. These five are recomputed here from the stored
+# inputs, matching umap_visualisation._compute_spectral_properties exactly.
+#
+# Seven more from that table are NOT recomputed: annotation_ratio, backbone_coverage,
+# median_ppm_error, n_fragment_groups_metric, signal_intensity_ratio, match_metrics and
+# spectrum_quality. They need theoretical-spectrum generation, matching and quality
+# scoring -- about 1.5-3 h for a million spectra, and the generator rejects the stored
+# modified-sequence format, which 31% of rows use. Reimplementing that handling risks
+# plausible-but-wrong numbers for a third of the data, so they wait for a run of the
+# harness's own annotation path.
+RECOMPUTED = ("sequence_length", "n_peaks", "peak_center_of_mass", "peak_spread",
+              "top_duplicate_peptides")
+TOP_DUPLICATES = 10
+
+
+def recompute_derived(meta_group: Any, rows: np.ndarray, max_mz: float = 2500.0) -> dict[str, np.ndarray]:
+    """Recompute the post-extraction columns the figure table carries.
+
+    ``spectra`` is not stored, but ``targets`` is the same array with m/z divided by
+    ``max_mz`` -- 152.0572/2500 = 0.06082, and 2500 is the extraction's own
+    ``theoretical_spectrum.max_mz``. ``spectra_mask`` is True for padding.
+
+    n_peaks deliberately counts the model's 200 slots, not ``mz_array``: the latter holds
+    up to 800 peaks (median 235), so counting it would produce a plausible column meaning
+    something different from the published one.
+    """
+    out: dict[str, np.ndarray] = {}
+
+    if "unmodified_peptide" in meta_group:
+        # Published semantics: the length of the unmodified peptide string.
+        seqs = meta_group["unmodified_peptide"][rows]
+        out["sequence_length"] = np.array(
+            [len(s.decode().strip()) if isinstance(s, bytes) else len(str(s).strip()) if s else 0
+             for s in seqs], dtype=np.int32)
+
+    if "targets" in meta_group and "spectra_mask" in meta_group:
+        spectra = meta_group["targets"][rows]
+        mask = np.asarray(meta_group["spectra_mask"][rows]).astype(bool)
+        valid = ~mask
+        n_peaks = valid.sum(axis=1).astype(np.int32)
+
+        mz = spectra[:, :, 0] * max_mz
+        intensities = spectra[:, :, 1]
+        mz_masked = np.where(valid, mz, 0.0)
+        int_masked = np.where(valid, intensities, 0.0)
+
+        total_int = int_masked.sum(axis=1)
+        safe_n = np.maximum(n_peaks, 1).astype(np.float64)
+        simple_mean = mz_masked.sum(axis=1) / safe_n
+        com = np.where(total_int > 0,
+                       (mz_masked * int_masked).sum(axis=1) / np.maximum(total_int, 1e-12),
+                       simple_mean)
+        sq_diff = np.where(valid, (mz - simple_mean[:, None]) ** 2, 0.0)
+        spread = np.sqrt(sq_diff.sum(axis=1) / np.maximum(safe_n - 1, 1))
+        com[n_peaks == 0] = np.nan
+        spread[n_peaks == 0] = np.nan
+
+        out["n_peaks"] = n_peaks
+        out["peak_center_of_mass"] = com.astype(np.float32)
+        out["peak_spread"] = spread.astype(np.float32)
+
+    return out
+
+
+def rank_duplicates(sequences: np.ndarray, top: int = TOP_DUPLICATES) -> np.ndarray:
+    """Rank of each peptide among the ``top`` most repeated, or ``top`` for the rest.
+
+    Population-dependent by definition, so the same spectrum ranks differently in the
+    two configs. Ties break on the sequence so two builds cannot disagree.
+    """
+    from collections import Counter
+
+    counts = Counter(sequences.tolist())
+    ranked = [s for s, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top]]
+    rank_of = {s: i for i, s in enumerate(ranked)}
+    return np.array([rank_of.get(s, top) for s in sequences], dtype=np.int32)
+
+
 def _coords_spec(text: str) -> dict[str, str]:
     """``source[:published],...`` so a build-time name can be published under a clearer one."""
     out: dict[str, str] = {}
@@ -175,6 +254,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 -- one linear p
                     help="column joining --coords to the HDF5 rows")
     ap.add_argument("--coords-columns", type=_coords_spec, default={},
                     help="source[:published],... coordinate columns to ship; required with --coords")
+    ap.add_argument("--no-recompute", action="store_true",
+                    help=f"omit the recomputed columns ({', '.join(RECOMPUTED)})")
     ap.add_argument("--shard-rows", type=int, default=DEFAULT_SHARD_ROWS)
     args = ap.parse_args(argv)
 
@@ -216,11 +297,23 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 -- one linear p
                 )
             key_values = np.asarray(f[f"metadata/{args.coords_join}"][:])
 
+        derived: dict[str, np.ndarray] = {}
+        if not args.no_recompute:
+            derived = recompute_derived(f["metadata"], rows)
+            if "sequence" in f["metadata"]:
+                seqs = np.array(_decode(f["metadata/sequence"][rows]), dtype=object)
+                derived["top_duplicate_peptides"] = rank_duplicates(seqs)
+            _log(f"  recomputed: {', '.join(sorted(derived))}")
+            missing = [c for c in RECOMPUTED if c not in derived]
+            if missing:
+                _log(f"  could not recompute (inputs absent): {', '.join(missing)}")
+
         summary: dict[str, Any] = {
             "config": args.config, "rows": int(len(rows)), "embedding_dim": dim,
             "embedding_pooling": pooling, "source_rows": n_h5,
             "metadata_fields": fields, "skipped_fields": skipped,
-            "coordinate_columns": sorted(coord_columns), "shards": [],
+            "coordinate_columns": sorted(coord_columns),
+            "recomputed_columns": sorted(derived), "shards": [],
         }
 
         schema = pa.schema(
@@ -228,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 -- one linear p
             + [(name, pa.string() if f["metadata"][name].dtype == object else
                 pa.from_numpy_dtype(f["metadata"][name].dtype)) for name in fields]
             + [(name, pa.float32()) for name in sorted(coord_columns)]
+            + [(name, pa.from_numpy_dtype(derived[name].dtype)) for name in sorted(derived)]
         )
 
         for shard, start in enumerate(range(0, len(rows), args.shard_rows)):
@@ -250,6 +344,12 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 -- one linear p
                     hit = local >= 0
                     vals[hit] = src[local[hit]]
                     arrays[name] = pa.array(vals)
+
+            # The recomputed columns were built over the whole selection, so they slice
+            # positionally with the shard rather than being re-derived per shard -- which
+            # matters for the duplicate ranking, whose population is the config.
+            for name, values in derived.items():
+                arrays[name] = pa.array(values[start : start + args.shard_rows])
 
             table = pa.table({k: arrays[k] for k in schema.names}, schema=schema)
             path = out / f"{args.config}-{shard:05d}.parquet"

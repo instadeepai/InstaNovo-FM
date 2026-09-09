@@ -1262,7 +1262,14 @@ async function setMode3d(on){
    layouts are the same space only when one was derived in the other's frame;
    carrying a viewport across unrelated embeddings would land the reader somewhere
    arbitrary and look like a bug. */
-function layoutNames(){ return Object.keys(D.layouts || {}); }
+/* The layout that loads first also reads first in the switcher, whatever order the
+   build happened to write them in: it is the reference the others are compared against,
+   so putting it last would bury it. */
+function layoutNames(){
+  const all = Object.keys(D.layouts || {});
+  const first = D.defaultLayout;
+  return all.includes(first) ? [first, ...all.filter(n => n !== first)] : all;
+}
 
 function buildLayoutSwitcher(){
   const seg = document.getElementById('layoutSeg');

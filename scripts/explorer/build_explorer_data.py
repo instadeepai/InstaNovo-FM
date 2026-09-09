@@ -253,6 +253,7 @@ def write_payload(
     layouts: dict[str, dict[str, np.ndarray]],
     keys: dict[str, np.ndarray],
     order_layout: str,
+    default_layout: str,
     label: str,
     layout_labels: dict[str, tuple[str, str]],
     provenance: dict[str, Any],
@@ -276,7 +277,7 @@ def write_payload(
         "chunkRows": chunk_rows,
         "bootRows": min(boot_rows, n),
         "orderLayout": order_layout,
-        "defaultLayout": order_layout,
+        "defaultLayout": default_layout,
         "source": provenance,
         "layouts": {},
         "arrays": {},
@@ -356,12 +357,17 @@ def write_payload(
     # rather than working around it.
     boot = catalog["bootRows"]
     boot_files: dict[str, str] = {}
-    if boot >= n:
-        # Nothing to gain: the shard would be a byte-for-byte copy of the full column, so
-        # the viewer should just fetch the column. Only worth it for a real prefix.
-        catalog["bootRows"] = n
+
+    # The boot set belongs to the layout that loads first, which need not be the one
+    # whose geometry fixed the row order.
+    placed = np.flatnonzero(np.isfinite(layouts[default_layout]["x"][order]))
+    if placed.size <= boot:
+        # The whole layout is inside the budget, so its own columns are the fast path
+        # and a shard would only duplicate them.
+        catalog["bootRows"] = int(placed.size)
         catalog["boot"] = boot_files
-        _log(f"no boot shards: {n:,} rows is within the {boot:,}-row budget already")
+        _log(f"no boot shards: {default_layout} places {placed.size:,} rows, "
+             f"within the {boot:,}-row budget")
         return catalog
 
     # A strided sample of the row order, not a prefix, plus the row indices it covers.
@@ -374,17 +380,17 @@ def write_payload(
     # the viewer already treats as "not placeable" and excludes.
     # The stride is > 1 because the boot >= n case returned above, so floor(j * stride)
     # is strictly increasing and the picks need no de-duplication.
-    boot_index = np.floor(np.arange(boot) * (n / boot)).astype(np.uint32)
+    boot_index = placed[np.floor(np.arange(boot) * (placed.size / boot)).astype(np.int64)].astype(np.uint32)
     (out / "boot/index.u32").write_bytes(boot_index.tobytes())
     boot_files["index"] = "boot/index.u32"
     catalog["bootRows"] = int(boot_index.size)
 
     for axis in ("x", "y"):
-        src = out / catalog["layouts"][order_layout]["axes"][axis]["path"]
+        src = out / catalog["layouts"][default_layout]["axes"][axis]["path"]
         data = np.frombuffer(src.read_bytes(), dtype=np.uint16)[boot_index]
-        path = f"boot/{order_layout}.{axis}.u16"
+        path = f"boot/{default_layout}.{axis}.u16"
         (out / path).write_bytes(data.tobytes())
-        boot_files[f"{order_layout}.{axis}"] = path
+        boot_files[f"{default_layout}.{axis}"] = path
     for key in BOOT_CATS:
         meta_entry = catalog["cats"][key]
         width = {"uint8": 1, "uint16": 2, "uint32": 4}[meta_entry["dtype"]]
@@ -395,7 +401,7 @@ def write_payload(
         (out / path).write_bytes(data.tobytes())
         boot_files[key] = path
     catalog["boot"] = boot_files
-    _log(f"boot shards: {boot_index.size:,} rows strided across the layout")
+    _log(f"boot shards: {boot_index.size:,} rows strided across {default_layout}")
 
     return catalog
     for axis in ("x", "y"):
@@ -452,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-label", type=_layout_label, action="append", default=[],
                     help="NAME=Short|Description for the switcher; repeatable")
     ap.add_argument("--order-layout", help="layout whose geometry fixes the row order")
+    ap.add_argument("--default-layout",
+                    help="layout the viewer loads first; defaults to --order-layout")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--label", default="", help="dataset description shown in the UI")
     ap.add_argument("--chunk-rows", type=int, default=fmt.CHUNK_ROWS)
@@ -462,6 +470,9 @@ def main(argv: list[str] | None = None) -> int:
     order_layout = args.order_layout or next(iter(specs))
     if order_layout not in specs:
         ap.error(f"--order-layout {order_layout!r} is not one of {sorted(specs)}")
+    default_layout = args.default_layout or order_layout
+    if default_layout not in specs:
+        ap.error(f"--default-layout {default_layout!r} is not one of {sorted(specs)}")
 
     t0 = time.time()
     wanted = set(DIRECT_NUMS) | set(DIRECT_CATS) | set(DERIVATION_INPUTS) | set(KEY_COLUMNS)
@@ -500,8 +511,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"writing {args.out}", flush=True)  # noqa: T201
     catalog = write_payload(args.out, nums, cats, layouts, keys, order_layout,
-                            args.label, dict(args.layout_label), provenance,
-                            args.chunk_rows, args.boot_rows)
+                            default_layout, args.label, dict(args.layout_label),
+                            provenance, args.chunk_rows, args.boot_rows)
 
     problems = fmt.validate(catalog, args.out)
     (args.out / "catalog.json").write_text(json.dumps(catalog, separators=(",", ":")))

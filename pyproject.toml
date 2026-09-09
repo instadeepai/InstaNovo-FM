@@ -121,7 +121,7 @@ package = true
 
 [tool.codespell]
 # Scientific abbreviations and variable names that codespell otherwise flags.
-ignore-words-list = "aas,fpr,nce,ot,pres,ser,sord,strat,unparseable"
+ignore-words-list = "aas,disjointness,fpr,nce,ot,pres,ser,sord,strat,unparseable"
 
 [build-system]
 requires = ["hatchling"]

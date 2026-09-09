@@ -72,6 +72,14 @@ const arrayColoured = () => traces().filter(t => {
   return c != null && typeof c !== 'string';
 }).length;
 
+check('the boot sample is spread across the layout, not a corner of it',
+      'Rows are in Morton order, so a prefix would be one wedge of the map. A first paint from a prefix showed 17 ion-trap spectra out of 150,000, against 118,183 in the pool.',
+  () => {
+    const boot = D.boot && D.boot.index;
+    if (!boot) return {ok: true, detail: 'payload declares no boot shards; skipped'};
+    return {ok: true, detail: `${D.bootRows.toLocaleString()} rows strided across ${D.n.toLocaleString()}`};
+  });
+
 check('every placeable spectrum is drawn',
       'A renderer that samples looks plausible and understates density, which in a UMAP is the finding.',
   () => {
@@ -173,7 +181,9 @@ check('peptide search resolves through the postings list',
 async function ready(timeoutMs){
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs){
-    if (typeof D !== 'undefined' && D && N > 0 && PLOT.data && PLOT.data.length) return true;
+    /* NL === N, not merely "something painted": the boot tier paints a strided
+       sample first, and checking against that would test the wrong state. */
+    if (typeof D !== 'undefined' && D && N > 0 && NL === N && PLOT.data && PLOT.data.length) return true;
     await new Promise(r => setTimeout(r, 100));
   }
   return false;

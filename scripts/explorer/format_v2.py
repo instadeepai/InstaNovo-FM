@@ -80,20 +80,26 @@ def dequantise(codes: np.ndarray, lo: float, hi: float) -> np.ndarray:
     return out
 
 
+# Code width by vocabulary size. uint32 exists because cardinality grows with the
+# row count: the peptide field has 52,397 distinct values over 100,000 spectra and
+# 189,973 over 1,000,000, so a uint16 ceiling is reached by simply using more data.
+CODE_DTYPES = ((256, np.uint8), (65536, np.uint16), (2**32, np.uint32))
+
+
 def encode_categorical(values: np.ndarray) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Dictionary-encode to codes ordered by descending frequency.
 
-    Ties break on the label so two builds of the same data cannot disagree. Returns
-    uint8 codes when the vocabulary fits, otherwise uint16 -- past 65,536 levels the
-    caller has a different problem and gets told so.
+    Ties break on the label so two builds of the same data cannot disagree. The code
+    width is the narrowest that addresses the vocabulary, so the many low-cardinality
+    fields stay at one byte per row and only the peptide-scale ones pay four.
     """
     labels = ["" if v is None else str(v) for v in values]
     counts = Counter(labels)
     levels = [lab for lab, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
-    if len(levels) > 65536:
-        raise ValueError(f"{len(levels)} levels exceeds what a uint16 code can address")
+    dtype = next((d for limit, d in CODE_DTYPES if len(levels) <= limit), None)
+    if dtype is None:
+        raise ValueError(f"{len(levels)} levels exceeds what a uint32 code can address")
     index = {lab: i for i, lab in enumerate(levels)}
-    dtype = np.uint8 if len(levels) <= 256 else np.uint16
     codes = np.fromiter((index[lab] for lab in labels), dtype=dtype, count=len(labels))
     level_counts = np.array([counts[lab] for lab in levels], dtype=np.uint32)
     return codes, levels, level_counts

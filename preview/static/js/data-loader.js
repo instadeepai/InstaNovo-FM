@@ -142,19 +142,25 @@ function toFloats(codes, lo, hi, into, rows){
 
 const axisKey = (layout, axis) => `${layout}.${axis}`;
 
+/* Axes currently holding only the boot sample. They are in ARR, so the load guard in
+   loadAxis would otherwise treat them as complete and never fetch the rest -- which
+   left the viewer permanently showing 150,000 of 1,000,000 rows. */
+const partialAxes = new Set();
+
 /** Load one axis of one layout. Layouts differ only in coordinates, so switching
  *  between them refetches at most five small columns and nothing else. */
 function loadAxis(layout, axis){
   const spec = D.layouts[layout];
   if (!spec || !spec.axes[axis]) return Promise.resolve();
   const key = axisKey(layout, axis);
-  if (ARR[key]) return Promise.resolve();
+  if (ARR[key] && !partialAxes.has(key)) return Promise.resolve();
   const id = 'axis:' + key;
   if (inflight.has(id)) return inflight.get(id);
 
   const m = spec.axes[axis];
   const p = fetchTyped(m.path, 'uint16').then(codes => {
     ARR[key] = toFloats(codes, m.lo, m.hi, null, N);
+    partialAxes.delete(key);
   });
   inflight.set(id, p);
   return p;
@@ -260,7 +266,13 @@ function onDetailReady(fn){ detailReady() ? fn() : detailWaiters.push(fn); }
  *  smaller NL rather than a different data shape the viewer must branch on. */
 async function loadBootShards(layout){
   const boot = D.boot || {};
-  if (!Object.keys(boot).length) return 0;
+  if (!boot.index) return 0;
+
+  /* The boot set is a stride across the row order, not a prefix, because the rows are
+     in Morton order and a prefix would be one corner of the layout. So the values are
+     scattered to the row indices the index column names, and every row not in the boot
+     set keeps NaN -- which the viewer already reads as "not placeable" and excludes. */
+  const rows = await fetchTyped(boot.index, 'uint32');
 
   const jobs = [];
   for (const axis of ['x', 'y']){
@@ -268,27 +280,28 @@ async function loadBootShards(layout){
     if (!path) return 0;                       /* boot covers another layout; skip it */
     const m = D.layouts[layout].axes[axis];
     jobs.push(fetchTyped(path, 'uint16').then(codes => {
-      const full = new Float32Array(N);
-      full.fill(NaN);
-      toFloats(codes, m.lo, m.hi, full, N);
+      const full = new Float32Array(N).fill(NaN);
+      for (let j = 0; j < rows.length; j++){
+        const v = codes[j];
+        full[rows[j]] = v === NAN_CODE ? NaN : m.lo + v * (m.hi - m.lo) / QUANT_MAX;
+      }
       ARR[axisKey(layout, axis)] = full;
-      return codes.length;
+      partialAxes.add(axisKey(layout, axis));
     }));
   }
   for (const key of Object.keys(boot)){
-    if (key.includes('.')) continue;           /* an axis, handled above */
+    if (key === 'index' || key.includes('.')) continue;
     const m = D.cats[key];
     if (!m) continue;
     jobs.push(fetchTyped(boot[key], m.dtype).then(codes => {
       const full = new TA[m.dtype](N);
-      full.set(codes);
+      for (let j = 0; j < rows.length; j++) full[rows[j]] = codes[j];
       CAT[key].codes = full;
-      CAT[key].partial = codes.length;
-      return codes.length;
+      CAT[key].partial = rows.length;
     }));
   }
-  const counts = await Promise.all(jobs);
-  return Math.min(...counts);
+  await Promise.all(jobs);
+  return rows.length;
 }
 
 /* ---------------------------------------------------------------------- boot */

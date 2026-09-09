@@ -85,17 +85,28 @@ def test_level_ties_break_on_the_label() -> None:
 
 
 def test_code_width_follows_the_vocabulary() -> None:
-    """uint8 while it fits, so the common low-cardinality fields stay one byte per row."""
-    small = fmt.encode_categorical(np.array([f"v{i%200}" for i in range(1000)], dtype=object))[0]
-    big = fmt.encode_categorical(np.array([f"v{i}" for i in range(300)], dtype=object))[0]
+    """The narrowest width that addresses the vocabulary, so most fields stay one byte.
+
+    uint32 is reachable in practice, not a theoretical case: the peptide field has
+    52,397 distinct values over 100,000 spectra and 189,973 over 1,000,000, so the
+    uint16 ceiling is crossed by nothing more than using more data.
+    """
+    small = fmt.encode_categorical(np.array([f"v{i % 200}" for i in range(1000)], dtype=object))[0]
+    mid = fmt.encode_categorical(np.array([f"v{i}" for i in range(300)], dtype=object))[0]
+    big = fmt.encode_categorical(np.array([f"v{i}" for i in range(70_000)], dtype=object))[0]
     assert small.dtype == np.uint8
-    assert big.dtype == np.uint16
+    assert mid.dtype == np.uint16
+    assert big.dtype == np.uint32
 
 
-def test_too_many_levels_is_refused_rather_than_truncated() -> None:
-    """Past a uint16 the codes cannot address the table, so say so."""
-    with pytest.raises(ValueError, match="exceeds what a uint16"):
-        fmt.encode_categorical(np.array([f"v{i}" for i in range(65_537)], dtype=object))
+def test_a_uint32_vocabulary_still_round_trips() -> None:
+    """Codes past 65,535 must name the right label, not wrap."""
+    values = np.array([f"pep{i}" for i in range(70_000)], dtype=object)
+    codes, levels, counts = fmt.encode_categorical(values)
+    assert codes.dtype == np.uint32
+    assert len(levels) == 70_000
+    for j in (0, 65_535, 65_536, 69_999):
+        assert levels[codes[j]] == values[j]
 
 
 def test_level_blob_and_offsets_reconstruct_every_level(tmp_path: Path) -> None:

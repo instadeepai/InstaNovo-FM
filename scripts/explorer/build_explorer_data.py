@@ -144,6 +144,7 @@ def read_layouts(
 
     out: dict[str, dict[str, np.ndarray]] = {}
     remaining = dict(specs)
+    rows: np.ndarray
     for path in paths:
         table = pl.read_parquet(path)
         if positional:
@@ -153,6 +154,17 @@ def read_layouts(
                     "positional alignment needs them equal"
                 )
             rows = np.arange(len(usi))
+        elif "row_index" in table.columns:
+            # An exact mapping, and the only lossless one: usi is not unique in this
+            # corpus (1,000,000 rows carry 999,720 distinct values, the repeats being
+            # timsTOF spectra whose USI drops the frame), so joining on it strands the
+            # collisions with no coordinates.
+            rows = table["row_index"].to_numpy().astype(np.int64)
+            if rows.max() >= len(usi):
+                raise SystemExit(
+                    f"{path} names row_index up to {rows.max():,} but the metadata has "
+                    f"{len(usi):,} rows"
+                )
         else:
             if "usi" not in table.columns:
                 raise SystemExit(f"{path} has no usi column to join on")
@@ -318,8 +330,8 @@ def write_payload(
     # ---- categoricals ----
     for key in derive.CAT_FIELDS:
         codes, levels, counts = fmt.encode_categorical(cats[key][order])
-        dtype = "uint8" if codes.dtype == np.uint8 else "uint16"
-        path = f"cat/{key}.{'u8' if dtype == 'uint8' else 'u16'}"
+        dtype = {np.uint8: "uint8", np.uint16: "uint16", np.uint32: "uint32"}[codes.dtype.type]
+        path = f"cat/{key}.{ {'uint8': 'u8', 'uint16': 'u16', 'uint32': 'u32'}[dtype] }"
         (out / path).write_bytes(codes.tobytes())
         entry = {
             **derive.CAT_FIELDS[key],
@@ -343,11 +355,46 @@ def write_payload(
     boot_files: dict[str, str] = {}
     if boot >= n:
         # Nothing to gain: the shard would be a byte-for-byte copy of the full column, so
-        # the viewer should just fetch the column. Only worth duplicating for a real prefix.
+        # the viewer should just fetch the column. Only worth it for a real prefix.
         catalog["bootRows"] = n
         catalog["boot"] = boot_files
         _log(f"no boot shards: {n:,} rows is within the {boot:,}-row budget already")
         return catalog
+
+    # A strided sample of the row order, not a prefix, plus the row indices it covers.
+    #
+    # The rows are in Morton order, so a prefix is one corner of the layout rather than a
+    # sample of it -- a first paint from `rows[:150000]` showed a wedge of the map with
+    # 17 ion-trap spectra in it out of 150,000, against 118,183 in the pool. Striding
+    # across that order lands in every region. The cost is one index column the viewer
+    # scatters through; rows it has not yet received simply have no coordinates, which
+    # the viewer already treats as "not placeable" and excludes.
+    # The stride is > 1 because the boot >= n case returned above, so floor(j * stride)
+    # is strictly increasing and the picks need no de-duplication.
+    boot_index = np.floor(np.arange(boot) * (n / boot)).astype(np.uint32)
+    (out / "boot/index.u32").write_bytes(boot_index.tobytes())
+    boot_files["index"] = "boot/index.u32"
+    catalog["bootRows"] = int(boot_index.size)
+
+    for axis in ("x", "y"):
+        src = out / catalog["layouts"][order_layout]["axes"][axis]["path"]
+        data = np.frombuffer(src.read_bytes(), dtype=np.uint16)[boot_index]
+        path = f"boot/{order_layout}.{axis}.u16"
+        (out / path).write_bytes(data.tobytes())
+        boot_files[f"{order_layout}.{axis}"] = path
+    for key in BOOT_CATS:
+        meta_entry = catalog["cats"][key]
+        width = {"uint8": 1, "uint16": 2, "uint32": 4}[meta_entry["dtype"]]
+        dt = {1: np.uint8, 2: np.uint16, 4: np.uint32}[width]
+        suffix = {1: "u8", 2: "u16", 4: "u32"}[width]
+        data = np.frombuffer((out / meta_entry["path"]).read_bytes(), dtype=dt)[boot_index]
+        path = f"boot/{key}.{suffix}"
+        (out / path).write_bytes(data.tobytes())
+        boot_files[key] = path
+    catalog["boot"] = boot_files
+    _log(f"boot shards: {boot_index.size:,} rows strided across the layout")
+
+    return catalog
     for axis in ("x", "y"):
         src = out / catalog["layouts"][order_layout]["axes"][axis]["path"]
         data = np.frombuffer(src.read_bytes(), dtype=np.uint16)[:boot]
@@ -356,9 +403,10 @@ def write_payload(
         boot_files[f"{order_layout}.{axis}"] = path
     for key in BOOT_CATS:
         meta_entry = catalog["cats"][key]
-        width = 1 if meta_entry["dtype"] == "uint8" else 2
+        width = {"uint8": 1, "uint16": 2, "uint32": 4}[meta_entry["dtype"]]
+        suffix = {1: "u8", 2: "u16", 4: "u32"}[width]
         data = (out / meta_entry["path"]).read_bytes()[: boot * width]
-        path = f"boot/{key}.{'u8' if width == 1 else 'u16'}"
+        path = f"boot/{key}.{suffix}"
         (out / path).write_bytes(data)
         boot_files[key] = path
     catalog["boot"] = boot_files

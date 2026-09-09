@@ -1,0 +1,117 @@
+# Kostas cross-set annotation transfer:
+# file-per-file ACFM − LCFM queries, retrieval against top-N LCFM-valid peptide anchors.
+#
+# Build + run (all basename-matched pairs):
+#   TOP_N_PEPTIDES=10 QUERY_DIR=... LIBRARY_DIR=... \
+#   bash scripts/run_cross_set_annotation_transfer.sh
+#
+# Restrict to one file pair with FILE_NAME=477-1.mzML.ipc.
+
+defaults:
+  - foundational
+  - _self_
+
+mlflow_enabled: False
+
+dataset:
+  use_search_data: false
+  # Combined parquet mixes unlabeled ACFM queries with labeled LCFM spectra.
+  # Must be false or SpectrumDataFrame rejects empty query sequences.
+  is_annotated: false
+  metadata_columns:
+    - acquisition
+    - collision_energy
+    - experiment_name
+    - frag_type
+    - header
+    - index
+    - intensity_array
+    - isolation_target
+    - lower_offset
+    - mz_array
+    - precursor_charge
+    - precursor_mz
+    - retention_time
+    - scan
+    - sequence
+    - source_file
+    - unmodified_peptide
+    - upper_offset
+    - usi
+    - search_tier
+    - overlap_id
+    - pair_file
+    - is_selected_anchor
+
+evaluation:
+  enabled: True
+  split: valid
+  batch_size: 128
+  device: auto
+  # 0 avoids DataLoader worker mmap/shm OOM on large combined parquets.
+  num_workers: 0
+  checkpoint_path: "s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
+  output_dir: "instanovo/foundational/eval/embed_eval_results"
+  max_samples: null
+  save_embeddings: True
+  force_regenerate_embeddings: False
+  compute_spectrum_confidence: False
+
+  tasks_to_run:
+    - crosssetannotationtransfertask
+
+  task_configs:
+    crosssetannotationtransfertask:
+      query_filter:
+        search_tier: ["acfm"]
+      # Kostas: retrieve only against spectra of the selected top-N peptides.
+      library_filter:
+        is_selected_anchor: ["1"]
+      # With is_annotated=false, labels stay on parquet `sequence` (no `peptides` field).
+      peptide_key: sequence
+      unmodified_key: unmodified_peptide
+      id_key: usi
+      overlap_key: overlap_id
+      # Diff already applied in the Kostas dataset builder (ACFM − LCFM/file).
+      exclude_overlap: false
+      k_values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+      batch_size: 500
+      topk_only: true
+      max_queries: null
+      # Pre-retrieval query confidence gate (all null => retrieve for every query).
+      # Keeps only the most confident queries BEFORE the embedding search, using the
+      # model's own spectrum_confidence (needs evaluation.compute_spectrum_confidence=true).
+      # Precedence if several set: top_n > top_frac > min.
+      query_confidence_key: spectrum_confidence
+      query_confidence_min: null
+      query_confidence_top_frac: null
+      query_confidence_top_n: null
+      sample_seed: 42
+      save_candidates_csv: true
+      save_matrix_artifact: false
+      save_plots: true
+      plot_dpi: 160
+      plot_max_curve_queries: 5000
+      plot_heatmap_max_queries: 512
+      plot_top_peptides: 20
+      # UMAP of the full library plus a handful of individually-labeled hero queries.
+      # Shows whether "hub" peptides (see cross_set_top_peptides.png) form a real
+      # embedding cluster near their own anchor, or are an anisotropy artifact.
+      plot_umap: true
+      umap_num_queries: 5
+      umap_n_neighbors: 30
+      umap_min_dist: 0.1
+      compute_evidence_metrics: true
+      # Distribution/scatter/rank-curve plots for evidence blocks A/B/C, on top of
+      # the embedding-similarity plots above. Requires compute_evidence_metrics=true.
+      plot_evidence_metrics: true
+      score_blocks: ["A", "B", "C"]
+      num_workers: 8
+      tolerance_da: 0.05
+      ion_types: "by"
+      max_ion_charge: 2
+      cache_library_self_scores: true
+      mz_key: mz_array
+      intensity_key: intensity_array
+      precursor_mz_key: precursor_mz
+      precursor_charge_key: precursor_charge

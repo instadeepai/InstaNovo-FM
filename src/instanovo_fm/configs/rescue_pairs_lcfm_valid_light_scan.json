@@ -1,0 +1,92 @@
+{
+  "scope": "multi_base",
+  "description": "Rescue pairs from lightweight grouped-count scan; approximate negatives.",
+  "discovery": {
+    "source_glob": "<data-root>/lcfm_splits/*valid*.parquet",
+    "matched_shards": 19,
+    "polars_max_threads": "16",
+    "polars_thread_pool_size": 16,
+    "projects_scanned": 82,
+    "candidate_pairs": 243675,
+    "eligible_pairs": 707,
+    "selected_pairs": 10,
+    "elapsed_seconds": 70.186,
+    "thresholds": {
+      "min_base_spectra": 101,
+      "min_modified_spectra": 50,
+      "min_negative_candidates": 200
+    }
+  },
+  "pairs": [
+    {
+      "pair_id": "pxd044303_faegtr_ox",
+      "project_id": "PXD044303",
+      "base_sequence": "LLGLGELMSGELVEFAEGTR",
+      "modified_sequence": "LLGLGELM[UNIMOD:35]SGELVEFAEGTR",
+      "notes": "light-scan in PXD044303: base=1665, mod=2811, approx_neg=41071"
+    },
+    {
+      "pair_id": "pxd048219_eslnqk_mod",
+      "project_id": "PXD048219",
+      "base_sequence": "SQESLNQK",
+      "modified_sequence": "SQESLNQK[UNIMOD:259]",
+      "notes": "light-scan in PXD048219: base=2072, mod=1958, approx_neg=103045"
+    },
+    {
+      "pair_id": "pxd009449_yvdvlk_mod",
+      "project_id": "PXD009449",
+      "base_sequence": "DLATVYVDVLK",
+      "modified_sequence": "DLATVY[UNIMOD:21]VDVLK",
+      "notes": "light-scan in PXD009449: base=697, mod=1784, approx_neg=28823"
+    },
+    {
+      "pair_id": "pxd056559_gsqetk_mod",
+      "project_id": "PXD056559",
+      "base_sequence": "KRSELSQDAEPAGSQETK",
+      "modified_sequence": "KR[UNIMOD:7]SELSQDAEPAGSQETK",
+      "notes": "light-scan in PXD056559: base=364, mod=1682, approx_neg=57072"
+    },
+    {
+      "pair_id": "pxd010154_sqlsmk_ox",
+      "project_id": "PXD010154",
+      "base_sequence": "TLQGLELELQSQLSMK",
+      "modified_sequence": "TLQGLELELQSQLSM[UNIMOD:35]K",
+      "notes": "light-scan in PXD010154: base=1133, mod=1627, approx_neg=194062"
+    },
+    {
+      "pair_id": "pxd044325_ldamlk_ox",
+      "project_id": "PXD044325",
+      "base_sequence": "NEELDAMLK",
+      "modified_sequence": "NEELDAM[UNIMOD:35]LK",
+      "notes": "light-scan in PXD044325: base=570, mod=1217, approx_neg=109541"
+    },
+    {
+      "pair_id": "pxd047134_lmpaqk_ox",
+      "project_id": "PXD047134",
+      "base_sequence": "LEQGQALDDLMPAQK",
+      "modified_sequence": "LEQGQALDDLM[UNIMOD:35]PAQK",
+      "notes": "light-scan in PXD047134: base=1268, mod=1115, approx_neg=306737"
+    },
+    {
+      "pair_id": "pxd010595_dlfpfk_ox",
+      "project_id": "PXD010595",
+      "base_sequence": "LMYDLFPFK",
+      "modified_sequence": "LM[UNIMOD:35]YDLFPFK",
+      "notes": "light-scan in PXD010595: base=639, mod=970, approx_neg=776578"
+    },
+    {
+      "pair_id": "pxd025859_spgper_ox",
+      "project_id": "PXD025859",
+      "base_sequence": "LSDSSFLANLPNGYMTDLQRPEPQQPPPAPGPGAATASAATSAASPGPER",
+      "modified_sequence": "LSDSSFLANLPNGYM[UNIMOD:35]TDLQRPEPQQPPPAPGPGAATASAATSAASPGPER",
+      "notes": "light-scan in PXD025859: base=1174, mod=918, approx_neg=42498"
+    },
+    {
+      "pair_id": "pxd004732_eslmnk_ox",
+      "project_id": "PXD004732",
+      "base_sequence": "EEEAEEESLMNK",
+      "modified_sequence": "EEEAEEESLM[UNIMOD:35]NK",
+      "notes": "light-scan in PXD004732: base=146, mod=898, approx_neg=1109250"
+    }
+  ]
+}

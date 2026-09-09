@@ -73,12 +73,6 @@ pip install "instanovo-fm[interpret]"   # adds UMAP visualization
 pip install "instanovo-fm[clustering]"  # adds the EvoC clustering eval task
 ```
 
-Two things live in the repository rather than the package: the figure notebooks
-(see [Reproducing the figures](#reproducing-the-figures)) and the `figures` and `dev`
-dependency groups, which are [PEP 735](https://peps.python.org/pep-0735/) groups rather
-than extras and so resolve only from a checkout, through
-[uv](https://docs.astral.sh/uv/).
-
 ## Quick start
 
 Everything is driven by module entry points and Hydra configs from

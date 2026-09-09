@@ -28,7 +28,7 @@ Each row is one spectrum: a 768-dimensional mean-pooled embedding, the search-en
 acquisition metadata that identifies it, and the UMAP coordinates used in the paper.
 
 Publication: *Learning from tandem mass spectra at scale with a self-supervised foundation
-model for proteomics*, bioRxiv, 3 September 2026.
+model for proteomics*, bioRxiv, 3 September 2026 (v2).
 [doi:10.64898/2026.09.03.747733](https://doi.org/10.64898/2026.09.03.747733)
 
 ## The two configs
@@ -43,7 +43,7 @@ big  = load_dataset("InstaDeepAI/InstaNovo-FM-embeddings", "1M", split="train")
 | config | spectra | what it is |
 |---|---|---|
 | `100k` | 100,000 | the point set published as **Figure 3**. Carries `figure3_umap_x` / `figure3_umap_y`, the exact coordinates in the paper |
-| `1M` | 1,000,000 | a larger draw from the same held-out split. Carries two 2-D and two 3-D UMAP layouts, none of which appear in the manuscript |
+| `1M` | 1,000,000 | a larger draw from the same held-out split. Carries two 2-D and two 3-D UMAP layouts, not yet mentioned in [v2 of the preprint](https://www.biorxiv.org/content/10.64898/2026.09.03.747733v2) |
 
 Both are the LCFM **test** split — held out from training — embedded with the released
 checkpoint `instanovo-fm-v0.1.0` using `mean_pool`.
@@ -165,7 +165,7 @@ remain subject to [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-u
   year    = {2026},
   journal = {bioRxiv},
   doi     = {10.64898/2026.09.03.747733},
-  url     = {https://www.biorxiv.org/content/10.64898/2026.09.03.747733v1},
+  url     = {https://www.biorxiv.org/content/10.64898/2026.09.03.747733v2},
   note    = {Preprint}
 }
 ```

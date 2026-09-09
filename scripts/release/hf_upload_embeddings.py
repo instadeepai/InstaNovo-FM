@@ -48,12 +48,20 @@ def _log(msg: str = "") -> None:
 
 
 def find_token() -> tuple[str | None, str]:
-    """The token and which variable supplied it, so a permission failure is explicable."""
+    """The token and where it came from, so a permission failure is explicable.
+
+    Falls back to the cached ``huggingface-cli login`` rather than treating an unset
+    environment variable as no credential at all -- the whoami check passes on the cached
+    token, so refusing to upload with it reported "no token" about a token that works.
+    """
     for name in TOKEN_VARS:
         value = os.environ.get(name)
         if value:
             return value, name
-    return None, "the cached huggingface-cli login"
+    from huggingface_hub import get_token
+
+    cached = get_token()
+    return cached, "the cached huggingface-cli login" if cached else "nowhere"
 
 
 def discover(root: Path, only: str | None) -> dict[str, dict[str, Any]]:

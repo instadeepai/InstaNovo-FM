@@ -164,7 +164,7 @@ scaling baseline, and the three de novo sequencers — see
 
 ```bash
 uv run python -m instanovo_fm.eval.embed_evaluation \
-  --config-name foundational_local
+  --config-name foundational
 ```
 
 The spectrum embedding is the mean of the final-layer hidden states over the non-padding
@@ -176,7 +176,7 @@ attention and integrated-gradients attribution. Each is runnable the same way.
 
 ```bash
 uv run python -m instanovo_fm.trainer.train \
-  --config-name foundational_local
+  --config-name foundational
 ```
 
 ## Downstream applications

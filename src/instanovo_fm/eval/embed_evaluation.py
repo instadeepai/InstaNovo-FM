@@ -76,7 +76,7 @@ def _checkpoint_id(ckpt_path: str, index: int) -> str:
     return f"checkpoint_{index}"
 
 
-@hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational_local")
+@hydra.main(config_path=str(CONFIG_PATH), version_base=None, config_name="foundational")
 def main(config: DictConfig) -> None:
     """Main entry point for embedding evaluation.
 

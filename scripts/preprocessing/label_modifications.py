@@ -67,6 +67,7 @@ from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_AMBIGUOUS_MODS, DEFAULT_GOLD_STANDARD_MODS
+from scripts.preprocessing.parquet_io import atomic_write_parquet
 
 logger = logging.getLogger(__name__)
 
@@ -447,7 +448,7 @@ def create_unimod_column(
             df = df.drop([modified_sequence_col])
         if sequence_col != "unmodified_peptide":
             df = df.drop([sequence_col])
-        df.collect().write_parquet(file)
+        atomic_write_parquet(df.collect(), file)
 
 
 @app.command()

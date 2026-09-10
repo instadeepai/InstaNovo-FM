@@ -25,7 +25,7 @@ import typer
 from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
-from scripts.preprocessing.parquet_io import nan_string_to_null_expr
+from scripts.preprocessing.parquet_io import atomic_write_parquet, nan_string_to_null_expr
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def process_single_file(file_path: str, verbose: bool = False) -> tuple[bool, bo
 
     # Write the new dataframe to the file.
     df = query.collect()
-    df.write_parquet(file_path)
+    atomic_write_parquet(df, file_path)
 
     return True, False
 

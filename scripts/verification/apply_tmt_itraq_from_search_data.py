@@ -43,9 +43,7 @@ CLI::
 from __future__ import annotations
 
 import logging
-import os
 import re
-import tempfile
 from dataclasses import dataclass
 from functools import partial
 from enum import Enum
@@ -58,7 +56,7 @@ import yaml
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_SEARCH_DATA
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import atomic_write_parquet, search_data_lookup_key
 from scripts.verification.verify_calc_mz import (
     find_parquet_files_in_project,
     is_tmt_quant,
@@ -435,20 +433,6 @@ def log_quant_summary(project: str, summary: QuantSummary) -> None:
     )
 
 
-def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
-    """Replace the parquet only after a full write so a crash cannot leave a truncated file."""
-    temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=file_path.parent)
-    os.close(temp_fd)
-    temp_path = Path(temp_path_str)
-    try:
-        df.write_parquet(temp_path)
-        os.replace(temp_path, file_path)
-    except Exception:
-        if temp_path.exists():
-            temp_path.unlink()
-        raise
-
-
 def _label_sequence(seq: Optional[str], unimod_id: str) -> Optional[str]:
     """Leave null sequences untouched while tagging unmodified lysines on valid peptides."""
     if seq is None:
@@ -488,7 +472,7 @@ def process_parquet_file(
         logger.info("[DRY-RUN] Would update %s (%d rows)", file_path, n_changed)
         return (1, n_changed)
     out = df.with_columns(new_seq.alias("sequence"))
-    _atomic_write_parquet(out, file_path)
+    atomic_write_parquet(out, file_path)
     logger.info("Updated %s (%d rows)", file_path, n_changed)
     return (1, n_changed)
 

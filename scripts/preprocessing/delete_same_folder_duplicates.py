@@ -24,6 +24,7 @@ from typing import Annotated, List
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ def parse_input_file(input_file: str) -> defaultdict:
             line = line.strip()
             if line:
                 folder, file_name = os.path.split(line)
-                base_name = file_name.rsplit(".", maxsplit=2)[0]
+                base_name = strip_known_data_suffix(file_name)
                 file_map[base_name].append((folder, line))
 
     return file_map
@@ -124,11 +125,11 @@ def find_duplicates_to_delete(file_map: defaultdict) -> list:
         for _folder, file_paths in folder_groups.items():
             if len(file_paths) > 1:
                 file_paths.sort()
-                second_file = file_paths[1]
-                files_to_delete.append(second_file)
-                parquet_file = second_file.rsplit(".", maxsplit=1)[0] + ".parquet"
-                if os.path.exists(parquet_file):
-                    files_to_delete.append(parquet_file)
+                for redundant in file_paths[1:]:
+                    files_to_delete.append(redundant)
+                    parquet_file = redundant.rsplit(".", maxsplit=1)[0] + ".parquet"
+                    if os.path.exists(parquet_file):
+                        files_to_delete.append(parquet_file)
 
     return files_to_delete
 

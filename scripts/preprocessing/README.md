@@ -10,7 +10,7 @@ Run them from the repository root as `uv run python -m scripts.preprocessing.<sc
 
 1. Detect duplicates, both same-folder and multi-folder. Multi-folder hits need a person to decide which copy to keep; the scripts cannot choose the true file for you.
 2. Delete same-folder duplicates, then delete the reviewed multi-folder duplicates.
-3. Find and remove empty or undersized files.
+3. Find and remove empty files.
 4. Convert IPC to Parquet, then check that every IPC file has a converted counterpart.
 5. Clean columns: replace `"Unknown"` with null in `collision_energy` and `frag_type`, infer missing isolation targets, re-label EncyclopeDIA modifications as UNIMOD, and add the `acquisition` column (DIA/DDA) from search metadata.
 
@@ -42,7 +42,6 @@ uv run python -m scripts.preprocessing.delete_same_folder_duplicates --input-fil
 
 ```bash
 uv run python -m scripts.preprocessing.find_empty_files --input-dir ./data --output-file empty_files.txt
-uv run python -m scripts.preprocessing.find_empty_files --input-dir ./data --min-size 1024 --output-file small_files.txt
 uv run python -m scripts.preprocessing.find_empty_files --input-dir ./acfm --input-dir ./lcfm --output-file empty_files.txt
 ```
 
@@ -209,6 +208,9 @@ Default column mapping, which can be customised:
 {
   "rt": "retention_time",
   "mz": "mz_array",
-  "intensity": "intensity_array"
+  "intensity": "intensity_array",
+  "peptide": "unmodified_peptide"
 }
 ```
+
+`--column-mapping` JSON is merged onto these defaults (overrides win; other defaults remain).

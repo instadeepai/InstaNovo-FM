@@ -112,7 +112,10 @@ class AccelerateDeNovoTrainer(metaclass=ABCMeta):
         # Used for accelerate training state checkpointing
         self._training_state = TrainingState()
 
-        self._run_id = self.config.get("run_name", "instanovo") + datetime.datetime.now().strftime("_%y_%m_%d_%H_%M")
+        # `or` rather than a .get() default, for the same reason as the predictor:
+        # a config that declares `run_name:` with no value yields None, not the
+        # default. Latent here only because the foundational configs set a value.
+        self._run_id = (self.config.get("run_name") or "instanovo") + datetime.datetime.now().strftime("_%y_%m_%d_%H_%M")
 
         self.accelerator = self.setup_accelerator()
 

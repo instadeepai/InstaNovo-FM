@@ -46,7 +46,7 @@ lr_hold_steps: 100_000
 training_steps: 2_500_000
 validate_before_training: False
 
-mlflow_enabled: True  # Set to False to disable all MLFlow tracking
+mlflow_enabled: False  # Set to True to enable MLFlow tracking; needs a tracking URI
 mlflow_experiment_name: downstream_denovo
 mlflow_workspace: instanovo
 

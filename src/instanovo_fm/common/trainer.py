@@ -112,7 +112,7 @@ class AccelerateDeNovoTrainer(metaclass=ABCMeta):
         # Used for accelerate training state checkpointing
         self._training_state = TrainingState()
 
-        self._run_id = self.config.get("run_name", "instanovo") + datetime.datetime.now().strftime("_%y_%m_%d_%H_%M")
+        self._run_id = (self.config.get("run_name") or "instanovo") + datetime.datetime.now().strftime("_%y_%m_%d_%H_%M")
 
         self.accelerator = self.setup_accelerator()
 

@@ -117,7 +117,7 @@ log_interval: 50
 use_basic_logging: True
 
 # MLFlow configuration (evaluation mode only)
-mlflow_enabled: True
+mlflow_enabled: False  # Set to True to enable MLFlow tracking; needs a tracking URI
 mlflow_tracking_uri:
 mlflow_experiment_name:
 mlflow_workspace: instanovo

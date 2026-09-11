@@ -56,7 +56,7 @@ class AccelerateDeNovoPredictor(metaclass=ABCMeta):
         config: DictConfig,
     ) -> None:
         self.config = config
-        self._run_id = self.config.get("run_name", "instanovo_predict") + datetime.now().strftime("_%y_%m_%d_%H_%M")
+        self._run_id = (self.config.get("run_name") or "instanovo_predict") + datetime.now().strftime("_%y_%m_%d_%H_%M")
 
         # Hide progress bar from HF datasets
         disable_progress_bar()

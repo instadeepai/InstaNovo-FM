@@ -224,13 +224,21 @@ def _score_and_render(
     args: argparse.Namespace,
 ) -> dict:
     """Score observed vs the peptide's theoretical spectrum and render mirror + annotated views."""
-    from proteomics_mcp.core.scoring import score_candidate_spectrum
-    from proteomics_mcp.core.visualization import (
-        build_spectrum_payload,
-        render_annotated_observed_spectrum_html,
-        render_spectrum_comparison_html,
-    )
-    from proteomics_mcp.models.schemas import CandidatePSM, ObservedSpectrum
+    try:
+        from proteomics_mcp.core.scoring import score_candidate_spectrum
+        from proteomics_mcp.core.visualization import (
+            build_spectrum_payload,
+            render_annotated_observed_spectrum_html,
+            render_spectrum_comparison_html,
+        )
+        from proteomics_mcp.models.schemas import CandidatePSM, ObservedSpectrum
+    except ImportError as exc:  # pragma: no cover - depends on an unpublished package
+        raise ImportError(
+            "This step scores observed spectra against theoretical ones, which needs "
+            "`proteomics_mcp`. That package is unpublished and deliberately not included in this "
+            "repository; see docs/sanitisation.md. Retrieval, rescue and the observed-versus-"
+            "observed metrics do not need it and run without it."
+        ) from exc
 
     observed = ObservedSpectrum(**observed_dict)
     charge = int(observed_dict.get("precursor_charge") or 2)

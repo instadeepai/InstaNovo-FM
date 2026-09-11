@@ -1,0 +1,14 @@
+# Multi-base spectral rescue panel (aggregate metrics across curated peptide pairs).
+
+defaults:
+  - foundational_eval_spectral_rescue_reformulated_rigorous
+  - _self_
+
+evaluation:
+  output_dir: "instanovo/foundational/eval/embed_eval_results/spectral_rescue_multi_base"
+  task_configs:
+    spectralrescuetaskreformulated:
+      scope: multi_base
+      rescue_pairs_path: instanovo/configs/rescue_pairs_multi_example.json
+      # Publication UMAPs use one hero pair from the panel (default: first pair in manifest)
+      # plot_pair_id: leqgqa_mox

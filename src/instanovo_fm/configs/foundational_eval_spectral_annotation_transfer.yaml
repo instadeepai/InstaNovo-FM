@@ -1,0 +1,49 @@
+# Aichor config for spectral annotation transfer embedding evaluation.
+
+defaults:
+  - foundational
+  - _self_
+
+mlflow_enabled: False
+
+evaluation:
+  enabled: True
+  split: valid
+  batch_size: 128
+  device: auto
+  checkpoint_path: "s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
+  output_dir: "instanovo/foundational/eval/embed_eval_results"
+  max_samples: 20_000
+  save_embeddings: False
+  force_regenerate_embeddings: False
+  compute_spectrum_confidence: True
+
+  tasks_to_run:
+    - spectralannotationtransfertask
+
+  task_configs:
+    spectralannotationtransfertask:
+      k_values: [1, 5, 10, 20]
+      peptide_key: peptides
+      max_samples: 20_000
+      batch_size: 500
+      edit_distance_bins: [0, 1, 2, 3, 5]
+      n_ed_sample_pairs: 500_000
+      sample_seed: 42
+      save_matrix_artifact: true
+      save_plots: true
+      heatmap_max_queries: 256
+      heatmap_max_library: 512
+      plot_max_points: 50_000
+      plot_dpi: 160
+      enable_conditional_eval: true
+      conditional_min_samples: 200
+      conditional_subsets:
+        - name: "hcd_orbitrap"
+          frag_types: ["HCD", "HCID"]
+          detectors: ["Orbitrap"]
+          instruments: null
+        - name: "cid"
+          frag_types: ["CID"]
+          detectors: null
+          instruments: null

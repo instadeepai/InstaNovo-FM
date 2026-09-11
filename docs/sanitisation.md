@@ -52,6 +52,17 @@ usable and is not:
 - `instanovo`'s own inference configs for models unrelated to this one.
 - Cluster job manifests, and the scheduler invocations that reference them. Where a doc needs to
   describe a run, it describes the recipe.
+- **`proteomics-mcp`.** The internal branch carries a copy of this package in-tree, and the
+  retrieval and rescue tasks use it for their spectral-evidence metrics — the observed-versus-
+  theoretical blocks that check whether a transferred peptide explains the query spectrum. It is
+  left out here because it is unpublished work by its author rather than a released dependency: it
+  is not on PyPI and its repository is not public. Its licence is permissive, so it can be vendored
+  once that changes.
+
+  Everything that does not need it still runs. `spectrum_metrics/` is self-contained numpy, and
+  `mcp_scoring.py` guards the import behind `MCP_AVAILABLE`, so the retrieval, rescue and
+  observed-versus-observed paths are unaffected. What cannot be reproduced here, until the package
+  is published, is the evidence-metric blocks alone.
 
 ## Reviewing a port
 

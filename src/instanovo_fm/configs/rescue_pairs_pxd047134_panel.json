@@ -1,0 +1,76 @@
+{
+  "scope": "multi_base",
+  "description": "PXD047134 LCFM within-project spectral rescue panel. Pairs are base/unmodified peptide sequences with M-oxidized query variants and enough raw-file-deduped spectra for the rigorous protocol.",
+  "pairs": [
+    {
+      "pair_id": "leqgqa_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "LEQGQALDDLMPAQK",
+      "modified_sequence": "LEQGQALDDLM[UNIMOD:35]PAQK",
+      "notes": "Original single-base case-study pair; M oxidation on LEQGQALDDLMPAQK."
+    },
+    {
+      "pair_id": "kfvevm_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "KFVEVMTEYNATQSK",
+      "modified_sequence": "KFVEVM[UNIMOD:35]TEYNATQSK",
+      "notes": "Second manually discovered PXD047134 pair; base_raw=101, modified_raw=91 in project-local scan."
+    },
+    {
+      "pair_id": "pxd047134_mvnhek_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "ATLEMVNHEK",
+      "modified_sequence": "ATLEM[UNIMOD:35]VNHEK",
+      "notes": "Quick project-local discovery: base_raw=105, positive_after_50_ref=55, modified_raw=97, negative_raw_lower_bound=204."
+    },
+    {
+      "pair_id": "pxd047134_tnlvtk_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "NQMQLASTLLNYGAETNLVTK",
+      "modified_sequence": "NQM[UNIMOD:35]QLASTLLNYGAETNLVTK",
+      "notes": "Quick project-local discovery: base_raw=100, positive_after_50_ref=50, modified_raw=78, negative_raw_lower_bound=223."
+    },
+    {
+      "pair_id": "pxd047134_elmntk_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "DYQELMNTK",
+      "modified_sequence": "DYQELM[UNIMOD:35]NTK",
+      "notes": "Quick project-local discovery: base_raw=108, positive_after_50_ref=58, modified_raw=66, negative_raw_lower_bound=202."
+    },
+    {
+      "pair_id": "pxd047134_weelvk_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "ADDPSSYMEVVQAANTSGNWEELVK",
+      "modified_sequence": "ADDPSSYM[UNIMOD:35]EVVQAANTSGNWEELVK",
+      "notes": "Quick project-local discovery: base_raw=107, positive_after_50_ref=57, modified_raw=64, negative_raw_lower_bound=214."
+    },
+    {
+      "pair_id": "pxd047134_gtdvak_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "KADVGFAMGLAGTDVAK",
+      "modified_sequence": "KADVGFAM[UNIMOD:35]GLAGTDVAK",
+      "notes": "Quick project-local discovery: base_raw=107, positive_after_50_ref=57, modified_raw=64, negative_raw_lower_bound=201."
+    },
+    {
+      "pair_id": "pxd047134_mdfslr_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "NNMDFSLR",
+      "modified_sequence": "NNM[UNIMOD:35]DFSLR",
+      "notes": "Quick project-local discovery: base_raw=118, positive_after_50_ref=68, modified_raw=57, negative_raw_lower_bound=203."
+    },
+    {
+      "pair_id": "pxd047134_maalek_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "AFVHWYVGEGMEEGEFSEAREDMAALEK",
+      "modified_sequence": "AFVHWYVGEGM[UNIMOD:35]EEGEFSEAREDMAALEK",
+      "notes": "Quick project-local discovery: base_raw=110, positive_after_50_ref=60, modified_raw=56, negative_raw_lower_bound=214."
+    },
+    {
+      "pair_id": "pxd047134_ftntmr_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "KGDVVLVLTGWRPGSGFTNTMR",
+      "modified_sequence": "KGDVVLVLTGWRPGSGFTNTM[UNIMOD:35]R",
+      "notes": "Quick project-local discovery: base_raw=107, positive_after_50_ref=57, modified_raw=54, negative_raw_lower_bound=216."
+    }
+  ]
+}

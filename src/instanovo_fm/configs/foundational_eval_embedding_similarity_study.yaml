@@ -1,0 +1,48 @@
+# Embedding vs sequence similarity study — full validation split, streaming memmap.
+#
+# Local trusted:
+#   uv run python -m instanovo_fm.eval.embedding_sequence_similarity_study \
+#     --config-name foundational_eval_embedding_similarity_study \
+#     study_mode=trusted
+#
+# Local independent:
+#   uv run python -m instanovo_fm.eval.embedding_sequence_similarity_study \
+#     --config-name foundational_eval_embedding_similarity_study \
+#     study_mode=independent
+
+defaults:
+  - foundational
+  - _self_
+
+mlflow_enabled: False
+
+study_mode: trusted
+
+study:
+  peptide_key: peptides
+  pooling: mean_pool
+  sample_seed: 42
+  n_random_pairs: 500_000
+  max_edit_distance_plot: 15
+  k_values: [1, 5, 10, 20]
+  plot_dpi: 160
+  upload_to_s3: true
+  # Memory controls
+  faiss_chunk_size: 8192  # legacy alias; see scan_chunk_size
+  scan_chunk_size: 8192
+  max_same_pairs_eval: 2_000_000
+  plot_reservoir_size: 50_000
+
+evaluation:
+  enabled: True
+  split: valid
+  batch_size: 128
+  device: auto
+  checkpoint_path: "s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
+  output_dir: "instanovo/foundational/eval/embed_eval_results"
+  max_samples: 100_000  # Sample 100K spectra (null = entire validation split)
+  save_embeddings: False
+  force_regenerate_embeddings: False
+  compute_spectrum_confidence: False
+  embedding_pooling:
+    - mean_pool

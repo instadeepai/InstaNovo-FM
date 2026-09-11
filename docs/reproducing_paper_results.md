@@ -72,7 +72,32 @@ zoom regions numerically, and an unpinned numpy can order ties differently.
 The attribution input for `figure_4` is committed under `data/`, because it cannot be regenerated
 without the trained model.
 
-The remaining published panels are produced by scripts that are not part of this repository.
+## Downstream retrieval, rescue and run classification
+
+The database-free identification and run-classification panels come from the evaluation tasks in
+`src/instanovo_fm/eval/embed_eval_tasks/`, driven the same way as any other task:
+
+```bash
+instanovo-fm evaluate \
+    --checkpoint path/to/model_best.ckpt \
+    evaluation.tasks_to_run=[crosssetannotationtransfertask]
+```
+
+The datasets these tasks consume are not raw spectra — they carry anchor and query roles, so they
+are built first, by the `scripts/create_*_dataset.py` builders. `scripts/discover_spectral_rescue_pairs.py`
+selects the query/anchor pairs, and the two `plot_*_publication.py` scripts draw the panels.
+
+Cross-set retrieval runs in two stages on purpose: the evaluator does the retrieval and writes
+`cross_set_topk_candidates.csv`, then `scripts/compute_cross_set_evidence_metrics.py` scores the
+evidence blocks offline from that file. The second stage is where the cost is, so it is resumable
+and kept separate.
+
+> **The evidence-metric blocks cannot be reproduced here yet**
+>
+> Those blocks score a query spectrum against the *theoretical* spectrum of its transferred
+> peptide, and that scoring comes from `proteomics-mcp`, which is unpublished work by its author
+> and is deliberately not included — see [Sanitisation](sanitisation.md#what-is-not-ported).
+> Retrieval, rescue, and the observed-versus-observed metrics are unaffected and run without it.
 
 
 ## Reading the results

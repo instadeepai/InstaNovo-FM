@@ -1,5 +1,5 @@
 # ruff: noqa: T201 - a CLI script: the printed output is the whole point
-"""Kostas preprint figures for confidence-filtering / rescue validation (477-1).
+"""Confidence-filtering and rescue-validation figures (run 477-1).
 
 Produces figures 1–5 incrementally:
   1. Box plot: observed cosine by matched-fragment-ion count (>=3 vs <3)
@@ -9,7 +9,7 @@ Produces figures 1–5 incrementally:
   5. Refined consecutive-ion example spectra (from top_pairs explain output)
 
 Usage:
-    uv run python scripts/downstream/plot_kostas_preprint_figures.py --point 1 \\
+    uv run python scripts/downstream/plot_rescue_validation_figures.py --point 1 \\
         --analysis-table stage2_477_1/confidence_match_analysis/rank1_analysis_table.csv \\
         --output-dir stage2_477_1/kostas_preprint_figures
 """

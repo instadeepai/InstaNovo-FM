@@ -56,7 +56,7 @@ separate.
 ## Figures
 
 `plot_spectral_rescue_publication.py`, `plot_sequence_rescue_publication.py`,
-`plot_kostas_preprint_figures.py`, `plot_crossset_diagnostics.py`, `plot_margin_evidence.py`,
+`plot_rescue_validation_figures.py`, `plot_crossset_diagnostics.py`, `plot_margin_evidence.py`,
 `plot_rescue_projection_comparison.py` and `regenerate_spectral_rescue_plots.py` draw from saved
 artefacts, so they can be re-run without repeating the evaluation.
 

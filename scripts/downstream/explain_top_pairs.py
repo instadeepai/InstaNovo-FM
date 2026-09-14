@@ -26,7 +26,7 @@ not required. Block A (query observed vs library observed) is the direct spectru
 spectrum similarity that the embedding is implicitly matching on.
 
 Usage:
-    uv run python scripts/explain_top_pairs.py \\
+    uv run python scripts/downstream/explain_top_pairs.py \\
         --candidates-csv stage2_477_1/cross_set_topk_candidates.csv \\
         --combined-parquet stage2_477_1/PXD074343_477-1_all.parquet \\
         --output-dir stage2_477_1/top_pairs --top-n 5 --label "PXD074343 477-1"
@@ -94,9 +94,8 @@ def _skip_metric(short_key: str) -> bool:
 
 # Candidate locations for the shared Nature-methods palette (single source of truth).
 _METADATA_COLORS_PATHS = [
-    Path(__file__).resolve().parents[1]
-    / "instanovo/foundational/eval/embed_eval_tasks/metadata_colors.json",
-    Path("/home/hjisaac/Downloads/metadata_colors.json"),
+    Path(__file__).resolve().parents[2] / "config" / "metadata_colors.json",
+    Path(__file__).resolve().parents[2] / "src/instanovo_fm/eval/embed_eval_tasks/metadata_colors.json",
 ]
 
 

@@ -30,6 +30,28 @@ from instanovo.utils.s3 import S3FileHandler
 
 logger = ColorLog(console, __name__).logger
 
+# Offline reformulated spectral-rescue parquet columns (see create_spectral_rescue_reformulated_dataset.py).
+_RESCUE_OFFLINE_METADATA_COLUMNS = (
+    "rescue_role",
+    "rescue_pair_id",
+    "rescue_scope",
+    "rescue_source_shard",
+    "rescue_row_in_shard",
+    "rescue_project_id",
+    "rescue_base_sequence",
+    "rescue_modified_sequence",
+    "rescue_selection_seed",
+    "rescue_sampling_profile",
+)
+
+# Offline cross-set parquet columns (see create_cross_set_annotation_transfer_dataset.py).
+_CROSS_SET_OFFLINE_METADATA_COLUMNS = (
+    "search_tier",
+    "overlap_id",
+    "pair_file",
+    "is_selected_anchor",
+)
+
 
 def _collect_numeric_stats(dicts: list) -> dict:
     """Recursively collect mean/std for all numeric leaves across a list of dicts.
@@ -332,6 +354,16 @@ class EmbeddingEvaluator:
 
         # Add prediction_id column to processor (same as trainer)
         self.data_processor.add_metadata_columns(["prediction_id"])
+
+        rescue_meta_cols = [col for col in _RESCUE_OFFLINE_METADATA_COLUMNS if col in dataset.column_names]
+        if rescue_meta_cols:
+            self.data_processor.add_metadata_columns(rescue_meta_cols)
+            logger.info(f"Registered offline rescue metadata columns: {rescue_meta_cols}")
+
+        cross_set_meta_cols = [col for col in _CROSS_SET_OFFLINE_METADATA_COLUMNS if col in dataset.column_names]
+        if cross_set_meta_cols:
+            self.data_processor.add_metadata_columns(cross_set_meta_cols)
+            logger.info(f"Registered offline cross-set metadata columns: {cross_set_meta_cols}")
 
         # Keep non-tensor metadata (strings, lists with Nones) so that
         # embedding_io.generate() receives frag_type, sequence, search_instrument,

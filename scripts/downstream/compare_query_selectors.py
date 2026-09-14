@@ -17,7 +17,7 @@ Fit = ``q_obs__lib_theo__annotated_intensity_fraction`` (fraction of the query's
 observed intensity explained by the rank-1 transferred peptide's b/y ions).
 
 Usage:
-    uv run python scripts/compare_query_selectors.py \\
+    uv run python scripts/downstream/compare_query_selectors.py \\
         --enriched-csv stage2_477_1/selector_pool_blockB/cross_set_topk_candidates_with_evidence.csv \\
         --output-dir stage2_477_1/plots --label "PXD074343 477-1" --top-k 300
 """

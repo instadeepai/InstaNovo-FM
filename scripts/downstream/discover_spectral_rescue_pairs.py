@@ -6,7 +6,7 @@ Two-step workflow (recommended):
 
   1. Discovery — specify projects, print manifest to stdout, pick pairs manually:
 
-         uv run python scripts/discover_spectral_rescue_pairs.py \\
+         uv run python scripts/downstream/discover_spectral_rescue_pairs.py \\
            --projects PXD047134,PXD010595,PXD000561 \\
            --source_glob '<data-root>/lcfm_splits/*valid*.parquet'
 

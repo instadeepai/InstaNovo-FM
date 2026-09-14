@@ -3,7 +3,7 @@ r"""Build a Kostas-protocol cross-set parquet from paired ACFM/LCFM folders.
 
 File-per-file ACFM−LCFM diff + top-N peptide anchors::
 
-    uv run python scripts/create_cross_set_annotation_transfer_dataset.py \
+    uv run python scripts/downstream/create_cross_set_annotation_transfer_dataset.py \
         --query-dir /data/acfm/PXD074343 \
         --library-dir /data/lcfm/PXD074343 \
         --top-n-peptides 10 \

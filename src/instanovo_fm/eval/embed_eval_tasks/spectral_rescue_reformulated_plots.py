@@ -11,11 +11,22 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import umap
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle, Patch
 from sklearn.metrics import auc, average_precision_score, precision_recall_curve, roc_curve
+
+# seaborn lives in the optional `figures` dependency group, and the task registry
+# swallows ImportError while discovering task modules -- so importing it at module
+# scope silently unregisters `spectralrescuetaskreformulated`, and every rescue
+# config then fails with a misleading "Task not found". The two other seaborn
+# tasks defer it the same way.
+try:
+    import seaborn as sns
+
+    SEABORN_AVAILABLE = True
+except ImportError:  # pragma: no cover - depends on an optional dependency group
+    SEABORN_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +80,8 @@ def _display_sequence(sequence: str, *, max_len: int = 18) -> str:
 
 
 def _set_publication_style() -> None:
-    sns.set_theme(style="ticks")
+    if SEABORN_AVAILABLE:
+        sns.set_theme(style="ticks")
     plt.rcParams.update(
         {
             "font.family": "serif",
@@ -105,7 +117,8 @@ def _set_publication_style() -> None:
 
 
 def _set_neurips_style() -> None:
-    sns.set_theme(style="ticks")
+    if SEABORN_AVAILABLE:
+        sns.set_theme(style="ticks")
     plt.rcParams.update(
         {
             "font.family": "serif",
@@ -548,6 +561,10 @@ def _plot_match_unmatch_distribution(
     plot_dpi: int,
 ) -> Optional[str]:
     if len(match_scores) == 0 or len(unmatch_scores) == 0:
+        return None
+
+    if not SEABORN_AVAILABLE:
+        logger.warning("seaborn is not installed, so the match/unmatch density plot is skipped. Install the 'figures' group to get it.")
         return None
 
     _set_publication_style()

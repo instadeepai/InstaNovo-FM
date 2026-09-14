@@ -20,7 +20,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 
 def load_shared_colors() -> dict[str, str]:
-    path = Path("/home/hjisaac/Downloads/metadata_colors.json")
+    path = Path(__file__).resolve().parents[2] / "config" / "metadata_colors.json"
     if path.is_file():
         payload = json.loads(path.read_text())
         palette = payload.get("palette", [])

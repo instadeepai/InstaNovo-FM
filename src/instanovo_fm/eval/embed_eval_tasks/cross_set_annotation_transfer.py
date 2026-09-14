@@ -838,7 +838,7 @@ class CrossSetAnnotationTransferTask(BaseTask):
         # query assigned to it (rank-1), so "does the query sit on its own color?" is a
         # direct visual check.
         hero_peptides = [pep for pep in dict.fromkeys(query_labels) if pep]
-        cmap = plt.cm.get_cmap("tab10", max(len(hero_peptides), 1))
+        cmap = plt.get_cmap("tab10", max(len(hero_peptides), 1))
         color_map = {pep: cmap(i % 10) for i, pep in enumerate(hero_peptides)}
 
         fig, ax = plt.subplots(figsize=(11, 9))

@@ -23,7 +23,7 @@ blocks A/B/C separately, with:
   - Progress logging with a live ETA.
 
 Usage:
-    uv run python scripts/compute_cross_set_evidence_metrics.py \\
+    uv run python scripts/downstream/compute_cross_set_evidence_metrics.py \\
         --candidates-csv /path/to/cross_set_topk_candidates.csv \\
         --combined-parquet /path/to/PXD074343_kostas_top20.parquet \\
         --output-dir /path/to/crosssetannotationtransfertask \\
@@ -43,7 +43,7 @@ from typing import Any, Dict, Iterable, List, Set, Tuple
 import numpy as np
 import polars as pl
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from instanovo_fm.eval.spectrum_metrics.mcp_scoring import MCP_AVAILABLE  # noqa: E402
 from instanovo_fm.eval.spectrum_metrics.worker import (  # noqa: E402

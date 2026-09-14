@@ -21,6 +21,7 @@ script because it requires the raw embedding matrix.)
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -40,8 +41,13 @@ from instanovo_fm.eval.spectrum_metrics.observed_vs_observed import (
     score_observed_vs_observed,
 )
 
+# Running this file directly puts its own directory on sys.path, not the repository
+# root, so the sibling import below needs the root added first -- as the other
+# script that imports a sibling already does.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 # Reuse the shared publication style / palette / multi-format saver.
-from scripts.explain_top_pairs import (  # noqa: E402
+from scripts.downstream.explain_top_pairs import (  # noqa: E402
     load_shared_colors,
     save_all_formats,
     set_publication_style,
@@ -354,7 +360,7 @@ def plot_hero_umap(
     ax.scatter(lib_xy[:, 0], lib_xy[:, 1], s=18, c=colors["unmatched"], alpha=0.5,
                linewidths=0, zorder=1, label=f"Library spectra (n={n_lib})")
 
-    cmap = plt.cm.get_cmap("tab10", max(n_hero, 1))
+    cmap = plt.get_cmap("tab10", max(n_hero, 1))
     for i, (_r, pep) in enumerate(zip(hero_rows.tolist(), hero_peptides)):
         col = cmap(i % 10)
         # Highlight the transferred peptide's library spectra (its rank-1 anchor + siblings).

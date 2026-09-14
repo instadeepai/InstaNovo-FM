@@ -33,7 +33,7 @@ PAIR_ORDER = [
 
 def load_shared_colors() -> dict[str, str]:
     """Load the shared metadata palette and map it to rescue plot semantics."""
-    path = Path("/home/hjisaac/Downloads/metadata_colors.json")
+    path = Path(__file__).resolve().parents[2] / "config" / "metadata_colors.json"
     if path.is_file():
         payload = json.loads(path.read_text())
         palette = payload.get("palette", [])
@@ -694,7 +694,7 @@ def main() -> None:
         "output_dir": str(out_dir),
         "formats": ["png", "svg", "pdf"],
         "style_source": "rescue_task_handover/scripts/publication.py",
-        "color_source": "/home/hjisaac/Downloads/metadata_colors.json",
+        "color_source": str(Path(__file__).resolve().parents[2] / "config" / "metadata_colors.json"),
         "rescue_color_mapping": load_shared_colors(),
         "note": "Plot titles are encoded in filenames; plot canvases intentionally omit titles.",
         "files": sorted(path.name for path in out_dir.iterdir() if path.is_file()),

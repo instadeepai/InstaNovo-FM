@@ -1430,7 +1430,7 @@ class SpectralRescueTaskReformulated(BaseTask):
             [row["margin"] for row in query_metrics if row["query_role"] == self.modified_query_role],
         ]
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.boxplot(margin_values, labels=labels, patch_artist=True)
+        ax.boxplot(margin_values, tick_labels=labels, patch_artist=True)
         for x_pos, values, color in [(1, margin_values[0], "#4E9AC6"), (2, margin_values[1], "#F5A45D")]:
             ax.scatter(
                 np.full(len(values), x_pos, dtype=float),

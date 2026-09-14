@@ -1,0 +1,114 @@
+{
+  "_meta": {
+    "description": "Single source of truth for metadata colors across all InstaNovoFM notebooks. Nature Methods style: pastel, colorblind-safe (adapted from ColorBrewer Set2 + Wong CB-safe palette).",
+    "neutral_color": "#AED6F1",
+    "neutral_note": "Uniform fill used for categorical fields that should NOT be color-encoded (PTMs, diseases, tissue, cell_type). Same treatment as the PTM figure in notebook 1.",
+    "neutral_fields": ["ptm", "diseases", "tissue", "cell_type"]
+  },
+
+  "palette": [
+    "#4E9AC6",
+    "#6DBF91",
+    "#F5A45D",
+    "#C285C7",
+    "#E87878",
+    "#7CCBC8",
+    "#F5D46A",
+    "#AAAAAA"
+  ],
+
+  "pastel": [
+    "#AED6F1",
+    "#A9DFBF",
+    "#FAD7A0",
+    "#D7BDE2",
+    "#F1948A",
+    "#A2D9CE",
+    "#F9E79F",
+    "#D5D8DC"
+  ],
+
+  "organism": {
+    "H. sapiens":    "#4E9AC6",
+    "M. musculus":   "#6DBF91",
+    "A. thaliana":   "#F5A45D",
+    "R. norvegicus": "#C285C7",
+    "S. cerevisiae": "#E87878",
+    "Z. mays":       "#7CCBC8",
+    "B. subtilis":   "#F5D46A",
+    "Other":         "#AAAAAA"
+  },
+
+  "kingdom": {
+    "Animalia": "#4E9AC6",
+    "Plantae":  "#6DBF91",
+    "Fungi":    "#E87878",
+    "Bacteria": "#F5D46A",
+    "Archaea":  "#C285C7",
+    "Protista": "#7CCBC8",
+    "Other":    "#DEE2E6"
+  },
+
+  "acquisition": {
+    "DDA": "#4E9AC6",
+    "DIA": "#F5A45D"
+  },
+
+  "detector": {
+    "Orbitrap":    "#4E9AC6",
+    "Astral":      "#6DBF91",
+    "TOF":         "#F5A45D",
+    "Orbitrap+IT": "#C285C7",
+    "Triple Quad": "#E87878",
+    "Ion Trap":    "#AAAAAA",
+    "Other":       "#DEE2E6"
+  },
+
+  "fragmentation": {
+    "HCID":    "#5E8DBC",
+    "HCD":     "#E4C961",
+    "CID":     "#70BAA1",
+    "ETD":     "#D48F4C",
+    "Unknown": "#D5D8DC"
+  },
+
+  "instrument": {
+    "Q Exactive":       "#AED6F1",
+    "Orbitrap Fusion":  "#A9DFBF",
+    "TimsTOF":          "#FAD7A0",
+    "Orbitrap Astral":  "#D7BDE2",
+    "Orbitrap (Other)": "#F1948A"
+  },
+
+  "enzyme": {
+    "Trypsin":      "#4E9AC6",
+    "Lysn":         "#6DBF91",
+    "Aspn":         "#F5A45D",
+    "Lysc":         "#C285C7",
+    "Chymotrypsin": "#E87878",
+    "Gluc":         "#F5D46A",
+    "Unspecific":   "#AAAAAA",
+    "Other":        "#DEE2E6"
+  },
+
+  "charge": {
+    "1":     "#AED6F1",
+    "2":     "#4E9AC6",
+    "3":     "#2E75B6",
+    "4":     "#1F4E79",
+    "5+":    "#C285C7",
+    "Other": "#DEE2E6"
+  },
+
+  "tier": {
+    "ACFM": "#D6EAF8",
+    "LCFM": "#AED6F1",
+    "MCFM": "#7FB3D3",
+    "HCFM": "#5499C7"
+  },
+
+  "ptm":       "#AED6F1",
+  "diseases":  "#AED6F1",
+  "tissue":    "#AED6F1",
+  "cell_type": "#AED6F1"
+}

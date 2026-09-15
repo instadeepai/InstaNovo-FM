@@ -37,11 +37,12 @@ been tested on and what hardware each part of the pipeline needs.
 
 > **Want to see it work first?**
 >
-> The [demo](../README.md#demo) runs the published encoder and *de novo* sequencer over one
-> committed spectrum in about 15 seconds once the checkpoints are cached, with no data preparation:
+> The [demo](../README.md#demo) embeds a spectrum, sequences it *de novo* and runs a database-free
+> retrieval search over the spectra committed in `sample_data/` — about 15 seconds on a GPU or 40
+> on a CPU once the checkpoints are cached, with no data preparation:
 >
 > ```bash
-> python scripts/demo.py sample_data/spectra.mgf
+> python scripts/demo.py
 > ```
 >
 > The README records its exact expected output. The rest of this tutorial is the longer path:

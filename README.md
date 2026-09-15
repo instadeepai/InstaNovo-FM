@@ -96,8 +96,10 @@ for pretraining, *de novo* fine-tuning and large embedding or evaluation sweeps.
   checkpoint, 659 MiB per *de novo* checkpoint. A default Linux install also pulls 4.1 GB of NVIDIA
   CUDA wheels transitively via `torch` (8.4 GB of site-packages in total); [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) has a
   CPU-only recipe that avoids them.
-- **Reference machine.** The timings quoted in this README come from a 20-core x86-64 desktop with
-  30 GB RAM, no GPU, running Ubuntu 24.10.
+- **Reference machine.** The timings quoted in this README come from a laptop with a 20-core
+  x86-64 CPU, 30 GB RAM and an NVIDIA GeForce RTX 4070 Laptop GPU (8 GB), running Ubuntu 24.10.
+  Where a timing is CPU-only it says so, and was measured with the GPU hidden via
+  `CUDA_VISIBLE_DEVICES=""`.
 
 ## Reproducing the figures
 
@@ -128,63 +130,82 @@ pulls in. A warm cache, or the CPU-only recipe in
 
 ## Demo
 
-[`sample_data/spectra.mgf`](sample_data/) is one real annotated MS/MS spectrum, committed so the
-software can be demonstrated without downloading a dataset first. [`scripts/demo.py`](scripts/demo.py)
-embeds it with the published encoder and then sequences it *de novo*:
+[`sample_data/`](sample_data/) holds three small MGF files, committed so the software can be
+demonstrated without downloading a dataset first: one spectrum from the manuscript's Fig. 4, a
+270-spectrum reference library, and 20 query spectra. [`scripts/demo.py`](scripts/demo.py) runs the
+three things the paper claims the frozen encoder is good for, each at a scale that fits on a laptop:
 
 ```bash
 pip install instanovo-fm
-python scripts/demo.py sample_data/spectra.mgf
+python scripts/demo.py
 ```
+
+It embeds a spectrum, sequences it *de novo*, and then identifies the 20 queries against the library
+by embedding nearest neighbour alone — no peptide database involved.
 
 ### Expected output
 
 ```
-Loaded 1 spectra from sample_data/spectra.mgf
-Embedding shape: (1, 768)
-Embedding norm:  1.000
-First 5 values:  [0.0106, -0.0046, -0.0186, -0.0113, 0.0131]
-Predicted peptide: IAHYNRK
-Log probability:   -0.420  (confidence 0.657)
+Device: cuda
+
+[1] Embedding fig4_TGVELGKPTHFTVNAK.mgf (TGVELGKPTHFTVNAK)
+    Shape:          (1, 768)
+    Norm:           1.000
+    First 5 values: [-0.0084, 0.0005, -0.0135, -0.0212, -0.0062]
+
+[2] De novo sequencing fig4_TGVELGKPTHFTVNAK.mgf
+    Annotated:  TGVELGKPTHFTVNAK
+    Predicted:  TGVELGKPTHFTVNAK   (match)
+    Log prob:   -0.000  (uncalibrated score 1.000)
+
+[3] Database-free retrieval: 20 queries vs 270-spectrum library
+    Top-1 correct:       11/20 (55%)
+    Mean cosine (hit):   0.992
+    Mean cosine (miss):  0.988
+    OK   query ATETVDNKDIER         -> ATETVDNKDIER         cos 0.992
+    OK   query GSIAGVR              -> GSIAGVR              cos 0.992
+    MISS query GVAMNPVDHPHGGGNHQHIGK -> AIVHHYEEC(+57.02)AERVK cos 0.989
 ```
 
-The run is deterministic: the same five values and the same peptide come back every time on the same
-checkpoint. Two things are worth reading carefully.
+The run is deterministic, and CPU and GPU agree to every digit printed — only the `Device:` line
+differs. Three things in that output are worth reading carefully.
 
 - **The embedding norm is 1.000 by construction.** Mean-pooled embeddings are L2-normalized so that
   a dot product between two of them is a cosine similarity. It is a normalization convention, not a
   measure of spectral quality or identification confidence.
-- **The prediction is not a match.** The spectrum is annotated `IAHYNKR`; the model returns
-  `IAHYNRK`, the same residues with the final two transposed. That is the expected output here, and
-  it is a fair illustration of what a single *de novo* call is worth: C-terminal K/R order is poorly
-  constrained by one spectrum's fragment ions, and the 0.657 figure is an uncalibrated model score,
-  not a probability of correctness. Applying FDR control — the Winnow step in
-  [the tutorial notebook](notebooks/getting_started_with_instanovo_fm.ipynb) — is what turns scores
-  like this into usable confidence.
+- **A score of 1.000 is not a 100% chance of being right.** The *de novo* call is correct here, but
+  the beam-search log probability is an uncalibrated model score. Turning scores like it into
+  something you can threshold needs FDR control — the Winnow step in
+  [the tutorial notebook](notebooks/getting_started_with_instanovo_fm.ipynb).
+- **55% top-1 is the honest number, and the misses are the interesting part.** Every query's peptide
+  *is* in the library, so a perfect search would score 20/20. Note how little separates a hit from a
+  miss: 0.992 mean cosine against 0.988. Nearest-neighbour similarity alone is a candidate
+  generator, not an identification — which is exactly why the paper's retrieval and rescue pipeline
+  validates candidates with precursor mass, raw-spectrum similarity and fragment-ion evidence before
+  transferring a label. This demo deliberately stops short of that step so the gap is visible.
 
 ### Expected run time
 
-On the reference machine (20-core CPU, **no GPU**):
+Measured on the reference laptop, with the checkpoints already cached:
 
-| | |
+| | cached run |
 | --- | --- |
-| First run | **~1 min 45 s**, measured at 1:45 — dominated by downloading the two checkpoints (342 MiB encoder, 659 MiB *de novo*) into `~/.cache/instanovo-fm/` |
-| Subsequent runs | **~15 seconds**, measured at 14.8 s, with the checkpoints cached |
+| GPU (RTX 4070 Laptop) | **15 seconds** |
+| CPU only | **40 seconds** |
 
-A GPU is not needed and makes little difference at this size; it matters for batches of thousands of
-spectra, not one.
+The **first** run additionally downloads the two checkpoints — 342 MiB encoder, 659 MiB *de novo* —
+into `~/.cache/instanovo-fm/`. That part is bound by your connection rather than by the machine: a
+cold-cache run on the reference laptop took 44 seconds in total, but on a slower link the download
+alone can take a few minutes. Budget a couple of minutes the first time and seconds thereafter.
+
+A GPU is not required at this size; it matters for batches of thousands of spectra, not for 291.
 
 ### Running it on your own data
 
-`scripts/demo.py` takes any input `SpectrumDataFrame` accepts — MGF, mzML, mzXML, CSV or parquet:
-
-```bash
-python scripts/demo.py ./my_spectra/run01.mzML
-```
-
-For anything larger than a handful of spectra, use the batch entry points under
-[Quick start](#quick-start) rather than this script, and see
-[Getting started](docs/getting_started.md) for converting raw files and training on your own spectra.
+`scripts/demo.py` takes a directory holding files named as `sample_data/` does. To run the model
+over your own spectra instead, use the batch entry points under [Quick start](#quick-start) — they
+accept any input `SpectrumDataFrame` reads, including MGF, mzML, mzXML, CSV and parquet — and see
+[Getting started](docs/getting_started.md) for converting raw files and training on your own data.
 
 ## Quick start
 
@@ -358,10 +379,10 @@ InstaNovo-FM/
 │   ├── splitting/        # tier construction, peptide-disjoint splits, shuffling
 │   ├── verification/     # metadata, mass and normalisation checks
 │   ├── release/          # HuggingFace upload, dataset card, audit scripts
-│   └── demo.py           # embed one spectrum and sequence it -- see Demo above
+│   └── demo.py           # embed, sequence and retrieve -- see Demo above
 ├── notebooks/            # figure-reproduction notebooks (figure_1, figure_3, figure_4)
 ├── data/                 # committed inputs for those notebooks
-├── sample_data/          # one real spectrum, so the demo runs offline
+├── sample_data/          # three small MGFs, so the demo runs offline
 ├── assets/               # accession list, modification dictionaries, residue masses
 ├── config/               # plotting configuration
 ├── docker/               # baseline-model images (Casanovo, XuanjiNovo)

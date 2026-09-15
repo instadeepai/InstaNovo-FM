@@ -1,0 +1,20 @@
+{
+  "scope": "multi_base",
+  "description": "Example multi-base rescue panel. Replace or extend pairs before running; each pair needs sufficient spectra in the source shards.",
+  "pairs": [
+    {
+      "pair_id": "leqgqa_mox",
+      "project_id": "PXD047134",
+      "base_sequence": "LEQGQALDDLMPAQK",
+      "modified_sequence": "LEQGQALDDLM[UNIMOD:35]PAQK",
+      "notes": "M oxidation on LEQGQALDDLMPAQK"
+    },
+    {
+      "pair_id": "leqgqa_second_pair",
+      "project_id": "PXD047134",
+      "base_sequence": "REPLACE_BASE_SEQUENCE",
+      "modified_sequence": "REPLACE_MODIFIED_SEQUENCE",
+      "notes": "Replace with a second curated pair that has enough spectra in your shards"
+    }
+  ]
+}

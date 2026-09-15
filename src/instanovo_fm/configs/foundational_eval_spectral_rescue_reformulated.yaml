@@ -1,0 +1,51 @@
+# Aichor config for the reformulated two-query spectral rescue evaluation.
+
+defaults:
+  - foundational
+  - _self_
+
+mlflow_enabled: False
+
+evaluation:
+  enabled: True
+  split: valid
+  batch_size: 128
+  device: auto
+  checkpoint_path: "s3://<outputs-bucket>/output/<run-id>/checkpoints/instanovo-foundational-base/model_best.ckpt"
+  output_dir: "instanovo/foundational/eval/embed_eval_results"
+  max_samples: 200_000
+  save_embeddings: False
+  force_regenerate_embeddings: False
+  compute_spectrum_confidence: True
+
+  tasks_to_run:
+    - spectralrescuetaskreformulated
+
+  task_configs:
+    spectralrescuetaskreformulated:
+      # Scope: single_base (one peptide pair, case study) | multi_base (panel, see rescue_pairs_path)
+      scope: single_base
+      project_id: PXD047134
+      project_key: search_project
+      usi_key: usi
+      role_key: rescue_role
+      reference_query_role: reference_query
+      modified_query_role: modified_query
+      positive_library_role: positive_library
+      negative_library_role: negative_library
+      sequence_key: peptides
+      sequence_fallback_keys: [sequence]
+      unmodified_sequence_key: unmodified_peptide
+      base_sequence: LEQGQALDDLMPAQK
+      rescue_sequence: LEQGQALDDLM[UNIMOD:35]PAQK
+      k_values: [1, 5, 10, 20, 50, 100]
+      num_reference_queries: 10
+      num_modified_queries: 10
+      max_base_positives: 20
+      max_negatives: 200
+      min_negative_clean_edit_distance: 5
+      sample_seed: 42
+      save_artifacts: true
+      save_plots: true
+      plot_dpi: 160
+      top_n_ranked: 200

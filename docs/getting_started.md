@@ -30,6 +30,24 @@ Install the package, as in the [Installation section of the README](../README.md
 pip install instanovo-fm
 ```
 
+Expect this to take about **10 minutes** on a normal desktop with a cold `pip` cache — almost all of
+it downloading the CUDA libraries `torch` pulls in. The
+[System requirements](../README.md#system-requirements) section lists the operating systems this has
+been tested on and what hardware each part of the pipeline needs.
+
+> **Want to see it work first?**
+>
+> The [demo](../README.md#demo) embeds a spectrum, sequences it *de novo* and runs a database-free
+> retrieval search over the spectra committed in `sample_data/` — about 15 seconds on a GPU or 40
+> on a CPU once the checkpoints are cached, with no data preparation:
+>
+> ```bash
+> python scripts/demo.py
+> ```
+>
+> The README records its exact expected output. The rest of this tutorial is the longer path:
+> your own spectra, and a model trained on them.
+
 Then check the CLI is present:
 
 ```bash

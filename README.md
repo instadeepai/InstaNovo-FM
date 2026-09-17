@@ -52,6 +52,55 @@ model for proteomics*, bioRxiv, 3 September 2026.
 | Reconstruction objective | Hierarchical classification over a 0.2 Da $m/z$ grid (group + offset) |
 | Spectrum embedding | Mean-pooled final-layer peak-token hidden states |
 
+## System requirements
+
+### Software dependencies
+
+Every dependency is pinned in [`pyproject.toml`](pyproject.toml), locked in [`uv.lock`](uv.lock) and
+listed with its licence in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). The pins are the
+versions the manuscript's results were produced with. The ones that most affect a reinstall:
+
+| dependency | version |
+| --- | --- |
+| Python | 3.10–3.13 |
+| `instanovo` | 1.2.2 (exact) |
+| `torch` | ≥2.5,<2.9 on Linux and Windows; ≥2.5,<2.8 on macOS |
+| `numpy` | 2.2.6 (exact) |
+| `pyarrow` | 22.0.0 (exact) |
+| `typer` | 0.27.2 (exact) |
+| `polars` | ≥1.12.0 |
+| `scikit-learn` | ≥1.5.2 |
+
+### Operating systems
+
+| platform | status |
+| --- | --- |
+| Ubuntu 24.04 LTS (GitHub Actions `ubuntu-latest`), Python 3.11 | tested on every push — lint, type-check and the full test suite, see [CI](.github/workflows/ci.yml) |
+| Ubuntu 24.10, Python 3.11 | used for development and for the timings quoted below |
+| macOS, Windows | the dependency pins carry platform-specific `torch` ranges so an install resolves, but neither is covered by CI and neither produced any published result |
+
+### Hardware
+
+No non-standard hardware is required to install the package, run the [demo](#demo), or regenerate
+the paper figures — all of those run on an ordinary desktop CPU. A CUDA GPU is required in practice
+for pretraining, *de novo* fine-tuning and large embedding or evaluation sweeps.
+
+- **GPU.** Optional for inference on modest inputs, effectively required for training. The published
+  model was trained on NVIDIA H100 nodes under 🤗 Accelerate — multi-GPU, fp16 mixed precision,
+  batch size 1024 — per [`configs/foundational.yaml`](src/instanovo_fm/configs/foundational.yaml)
+  and [`configs/accelerate/aichor.yaml`](src/instanovo_fm/configs/accelerate/aichor.yaml).
+- **Linear probes.** These run on GPU through cuML and fall back to scikit-learn on CPU. The two
+  backends do not give comparable scores, so every result records which it used as `config.backend`
+  — see [GPU-accelerated linear probes](docs/gpu-probes.md).
+- **Disk.** Checkpoints download on demand into `~/.cache/instanovo-fm/`: 342 MiB per foundation
+  checkpoint, 659 MiB per *de novo* checkpoint. A default Linux install also pulls 4.1 GB of NVIDIA
+  CUDA wheels transitively via `torch` (8.4 GB of site-packages in total); [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) has a
+  CPU-only recipe that avoids them.
+- **Reference machine.** The timings quoted in this README come from a laptop with a 20-core
+  x86-64 CPU, 30 GB RAM and an NVIDIA GeForce RTX 4070 Laptop GPU (8 GB), running Ubuntu 24.10.
+  Where a timing is CPU-only it says so, and was measured with the GPU hidden via
+  `CUDA_VISIBLE_DEVICES=""`.
+
 ## Reproducing the figures
 
 The three notebooks in `notebooks/` regenerate the paper figures from the committed
@@ -72,6 +121,91 @@ pip install instanovo-fm                # model, dataset pipeline and evaluation
 pip install "instanovo-fm[interpret]"   # adds UMAP visualization
 pip install "instanovo-fm[clustering]"  # adds the EvoC clustering eval task
 ```
+
+**Typical install time:** about **10 minutes** on the reference machine — a cold `pip` cache on a
+normal desktop over a home connection, measured at 10 min 11 s. Nearly all of that is download, not
+compilation: no wheel is built from source, and the bulk is the ~4 GB of CUDA libraries `torch`
+pulls in. A warm cache, or the CPU-only recipe in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), is substantially faster.
+
+## Demo
+
+[`sample_data/`](sample_data/) holds three small MGF files, committed so the software can be
+demonstrated without downloading a dataset first: one spectrum from the manuscript's Fig. 4, a
+270-spectrum reference library, and 20 query spectra. [`scripts/demo.py`](scripts/demo.py) runs the
+three things the paper claims the frozen encoder is good for, each at a scale that fits on a laptop:
+
+```bash
+pip install instanovo-fm
+python scripts/demo.py
+```
+
+It embeds a spectrum, sequences it *de novo*, and then identifies the 20 queries against the library
+by embedding nearest neighbour alone — no peptide database involved.
+
+### Expected output
+
+```
+Device: cuda
+
+[1] Embedding fig4_TGVELGKPTHFTVNAK.mgf (TGVELGKPTHFTVNAK)
+    Shape:          (1, 768)
+    Norm:           1.000
+    First 5 values: [-0.0084, 0.0005, -0.0135, -0.0212, -0.0062]
+
+[2] De novo sequencing fig4_TGVELGKPTHFTVNAK.mgf
+    Annotated:  TGVELGKPTHFTVNAK
+    Predicted:  TGVELGKPTHFTVNAK   (match)
+    Log prob:   -0.000  (uncalibrated score 1.000)
+
+[3] Database-free retrieval: 20 queries vs 270-spectrum library
+    Top-1 correct:       11/20 (55%)
+    Mean cosine (hit):   0.992
+    Mean cosine (miss):  0.988
+    OK   query ATETVDNKDIER         -> ATETVDNKDIER         cos 0.992
+    OK   query GSIAGVR              -> GSIAGVR              cos 0.992
+    MISS query GVAMNPVDHPHGGGNHQHIGK -> AIVHHYEEC(+57.02)AERVK cos 0.989
+```
+
+The run is deterministic, and CPU and GPU agree to every digit printed — only the `Device:` line
+differs. Three things in that output are worth reading carefully.
+
+- **The embedding norm is 1.000 by construction.** Mean-pooled embeddings are L2-normalized so that
+  a dot product between two of them is a cosine similarity. It is a normalization convention, not a
+  measure of spectral quality or identification confidence.
+- **A score of 1.000 is not a 100% chance of being right.** The *de novo* call is correct here, but
+  the beam-search log probability is an uncalibrated model score. Turning scores like it into
+  something you can threshold needs FDR control — the Winnow step in
+  [the tutorial notebook](notebooks/getting_started_with_instanovo_fm.ipynb).
+- **55% top-1 is the honest number, and the misses are the interesting part.** Every query's peptide
+  *is* in the library, so a perfect search would score 20/20. Note how little separates a hit from a
+  miss: 0.992 mean cosine against 0.988. Nearest-neighbour similarity alone is a candidate
+  generator, not an identification — which is exactly why the paper's retrieval and rescue pipeline
+  validates candidates with precursor mass, raw-spectrum similarity and fragment-ion evidence before
+  transferring a label. This demo deliberately stops short of that step so the gap is visible.
+
+### Expected run time
+
+Measured on the reference laptop, with the checkpoints already cached:
+
+| | cached run |
+| --- | --- |
+| GPU (RTX 4070 Laptop) | **15 seconds** |
+| CPU only | **40 seconds** |
+
+The **first** run additionally downloads the two checkpoints — 342 MiB encoder, 659 MiB *de novo* —
+into `~/.cache/instanovo-fm/`. That part is bound by your connection rather than by the machine: a
+cold-cache run on the reference laptop took 44 seconds in total, but on a slower link the download
+alone can take a few minutes. Budget a couple of minutes the first time and seconds thereafter.
+
+A GPU is not required at this size; it matters for batches of thousands of spectra, not for 291.
+
+### Running it on your own data
+
+`scripts/demo.py` takes a directory holding files named as `sample_data/` does. To run the model
+over your own spectra instead, use the batch entry points under [Quick start](#quick-start) — they
+accept any input `SpectrumDataFrame` reads, including MGF, mzML, mzXML, CSV and parquet — and see
+[Getting started](docs/getting_started.md) for converting raw files and training on your own data.
 
 ## Quick start
 
@@ -244,9 +378,11 @@ InstaNovo-FM/
 │   ├── preprocessing/    # raw-file conversion, modification labelling, parquet IO
 │   ├── splitting/        # tier construction, peptide-disjoint splits, shuffling
 │   ├── verification/     # metadata, mass and normalisation checks
-│   └── release/          # HuggingFace upload, dataset card, audit scripts
+│   ├── release/          # HuggingFace upload, dataset card, audit scripts
+│   └── demo.py           # embed, sequence and retrieve -- see Demo above
 ├── notebooks/            # figure-reproduction notebooks (figure_1, figure_3, figure_4)
 ├── data/                 # committed inputs for those notebooks
+├── sample_data/          # three small MGFs, so the demo runs offline
 ├── assets/               # accession list, modification dictionaries, residue masses
 ├── config/               # plotting configuration
 ├── docker/               # baseline-model images (Casanovo, XuanjiNovo)

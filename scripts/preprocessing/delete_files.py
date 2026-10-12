@@ -32,6 +32,12 @@ app = typer.Typer(
 )
 
 
+def expansion_targets(file_path: str) -> list[str]:
+    """Expand a list entry to the IPC and Parquet paths a real delete would unlink."""
+    base_path = file_path.rsplit(".", 1)[0]
+    return [base_path + ".ipc", base_path + ".parquet"]
+
+
 def delete_files_from_list(
     file_list_path: str, error_log_path: str, dry_run: bool = False
 ) -> None:
@@ -50,38 +56,39 @@ def delete_files_from_list(
         raise typer.Exit(1)
 
     with open(file_list_path, "r") as f:
-        files_to_delete = [line.strip() for line in f.readlines()]
+        files_to_delete = [line.strip() for line in f.readlines() if line.strip()]
+
+    expanded = [
+        target
+        for file_path in files_to_delete
+        for target in expansion_targets(file_path)
+    ]
 
     if dry_run:
         logger.info("DRY RUN - The following files would be deleted:")
-        for file_path in files_to_delete:
+        for file_path in expanded:
             logger.info(f"  {file_path}")
-        logger.info(f"Total: {len(files_to_delete)} files")
+        logger.info(f"Total: {len(expanded)} files")
         return
 
     error_log = Path(error_log_path)
     error_log.parent.mkdir(parents=True, exist_ok=True)
 
     with open(error_log, "a") as error_log_file:
-        for file_path in files_to_delete:
-            base_path = file_path.rsplit(".", 1)[0]
-            ipc_file = base_path + ".ipc"
-            parquet_file = base_path + ".parquet"
-
-            for file in [ipc_file, parquet_file]:
-                file_path_obj = Path(file)
-                if file_path_obj.exists():
-                    try:
-                        file_path_obj.unlink()
-                        logger.info(f"Deleted file: {file}")
-                    except Exception as e:
-                        error_message = f"Error deleting file {file}: {e}\n"
-                        logger.error(error_message.strip())
-                        error_log_file.write(error_message)
-                else:
-                    warning_message = f"File not found, skipping: {file}\n"
-                    logger.warning(warning_message.strip())
-                    error_log_file.write(warning_message)
+        for file in expanded:
+            file_path_obj = Path(file)
+            if file_path_obj.exists():
+                try:
+                    file_path_obj.unlink()
+                    logger.info(f"Deleted file: {file}")
+                except Exception as e:
+                    error_message = f"Error deleting file {file}: {e}\n"
+                    logger.error(error_message.strip())
+                    error_log_file.write(error_message)
+            else:
+                warning_message = f"File not found, skipping: {file}\n"
+                logger.warning(warning_message.strip())
+                error_log_file.write(warning_message)
 
 
 @app.command()

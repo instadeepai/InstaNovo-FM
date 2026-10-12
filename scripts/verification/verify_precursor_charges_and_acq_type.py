@@ -41,7 +41,7 @@ import typer
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_SEARCH_DATA
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import get_storage_options, search_data_lookup_key
 
 app = typer.Typer(
     help="Verify precursor charges against acquisition type",
@@ -229,72 +229,6 @@ def find_data_files_in_folder(
         return data_files
 
 
-def _find_aws_dir() -> str:
-    """Prefer a checkout ``.aws`` directory when present, otherwise the user home config."""
-    repo_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    aws_dir = os.path.join(repo_root, ".aws")
-    if os.path.isdir(aws_dir):
-        return aws_dir
-    return os.path.expanduser("~/.aws")
-
-
-def _read_aws_credentials(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Load access keys into Polars storage options for S3 reads."""
-    import configparser
-
-    creds_file = os.path.join(aws_dir, "credentials")
-    if not os.path.exists(creds_file):
-        return
-
-    creds = configparser.ConfigParser()
-    creds.read(creds_file)
-    if profile not in creds:
-        return
-
-    if "aws_access_key_id" in creds[profile]:
-        storage_opts["aws_access_key_id"] = creds[profile]["aws_access_key_id"]
-    if "aws_secret_access_key" in creds[profile]:
-        storage_opts["aws_secret_access_key"] = creds[profile]["aws_secret_access_key"]
-
-
-def _read_aws_config(aws_dir: str, profile: str, storage_opts: dict) -> None:
-    """Load region into Polars storage options for S3 reads."""
-    import configparser
-
-    config_file = os.path.join(aws_dir, "config")
-    if not os.path.exists(config_file):
-        return
-
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    profile_section = f"profile {profile}"
-    if profile_section in config and "region" in config[profile_section]:
-        storage_opts["aws_region"] = config[profile_section]["region"]
-
-
-def get_storage_options(aws_profile: Optional[str] = None) -> Optional[dict]:
-    """Build Polars S3 storage options from a named AWS profile.
-
-    Args:
-        aws_profile: Profile to read, or None for local files.
-
-    Returns:
-        Storage options dict, or None when unused or empty.
-    """
-    if not aws_profile:
-        return None
-
-    aws_dir = _find_aws_dir()
-    storage_opts: dict = {}
-
-    _read_aws_credentials(aws_dir, aws_profile, storage_opts)
-    _read_aws_config(aws_dir, aws_profile, storage_opts)
-
-    return storage_opts if storage_opts else None
-
-
 def _read_file_lazy(
     file_path: str, storage_options: Optional[dict] = None
 ) -> pl.LazyFrame:
@@ -417,7 +351,7 @@ def load_aquisitions_from_search_data(
         .unique()
     )
 
-    logger.info(f"Found {len(dda_projects)} DIA files in search data")
+    logger.info(f"Found {len(dda_projects)} DDA files in search data")
 
     check_conflicting_acquistions(dia_df=dia_projects, dda_df=dda_projects)
 
@@ -433,6 +367,40 @@ class FilePrecursorChargeErrors:
     error_type: str
     num_error_rows: int
     total_rows: int
+
+
+FILE_PRECURSOR_CHARGE_ERROR_SCHEMA: dict[str, pl.DataType] = {
+    "filename": pl.String,
+    "project": pl.String,
+    "error_type": pl.String,
+    "num_error_rows": pl.Int64,
+    "total_rows": pl.Int64,
+}
+
+
+def errors_to_dataframe(
+    errors: List[FilePrecursorChargeErrors],
+) -> pl.DataFrame:
+    """Keep empty DIA/DDA sides schema-compatible for concat and CSV writes.
+
+    ``pl.DataFrame([])`` has no columns, so concatenating with a non-empty
+    sibling fails when only one acquisition type has issues.
+    """
+    if not errors:
+        return pl.DataFrame(schema=FILE_PRECURSOR_CHARGE_ERROR_SCHEMA)
+    return pl.DataFrame(
+        [
+            {
+                "filename": e.filename,
+                "project": e.project,
+                "error_type": e.error_type,
+                "num_error_rows": e.num_error_rows,
+                "total_rows": e.total_rows,
+            }
+            for e in errors
+        ],
+        schema=FILE_PRECURSOR_CHARGE_ERROR_SCHEMA,
+    )
 
 
 def _check_dda_file_precursor_charges(
@@ -720,8 +688,8 @@ def analyze_precursor_charges(
                 )
             )
 
-    incorrect_dia_df = pl.DataFrame(incorrect_dia_files)
-    incorrect_dda_df = pl.DataFrame(incorrect_dda_files)
+    incorrect_dia_df = errors_to_dataframe(incorrect_dia_files)
+    incorrect_dda_df = errors_to_dataframe(incorrect_dda_files)
 
     project_level_summary = check_if_all_files_in_project_have_errors(
         data_files, incorrect_dia_df, incorrect_dda_df, search_data_files

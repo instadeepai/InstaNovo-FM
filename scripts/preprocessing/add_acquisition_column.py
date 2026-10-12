@@ -23,7 +23,11 @@ from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
 from scripts.paths import DEFAULT_SEARCH_DATA
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import (
+    atomic_write_parquet,
+    get_storage_options,
+    search_data_lookup_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,31 +245,45 @@ def _process_data_file_with_acquisition(
     acquisition: str,
     dry_run: bool,
     verbose: bool,
+    storage_options: Optional[dict] = None,
 ) -> Literal["updated", "already_has_column", "error"]:
     """Keep per-file failures from aborting acquisition enrichment for the dataset."""
     try:
-        df = pl.read_parquet(file_path)
+        df = pl.read_parquet(file_path, storage_options=storage_options)
 
         if "acquisition" in df.columns:
-            if verbose:
-                existing_value = df["acquisition"][0] if len(df) > 0 else None
-                logger.debug(
-                    f"File {project}/{filename} already has acquisition column "
-                    f"(value: {existing_value})"
-                )
-            return "already_has_column"
+            existing_values = (
+                df["acquisition"].drop_nulls().unique().to_list() if len(df) > 0 else []
+            )
+            if existing_values == [acquisition] or (
+                len(existing_values) == 0 and len(df) == 0
+            ):
+                if verbose:
+                    existing_value = existing_values[0] if existing_values else None
+                    logger.debug(
+                        f"File {project}/{filename} already has acquisition column "
+                        f"(value: {existing_value})"
+                    )
+                return "already_has_column"
+
+            logger.warning(
+                f"File {project}/{filename} acquisition mismatch "
+                f"(existing={existing_values!r}, search_data={acquisition!r}); overwriting"
+            )
 
         df = df.with_columns(pl.lit(acquisition).alias("acquisition"))
 
         if dry_run:
             if verbose:
                 logger.debug(
-                    f"[DRY RUN] Would add acquisition={acquisition} to {project}/{filename}"
+                    f"[DRY RUN] Would set acquisition={acquisition} on {project}/{filename}"
                 )
         else:
-            df.write_parquet(file_path)
+            atomic_write_parquet(df, file_path, storage_options=storage_options)
             if verbose:
-                logger.debug(f"Added acquisition={acquisition} to {project}/{filename}")
+                logger.debug(
+                    f"Set acquisition={acquisition} on {project}/{filename}"
+                )
 
         return "updated"
 
@@ -290,8 +308,15 @@ def add_acquisition_column(
         dry_run: Whether to preview without modifying files.
         verbose: Whether to print per-file details.
     """
+    storage_options = None
     if is_s3_path(input_dir):
         setup_aws_credentials(aws_profile)
+        storage_options = get_storage_options(aws_profile)
+        if not storage_options:
+            raise ValueError(
+                "S3 input requires --aws-profile with aws_access_key_id, "
+                "aws_secret_access_key, and aws_region in the AWS config"
+            )
 
     data_files = find_data_files_in_folder(input_dir, aws_profile)
     logger.info(f"Found {len(data_files)} data files to process")
@@ -321,7 +346,13 @@ def add_acquisition_column(
             continue
 
         outcome = _process_data_file_with_acquisition(
-            file_path, project, filename, acquisition, dry_run, verbose
+            file_path,
+            project,
+            filename,
+            acquisition,
+            dry_run,
+            verbose,
+            storage_options=storage_options,
         )
         if outcome == "updated":
             updated_count += 1

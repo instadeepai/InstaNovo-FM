@@ -110,10 +110,11 @@ def parse_files_to_delete(input_file: str, target_folder: str) -> list:
             current_file = line.split("File: ")[1]
         elif line.startswith("-"):
             folder = line.split("- ")[1]
-            if target_folder in folder and current_file:
-                files_to_delete.append(
-                    os.path.join(folder, current_file) + ".mzML.ipc"
-                )  # TODO: patch this suffix addition better
+            if folder == target_folder and current_file:
+                for suffix in (".mzML.ipc", ".ipc"):
+                    candidate = os.path.join(folder, current_file) + suffix
+                    if os.path.exists(candidate):
+                        files_to_delete.append(candidate)
     return files_to_delete
 
 

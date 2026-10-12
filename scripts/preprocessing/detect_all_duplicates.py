@@ -22,6 +22,7 @@ from typing import Annotated, Dict, List, Optional
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -33,36 +34,46 @@ app = typer.Typer(
 
 
 def find_duplicate_files(
-    source_dir: str, output_file: str = "duplicate_files.txt"
+    source_dir: str,
+    output_file: str = "duplicate_files.txt",
+    extensions: Optional[List[str]] = None,
 ) -> None:
     """Create the candidate report needed for safe duplicate classification.
 
-    Files sharing a basename across ``.ipc`` and ``.mzML.ipc`` variants are
-    treated as candidates.
+    Files sharing a basename across configured extensions are treated as
+    candidates (default ``.ipc`` / ``.mzML.ipc``).
 
     Args:
         source_dir: Directory tree to inspect.
         output_file: Destination for grouped duplicate paths.
+        extensions: Filename suffixes to include.
     """
-    file_dict = group_files_by_base_name(source_dir)
+    file_dict = group_files_by_base_name(source_dir, extensions=extensions)
     duplicates = identify_duplicates(file_dict)
     save_duplicates(output_file, duplicates)
 
 
-def group_files_by_base_name(source_dir: str) -> Dict[str, List[str]]:
+def group_files_by_base_name(
+    source_dir: str,
+    extensions: Optional[List[str]] = None,
+) -> Dict[str, List[str]]:
     """Preserve every candidate path so duplicate groups can be classified later.
 
     Args:
-        source_dir: Directory tree containing IPC variants.
+        source_dir: Directory tree containing candidate files.
+        extensions: Filename suffixes to include; defaults to ``.ipc`` / ``.mzML.ipc``.
 
     Returns:
         Mapping from experiment basename to matching paths.
     """
+    if extensions is None:
+        extensions = [".ipc", ".mzML.ipc"]
+
     file_dict: Dict[str, List[str]] = {}
     for root, _, files in os.walk(source_dir):
         for file in files:
-            if file.endswith(".ipc") or file.endswith(".mzML.ipc"):
-                base_name = file.split(".")[0]
+            if any(file.endswith(ext) for ext in extensions):
+                base_name = strip_known_data_suffix(file)
                 if base_name not in file_dict:
                     file_dict[base_name] = []
                 file_dict[base_name].append(os.path.join(root, file))
@@ -120,7 +131,7 @@ def main(
         typer.Option(
             "--extensions",
             "-e",
-            help="File extensions retained for CLI compatibility",
+            help="File extensions to include (default: .ipc .mzML.ipc)",
         ),
     ] = None,
     verbose: Annotated[
@@ -152,7 +163,7 @@ def main(
     all_duplicates: List[List[str]] = []
     for directory in valid_dirs:
         logger.debug(f"Searching for duplicates in: {directory}")
-        file_dict = group_files_by_base_name(str(directory))
+        file_dict = group_files_by_base_name(str(directory), extensions=extensions)
         all_duplicates.extend(identify_duplicates(file_dict))
 
     save_duplicates(str(output_file), all_duplicates)

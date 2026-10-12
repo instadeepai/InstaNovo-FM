@@ -28,7 +28,7 @@ from scripts.logging_setup import configure_script_logging
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
-    help="Find empty or small files in local directories",
+    help="Find empty IPC files in local directories",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -65,10 +65,9 @@ def check_if_empty(file_path: str, flagged_files: list[str]) -> list[str]:
     return flagged_files
 
 
-def flag_small_files_in_dir(
+def flag_empty_files_in_dir(
     source_dir: str,
     file_pattern: str = "**/*.ipc",
-    min_size_bytes: int = 0,
     verbose: bool = False,
 ) -> list[str]:
     """Scan one directory and return paths of empty IPC files.
@@ -76,7 +75,6 @@ def flag_small_files_in_dir(
     Args:
         source_dir: Directory tree containing IPC files.
         file_pattern: Glob selecting files to inspect.
-        min_size_bytes: Requested size threshold retained for CLI compatibility.
         verbose: Whether to print scan details.
 
     Returns:
@@ -88,7 +86,6 @@ def flag_small_files_in_dir(
 
     logger.debug(f"Searching for files in: {source_dir}")
     logger.debug(f"File pattern: {file_pattern}")
-    logger.debug(f"Minimum size: {min_size_bytes} bytes")
 
     matched_files = find_files(input_dir=source_dir, file_pattern=file_pattern)
 
@@ -128,16 +125,12 @@ def main(
         str,
         typer.Option("--pattern", help="File pattern to match"),
     ] = "**/*.ipc",
-    min_size: Annotated[
-        int,
-        typer.Option("--min-size", help="Minimum file size in bytes (CLI compatibility)"),
-    ] = 0,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose output"),
     ] = False,
 ) -> None:
-    """Report unusable IPC files before conversion."""
+    """Report empty IPC files before conversion."""
     configure_script_logging(verbose=verbose)
 
     logger.debug(f"Output file: {output_file}")
@@ -149,10 +142,9 @@ def main(
             continue
         logger.info(f"Checking empty files in: {directory}")
         all_flagged.extend(
-            flag_small_files_in_dir(
+            flag_empty_files_in_dir(
                 source_dir=str(directory),
                 file_pattern=pattern,
-                min_size_bytes=min_size,
                 verbose=verbose,
             )
         )

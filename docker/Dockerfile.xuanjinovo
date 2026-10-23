@@ -13,13 +13,17 @@ RUN git init /app && cd /app \
  && git fetch --depth 1 origin "$MASSNET_COMMIT" \
  && git checkout --detach FETCH_HEAD
 
+# pip < 26.2.2 and certifi < 2026.10.19 trust the compromised emSign CA intermediates. The wheel is
+# pinned by hash, so this first download does not depend on the old pip's CA bundle.
+RUN python -m pip install --no-cache-dir "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
 # --- upstream install chain ---
 RUN pip install -r /app/requirements-docker-cuda12.txt
 RUN cd /app/ctcdecode-master && pip install .
 RUN cd /app/imputer-pytorch && pip install -e .
 
 # --- cupy (beam-search PMC) + S3 staging tooling ---
-RUN pip install --no-cache-dir cupy-cuda12x==13.6.0 awscli s3fs rich
+# The upstream requirements pin certifi==2022.12.7; move it past the emSign distrust.
+RUN pip install --no-cache-dir cupy-cuda12x==13.6.0 awscli s3fs rich "certifi>=2026.10.19"
 
 # --- entrypoint ---
 # instanovo comes from PyPI rather than being copied in, so only our own adapter

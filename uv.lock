@@ -1946,7 +1946,7 @@ figures = [
     { name = "jupyter-client", specifier = ">=8.6.3" },
     { name = "kaleido", specifier = ">=1.3.0" },
     { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "nbconvert", specifier = ">=7.17.1" },
+    { name = "nbconvert", specifier = ">=7.17.2" },
     { name = "nbformat", specifier = ">=5.10.4" },
     { name = "plotly", specifier = ">=6.8.0" },
     { name = "scipy", specifier = ">=1.13.1" },

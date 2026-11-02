@@ -65,7 +65,7 @@ Then open a notebook and select the **InstaNovo-FM (figures)** kernel.
 
 ## Installation
 
-We support Python 3.10–3.13.
+We support Python 3.11–3.13.
 
 ```bash
 pip install instanovo-fm                # model, dataset pipeline and evaluation harness

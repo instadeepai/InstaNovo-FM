@@ -15,7 +15,10 @@ RUN apt-get update \
 # checkpoint loaded by package 5.1.2; keep them explicit so the pair is auditable.
 ARG CASANOVO_VERSION=5.1.2
 ARG CASANOVO_CHECKPOINT_URL=https://github.com/Noble-Lab/casanovo/releases/download/v5.0.0/casanovo_v5_0_0.ckpt
-RUN pip install --no-cache-dir "casanovo==${CASANOVO_VERSION}" h5py polars pyarrow
+# pip < 26.2.2 and certifi < 2026.10.19 trust the compromised emSign CA intermediates. The wheel is
+# pinned by hash, so this first download does not depend on the old pip's CA bundle.
+RUN python -m pip install --no-cache-dir "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+RUN pip install --no-cache-dir "casanovo==${CASANOVO_VERSION}" h5py polars pyarrow "certifi>=2026.10.19"
 RUN mkdir -p /checkpoints && curl -fsSL "$CASANOVO_CHECKPOINT_URL" -o /checkpoints/casanovo_v5_0_0.ckpt
 
 # Only the extractor is needed; it imports casanovo lazily and writes HDF5.

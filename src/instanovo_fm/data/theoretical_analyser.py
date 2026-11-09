@@ -571,6 +571,8 @@ class TheoreticalAnalyser:
             return ("a", "b", "y")
         if ft in ("ETD", "ECD"):
             return ("c", "z")
+        if ft in ("ETHCD", "ETCID"):
+            return ("b", "c", "y", "z")
         if ft == "UVPD":
             return ("a", "b", "c", "x", "y", "z")
         return ("b", "y")

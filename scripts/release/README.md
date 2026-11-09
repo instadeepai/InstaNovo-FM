@@ -197,15 +197,18 @@ Each product keeps to its own folders. A released tag is never moved or reused: 
 gets a new version.
 
 ```python
+import re
 from huggingface_hub import HfApi
 api = HfApi()
 tag = "instanovo-fm-v1.0"
+if not re.fullmatch(r"(instanovo|instanovoplus|instanovo-fm)(-[a-z]+)*-v\d+(\.\d+){0,2}", tag):
+    raise SystemExit(f"{tag} doesn't name a product and version, e.g. instanovo-fm-v1.0")
 if tag in {t.name for t in api.list_repo_refs("InstaDeepAI/InstaNovo", repo_type="dataset").tags}:
     raise SystemExit(f"{tag} already exists; released tags are never moved")
 commit = api.dataset_info("InstaDeepAI/InstaNovo").sha
 api.create_tag("InstaDeepAI/InstaNovo", tag=tag, revision=commit, repo_type="dataset",
                tag_message="InstaNovo-FM release")
-print(tag, commit)
+print(tag, commit)  # record both; list_repo_refs shows an annotated tag's own hash, not this commit
 ```
 
 Consumers pin it with `revision="instanovo-fm-v1.0"`, or with the commit itself, which can't

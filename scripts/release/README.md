@@ -187,14 +187,27 @@ complete.
 
 ## After the upload
 
-Tag the release and record both the tag and the commit SHA — a tag is a movable
-pointer, the SHA is not:
+Tag the release and record both the tag and the commit SHA: a tag is a movable
+pointer, the SHA is not.
+
+`InstaDeepAI/InstaNovo` also holds other products, such as the InstaNovo training data under
+`instanovo-v1.3.0`. Tags therefore name the product and version: `instanovo-fm-v1.0` for a
+release of all tiers together, or `instanovo-fm-lcfm-v1` for one tier released on its own.
+Each product keeps to its own folders. A released tag is never moved or reused: a correction
+gets a new version.
 
 ```python
 from huggingface_hub import HfApi
-HfApi().create_tag("InstaDeepAI/InstaNovo", tag="v1.0", repo_type="dataset",
-                   tag_message="Manuscript release")
+api = HfApi()
+tag = "instanovo-fm-v1.0"
+if tag in {t.name for t in api.list_repo_refs("InstaDeepAI/InstaNovo", repo_type="dataset").tags}:
+    raise SystemExit(f"{tag} already exists; released tags are never moved")
+commit = api.dataset_info("InstaDeepAI/InstaNovo").sha
+api.create_tag("InstaDeepAI/InstaNovo", tag=tag, revision=commit, repo_type="dataset",
+               tag_message="InstaNovo-FM release")
+print(tag, commit)
 ```
 
-Consumers pin it with `revision="v1.0"`. The manuscript's Data Availability has a
-placeholder for the tag and SHA that needs filling in once this is done.
+Consumers pin it with `revision="instanovo-fm-v1.0"`, or with the commit itself, which can't
+move. The manuscript's Data Availability has a placeholder for the tag and SHA that needs
+filling in once this is done.

@@ -279,16 +279,22 @@ by_project/lcfm/PXD012345/<instrument-run-name>.parquet
 
 ## Versioning
 
-`v0.1` is the first release, and the one the paper's results were produced from. Pin it
-rather than tracking `main`, so a later addition to the corpus cannot change what you
-fetch:
+Releases are tagged, and each tag names the commit it was made at. Pin a tag, or its commit,
+rather than tracking `main`, so a later addition to the repository can't change what you fetch:
+
+| tag | commit | contents |
+|---|---|---|
+| `v0.1` | `87609f483aafa353378b3595cce2fe8f8c6dcf58` | the first InstaNovo-FM release, the one the paper's results were produced from |
+| `instanovo-v1.3.0` | `7732d59ad48940e28f2404827e219a9dbcab78e0` | the peptide registry the InstaNovo v1.3.0 training, validation and test data were split against |
 
 ```python
 from datasets import load_dataset
 ds = load_dataset("InstaDeepAI/InstaNovo", "hcfm_splits", revision="v0.1")
 ```
 
-`main` moves as tiers are extended or corrected; a tag does not.
+This repository holds more than one product, so tags name the product and version
+(`instanovo-fm-v1.0`, `instanovo-v1.3.0`). A released tag is never moved: a correction gets
+a new version. `main` moves as tiers are extended or corrected; a tag does not.
 
 ## Licence
 

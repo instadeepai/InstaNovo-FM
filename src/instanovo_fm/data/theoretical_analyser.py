@@ -74,6 +74,8 @@ FRAG_TYPE_COLORS: Dict[str, str] = {
     "ETD": "#d62728",
     "ECD": "#9467bd",
     "UVPD": "#8c564b",
+    "EThcD": "#e377c2",
+    "ETciD": "#bcbd22",
     "unknown": "#7f7f7f",
 }
 

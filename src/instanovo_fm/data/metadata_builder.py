@@ -12,7 +12,9 @@ import torch
 
 # ===== Categorical Vocabularies =====
 
-FRAG_TYPES = ["HCD", "HCID", "CID", "ETD"]
+# New types are appended so existing indices keep their meaning. Adding one changes the size of the meta-token
+# fragmentation embedding, so checkpoints trained with the meta token need retraining.
+FRAG_TYPES = ["HCD", "HCID", "CID", "ETD", "EThcD", "ETciD"]
 
 INSTRUMENTS = [
     "Orbitrap Eclipse",

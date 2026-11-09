@@ -138,7 +138,7 @@ meta_token:
   precursor_mass_max: 6500.0  # Maximum precursor mass in Da (observed max in data)
 
   # Feature inclusion flags
-  include_frag_type: True           # Fragmentation type (HCD, CID, ETD, HCID)
+  include_frag_type: True           # Fragmentation type (HCD, HCID, CID, ETD, EThcD, ETciD)
   include_instrument: True          # Instrument model (20 categories)
   include_collision_energy: True   # Collision energy (continuous, NCE 0-100)
   include_precursor_charge: True   # Precursor charge (binned 2-6)

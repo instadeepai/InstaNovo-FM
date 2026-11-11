@@ -27,8 +27,6 @@ CLI::
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, cast
@@ -42,6 +40,7 @@ from scripts.verification.verify_calc_mz import (
 )
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import atomic_write_parquet
 
 app = typer.Typer(
     help="Apply implicit carbamidomethylation from verify_calc_mz report",
@@ -140,20 +139,6 @@ def _carb_sequence(seq: Optional[str]) -> Optional[str]:
     return cast(str, carbamidomethylate_cysteines(seq))
 
 
-def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
-    """Replace the parquet only after a full write so a crash cannot leave a truncated file."""
-    temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=file_path.parent)
-    os.close(temp_fd)
-    temp_path = Path(temp_path_str)
-    try:
-        df.write_parquet(temp_path)
-        os.replace(temp_path, file_path)
-    except Exception:
-        if temp_path.exists():
-            temp_path.unlink()
-        raise
-
-
 def _low_or_null_charge_mask(df: pl.DataFrame) -> Optional[pl.Series]:
     """Count carbamidomethylation rewrites on DIA-like (null/<=0 charge) rows that verify_calc_mz does not score."""
     if "precursor_charge" not in df.columns:
@@ -223,7 +208,7 @@ def process_parquet_file(
         return
 
     out = df.with_columns(new_sequence.alias("sequence"))
-    _atomic_write_parquet(out, file_path)
+    atomic_write_parquet(out, file_path)
     logger.info(
         "Updated %s (%d rows, %d with precursor_charge null or <= 0)",
         file_path,

@@ -21,9 +21,7 @@ CLI::
 from __future__ import annotations
 
 import logging
-import os
 import re
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
@@ -36,7 +34,7 @@ from scripts.verification.verify_calc_mz import (
     find_parquet_files_in_project,
     find_project_folders,
 )
-from scripts.preprocessing.parquet_io import search_data_lookup_key
+from scripts.preprocessing.parquet_io import atomic_write_parquet, search_data_lookup_key
 
 from scripts.logging_setup import configure_script_logging
 
@@ -213,20 +211,6 @@ class AddUsiStats:
     projects_missing_dir: int = 0
 
 
-def _atomic_write_parquet(df: pl.DataFrame, file_path: Path) -> None:
-    """Replace the parquet only after a full write so a crash cannot leave a truncated file."""
-    temp_fd, temp_path_str = tempfile.mkstemp(suffix=".parquet", dir=file_path.parent)
-    os.close(temp_fd)
-    temp_path = Path(temp_path_str)
-    try:
-        df.write_parquet(temp_path)
-        os.replace(temp_path, file_path)
-    except Exception:
-        if temp_path.exists():
-            temp_path.unlink()
-        raise
-
-
 def _add_usi_series(
     df: pl.DataFrame, default_filepath: str, scan_identifier_type: str
 ) -> pl.Series:
@@ -289,7 +273,7 @@ def process_parquet_file(
         logger.info("[DRY-RUN] Would write usi for %s (%d rows)", file_path, len(out))
         return
 
-    _atomic_write_parquet(out, file_path)
+    atomic_write_parquet(out, file_path)
     logger.info("Wrote usi column: %s (%d rows)", file_path, len(out))
 
 

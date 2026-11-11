@@ -17,11 +17,12 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated, Dict, List
 
 import typer
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import strip_known_data_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,57 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+
+def parse_duplicate_report(input_file: str | Path) -> Dict[str, List[str]]:
+    """Map experiment basenames to unique parent folders from a duplicate report.
+
+    Same-folder ``.ipc`` / ``.mzML.ipc`` pairs share one folder and must not be
+    treated as multi-folder duplicates.
+
+    Args:
+        input_file: Duplicate report from ``detect_all_duplicates.py``.
+
+    Returns:
+        Basename to unique folder list (order preserved).
+    """
+    file_map: Dict[str, List[str]] = defaultdict(list)
+    with open(input_file, "r") as infile:
+        for line in infile:
+            line = line.strip()
+            if not line:
+                continue
+            folder, file_name = line.rsplit("/", 1)
+            base_name = strip_known_data_suffix(file_name)
+            if folder not in file_map[base_name]:
+                file_map[base_name].append(folder)
+    return dict(file_map)
+
+
+def classify_multi_folder_duplicates(
+    file_map: Dict[str, List[str]],
+) -> Dict[str, List[str]]:
+    """Keep only basenames that appear under more than one distinct folder."""
+    return {
+        base_name: folders
+        for base_name, folders in file_map.items()
+        if len(folders) > 1
+    }
+
+
+def write_multi_folder_report(
+    duplicates: Dict[str, List[str]], output_file: str | Path
+) -> None:
+    """Persist cross-folder groups for manual review."""
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as outfile:
+        for file_name, folders in duplicates.items():
+            outfile.write(f"File: {file_name}\n")
+            outfile.write("Folders:\n")
+            for folder in folders:
+                outfile.write(f"  - {folder}\n")
+            outfile.write("\n")
 
 
 def find_duplicate_files(
@@ -54,33 +106,10 @@ def find_duplicate_files(
         typer.echo(f"Error: Input file '{input_file}' does not exist", err=True)
         raise typer.Exit(1)
 
-    file_map = defaultdict(list)
-
-    with open(input_file, "r") as infile:
-        for line in infile:
-            line = line.strip()
-            if line:
-                folder, file_name = line.rsplit("/", 1)
-                base_name = file_name.split(".", 1)[0]
-                file_map[base_name].append(folder)
-
-    duplicates = {
-        file_name: folders
-        for file_name, folders in file_map.items()
-        if len(folders) > 1
-    }
+    duplicates = classify_multi_folder_duplicates(parse_duplicate_report(input_file))
 
     if duplicates:
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_file, "w") as outfile:
-            for file_name, folders in duplicates.items():
-                outfile.write(f"File: {file_name}\n")
-                outfile.write("Folders:\n")
-                for folder in folders:
-                    outfile.write(f"  - {folder}\n")
-                outfile.write("\n")
+        write_multi_folder_report(duplicates, output_file)
         logger.info(f"Duplicate detection report written to {output_file}")
         logger.info(f"Found {len(duplicates)} files with multi-folder duplicates")
     else:
@@ -125,37 +154,19 @@ def main(
         typer.echo("Error: no valid input files", err=True)
         raise typer.Exit(1)
 
-    # Merge classifications from all reports into one output.
     merged: dict = {}
     for path in valid_files:
         logger.debug(f"Processing: {path}")
-        # Write through a temp merge: collect then write once.
-        if not path.exists():
-            continue
-        file_map = defaultdict(list)
-        with open(path, "r") as infile:
-            for line in infile:
-                line = line.strip()
-                if line:
-                    folder, file_name = line.rsplit("/", 1)
-                    base_name = file_name.split(".", 1)[0]
-                    file_map[base_name].append(folder)
-        for base_name, folders in file_map.items():
-            if len(folders) > 1:
-                existing = merged.setdefault(base_name, [])
-                for folder in folders:
-                    if folder not in existing:
-                        existing.append(folder)
+        for base_name, folders in classify_multi_folder_duplicates(
+            parse_duplicate_report(path)
+        ).items():
+            existing = merged.setdefault(base_name, [])
+            for folder in folders:
+                if folder not in existing:
+                    existing.append(folder)
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
     if merged:
-        with open(output_file, "w") as outfile:
-            for file_name, folders in merged.items():
-                outfile.write(f"File: {file_name}\n")
-                outfile.write("Folders:\n")
-                for folder in folders:
-                    outfile.write(f"  - {folder}\n")
-                outfile.write("\n")
+        write_multi_folder_report(merged, output_file)
         logger.info(f"Duplicate detection report written to {output_file}")
         logger.info(f"Found {len(merged)} files with multi-folder duplicates")
     else:

@@ -25,6 +25,7 @@ import typer
 from tqdm import tqdm
 
 from scripts.logging_setup import configure_script_logging
+from scripts.preprocessing.parquet_io import atomic_write_parquet
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def _process_parquet_file(
         df = ldf.with_columns(
             [pl.col(col).replace(old_value, new_value) for col in columns_to_update]
         ).collect()
-        df.write_parquet(file)
+        atomic_write_parquet(df, file)
         if verbose:
             logger.debug(
                 f"Updated file: {file} (columns: {', '.join(columns_to_update)})"

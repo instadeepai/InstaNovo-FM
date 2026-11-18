@@ -212,5 +212,5 @@ print(tag, commit)  # record both; list_repo_refs shows an annotated tag's own h
 ```
 
 Consumers pin it with `revision="instanovo-fm-v1.0"`, or with the commit itself, which can't
-move. The manuscript's Data Availability has a placeholder for the tag and SHA that needs
-filling in once this is done.
+move. Then update the tag and SHA in the manuscript's Data Availability. The preprint still
+names `v0.1`, the tag's name from before the product prefix; correct that in its next version.

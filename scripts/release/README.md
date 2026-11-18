@@ -190,8 +190,8 @@ complete.
 Tag the release and record both the tag and the commit SHA: a tag is a movable
 pointer, the SHA is not.
 
-`InstaDeepAI/InstaNovo` also holds other products, such as the InstaNovo training data under
-`instanovo-v1.3.0`. Tags therefore name the product and version: `instanovo-fm-v1.0` for a
+`InstaDeepAI/InstaNovo` is shared with other InstaNovo products. Tags therefore name the
+product and version: `instanovo-fm-v1.0` for a
 release of all tiers together, or `instanovo-fm-lcfm-v1` for one tier released on its own.
 Each product keeps to its own folders. A released tag is never moved or reused: a correction
 gets a new version.

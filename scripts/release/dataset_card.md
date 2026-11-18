@@ -294,8 +294,13 @@ ds = load_dataset("InstaDeepAI/InstaNovo", "hcfm_splits", revision="instanovo-fm
 This repository holds more than one product, so tags name the product and version
 (for example `instanovo-fm-v1.0`). `v0.1` is the name `instanovo-fm-v0.1` had before this
 convention, and the one the preprint cites. It still resolves to the same commit, so existing
-pins keep working, but use `instanovo-fm-v0.1`. A released tag is never moved: a correction gets
-a new version. `main` moves as tiers are extended or corrected; a tag does not.
+pins keep working, but use `instanovo-fm-v0.1`. A released tag is never moved: a correction
+gets a new version. `main` moves as tiers are extended or corrected; a tag does not.
+
+The preprint's Data Availability predates the prefixed names: *"All results in this work were
+produced from release v0.1 of this dataset; passing `revision=v0.1` to `load_dataset` in the
+HuggingFace datasets library reproduces that exact snapshot."* That sentence is outdated. Pass
+`revision="instanovo-fm-v0.1"` instead; it loads the same snapshot.
 
 ## Licence
 

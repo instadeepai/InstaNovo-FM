@@ -195,7 +195,12 @@ the paper:
 ## Pretrained weights & data
 
 - **Pretraining corpus:** [`InstaDeepAI/InstaNovo`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo)
-  on HuggingFace, under [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use/).
+  on HuggingFace, at tag
+  [`instanovo-fm-v0.1`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo/tree/instanovo-fm-v0.1)
+  for the data the preprint used. Pin it with `revision="instanovo-fm-v0.1"`, because `main`
+  moves as the corpus grows and the repository is shared with other InstaNovo products. The
+  preprint's instruction to pass `revision=v0.1` is outdated: `v0.1` is the tag's former name,
+  from before the product prefix. Released under [EMBL-EBI terms of use](https://www.ebi.ac.uk/about/terms-of-use/).
   Assembled from 92 public PRIDE submissions, with accessions in
   [`assets/table_s1_accessions.txt`](assets/table_s1_accessions.txt), and uniformly reprocessed
   with FragPipe (v22.0) / MSFragger (v4.1). The confidence tiers are described under

@@ -32,6 +32,18 @@ A bare `foundation_base` run does not reproduce the paper.
 > training the model first. `FoundationModel.from_pretrained("instanovo-fm-v0.1.0")` fetches
 > them, and `FoundationModel.describe_pretrained()` lists the ablation checkpoints alongside it.
 
+> **Pin the dataset tag**
+>
+> The paper's results were produced from the
+> [`InstaDeepAI/InstaNovo`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo) corpus at
+> tag [`instanovo-fm-v0.1`](https://huggingface.co/datasets/InstaDeepAI/InstaNovo/tree/instanovo-fm-v0.1)
+> (commit `798374bfa9f7447eda4470fd94b76440d43b2697`). Load it with
+> `revision="instanovo-fm-v0.1"`. `main` moves as tiers are extended or corrected.
+>
+> The preprint says to pass `revision=v0.1`. That instruction is outdated: `v0.1` is the tag's
+> former name, from before the product prefix the repository needs because it is shared with
+> other InstaNovo products. It still resolves to the same commit, but use `instanovo-fm-v0.1`.
+
 ## Reproducing the probe results
 
 The linear-probe and retrieval numbers all come from one protocol. To compare against the published

@@ -272,6 +272,12 @@ def main(
         df = normalise_dataframe_schema(df, get_reference_schema())
 
         df = _filter_out_glyco_sequences(df, hold_back)
+        if df.height == 0:
+            logger.debug(
+                f"Skipping {subfolder}/{name}: no rows left after hold-back filter"
+            )
+            continue
+
         scored = with_composite_score(df)
         filtered_df_mcfm = _drop_temp_scoring_columns(
             scored.filter(pl.col("_composite_score") > threshold_mcfm)

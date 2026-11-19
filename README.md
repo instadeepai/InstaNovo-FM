@@ -4,6 +4,7 @@
 
 <!-- Badges: update the Colab URL once the notebook is live -->
 [![PyPI version](https://img.shields.io/pypi/v/instanovo-fm.svg)](https://pypi.org/project/instanovo-fm/)
+[![Bioconda version](https://img.shields.io/conda/vn/bioconda/instanovo-fm.svg)](https://bioconda.github.io/recipes/instanovo-fm/README.html)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](#license)
 [![DOI](https://img.shields.io/badge/DOI-10.64898%2F2026.09.03.747733-blue.svg)](https://doi.org/10.64898/2026.09.03.747733)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/instadeepai/InstaNovo-FM/blob/main/notebooks/getting_started_with_instanovo_fm.ipynb)
@@ -71,6 +72,41 @@ We support Python 3.10–3.13.
 pip install instanovo-fm                # model, dataset pipeline and evaluation harness
 pip install "instanovo-fm[interpret]"   # adds UMAP visualization
 pip install "instanovo-fm[clustering]"  # adds the EvoC clustering eval task
+```
+
+### With conda (Bioconda)
+
+InstaNovo-FM is also packaged on [Bioconda](https://anaconda.org/bioconda/instanovo-fm), for
+Python 3.11–3.13:
+
+```bash
+conda create -n instanovo-fm -c conda-forge -c bioconda --strict-channel-priority instanovo-fm
+conda activate instanovo-fm
+instanovo-fm --help
+```
+
+On a machine with an NVIDIA GPU, the solver may still choose the CPU build of PyTorch. Ask for
+the CUDA build explicitly:
+
+```bash
+conda create -n instanovo-fm -c conda-forge -c bioconda --strict-channel-priority \
+    instanovo-fm "pytorch=*=cuda*"
+```
+
+Compared with the pip package, the conda package differs in three ways:
+
+- The `interpret` and `clustering` extras (`glass-box-umap`, `evoc`) are not on conda-forge.
+- `rustyms` is not on conda-forge either, so the theoretical-spectrum `annotator` engine is
+  unavailable. The default engine, pyopenms, is included.
+- `numpy` and `pyarrow` are lower bounds rather than the exact versions the paper's results
+  were produced with. To reproduce those results exactly, install with pip or `uv sync`.
+
+To add the missing packages, install their conda-forge dependencies first, so that pip only
+adds the three packages and does not replace anything conda installed:
+
+```bash
+conda install -c conda-forge -c bioconda --strict-channel-priority "pandas<3" pytorch-lightning tensorboard
+pip install glass-box-umap evoc rustyms
 ```
 
 ## Quick start

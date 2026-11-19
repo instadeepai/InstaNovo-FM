@@ -12,7 +12,7 @@ Run them from the repository root as `uv run python -m scripts.preprocessing.<sc
 2. Delete same-folder duplicates, then delete the reviewed multi-folder duplicates.
 3. Find and remove empty or undersized files.
 4. Convert IPC to Parquet, then check that every IPC file has a converted counterpart.
-5. Clean columns: replace `"Unknown"` with null in `collision_energy` and `frag_type`, infer missing isolation targets, re-label EncyclopeDIA modifications as UNIMOD, and add the `acquisition` column (DIA/DDA) from search metadata.
+5. Clean columns: replace `"Unknown"` with null in `collision_energy` and `frag_type`, set `frag_type` from the scan header (`frag_type_from_header.py`, so EThcD and ETciD spectra are named as such), infer missing isolation targets, re-label EncyclopeDIA modifications as UNIMOD, and add the `acquisition` column (DIA/DDA) from search metadata.
 
 Modification processing uses a hardcoded EncyclopeDIA → UNIMOD mapping dictionary.
 For other datasets that dictionary may need updating by hand.
@@ -211,4 +211,13 @@ Default column mapping, which can be customised:
   "mz": "mz_array",
   "intensity": "intensity_array"
 }
+```
+
+### Set `frag_type` from the scan header (`frag_type_from_header.py`)
+
+Conversion stored only the first of a spectrum's activation methods, so EThcD and ETciD spectra were named `ETD`, `HCD` or `CID`. This sets `frag_type` from the Thermo filter string in `header`, keeping values that already agree (`HCID` for HCD included).
+
+```bash
+uv run python -m scripts.preprocessing.frag_type_from_header --input-dir ./data/lcfm --dry-run
+uv run python -m scripts.preprocessing.frag_type_from_header --input-dir ./data/lcfm --output-file frag_type_changes.csv
 ```
